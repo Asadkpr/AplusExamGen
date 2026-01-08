@@ -1,0 +1,1 @@
+// Config is handled in index.html via CDN
