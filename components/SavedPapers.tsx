@@ -217,6 +217,7 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user }) => {
                   questions={selectedPaper.questions} 
                   layoutMode={1} 
                   showAnswerKey={showAnswerKey}
+                  paperCode={selectedPaper.paperCode}
                 />
             </div>
           </div>

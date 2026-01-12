@@ -13,6 +13,7 @@ interface PrintablePaperProps {
   showAnswerKey?: boolean;
   baseFontSize?: number;
   timeAllowed?: string;
+  paperCode?: string;
 }
 
 declare global {
@@ -31,8 +32,9 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   layoutMode,
   medium = 'English',
   showAnswerKey = false,
-  baseFontSize = 12,
-  timeAllowed = '2:00 Hours'
+  baseFontSize = 13,
+  timeAllowed = '2:00 Hours',
+  paperCode
 }) => {
 
   useEffect(() => {
@@ -45,30 +47,32 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   }, [questions, subject, showAnswerKey, medium, baseFontSize]);
 
   const getLayoutStyles = (mode: number, baseSize: number) => {
-    const scale = baseSize / 12;
+    // Clamp baseSize to maximum 13 for safety in print logic
+    const safeBaseSize = Math.min(baseSize, 13);
+    const scale = safeBaseSize / 12;
 
     switch (mode) {
       case 2:
         return {
-          headerTitle: '16px',
-          headerInfo: '11px',
+          headerTitle: '14px',
+          headerInfo: '10px',
           sectionTitle: `${Math.round(11 * scale)}px`,
           questionText: `${Math.round(10 * scale)}px`,
           optionText: `${Math.round(9 * scale)}px`,
           spacing: 'space-y-0',
-          logoSize: 'w-10 h-10',
+          logoSize: 'w-8 h-8',
           mcqGap: 'gap-y-0',
           optionGrid: 'grid-cols-2 gap-0'
         };
       default:
         return {
-          headerTitle: '22px',
-          headerInfo: '13px',
-          sectionTitle: `${Math.round(18 * scale)}px`,
-          questionText: `${baseSize}px`,
-          optionText: `${Math.round(14 * scale)}px`,
-          spacing: 'space-y-0.5',
-          logoSize: 'w-20 h-20',
+          headerTitle: '18px',
+          headerInfo: '11px',
+          sectionTitle: `${Math.round(15 * scale)}px`,
+          questionText: `${safeBaseSize}px`,
+          optionText: `${Math.round(12 * scale)}px`,
+          spacing: 'space-y-0',
+          logoSize: 'w-14 h-14',
           mcqGap: 'gap-y-0',
           optionGrid: 'grid-cols-4 gap-1'
         };
@@ -110,17 +114,17 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
     
     if (medium === 'Both') {
       return (
-        <div className="flex w-full items-start gap-8" dir="ltr">
+        <div className="flex w-full items-start gap-4" dir="ltr">
           {/* English Side */}
-          <div className="flex-1 text-left flex gap-2" style={{ fontFamily: "'Times New Roman', serif" }}>
+          <div className="flex-1 text-left flex gap-1.5" style={{ fontFamily: "'Times New Roman', serif" }}>
             <span className="font-bold whitespace-nowrap">{counter}{suffix}</span>
             <span>{mainText}</span>
           </div>
           {/* Urdu Side */}
           {urduText && (
             <div 
-              className="flex-1 text-right flex gap-2 justify-start items-start" 
-              style={{ fontFamily: urduFontStack, lineHeight: '2' }} 
+              className="flex-1 text-right flex gap-1.5 justify-start items-start" 
+              style={{ fontFamily: urduFontStack, lineHeight: '1.8' }} 
               dir="rtl"
             >
               <span className="font-bold whitespace-nowrap">{counter}{suffix}</span>
@@ -133,7 +137,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
     // Default: English Medium
     return (
-      <div className="flex gap-2 items-start" dir="ltr">
+      <div className="flex gap-1.5 items-start" dir="ltr">
         <span className="font-bold whitespace-nowrap">{counter}{suffix}</span>
         <span style={{ fontFamily: "'Times New Roman', serif" }}>{mainText}</span>
       </div>
@@ -150,12 +154,12 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
     if (medium === 'Both') {
       return (
-        <div className="flex w-full items-start justify-between gap-3" dir="ltr">
+        <div className="flex w-full items-start justify-between gap-2" dir="ltr">
           <span className="flex-1 text-left" style={{ fontFamily: "'Times New Roman', serif" }}>{optEng}</span>
           {optUrdu && (
             <span 
-              className="flex-1 text-right text-[0.9em]" 
-              style={{ fontFamily: urduFontStack, lineHeight: '1.8' }} 
+              className="flex-1 text-right text-[0.85em]" 
+              style={{ fontFamily: urduFontStack, lineHeight: '1.6' }} 
               dir="rtl"
             >
               {optUrdu}
@@ -179,7 +183,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           <img 
             src={instituteProfile.logoUrl} 
             alt="Watermark" 
-            className="w-2/3 max-w-[400px] object-contain opacity-[0.07] grayscale"
+            className="w-2/3 max-w-[300px] object-contain opacity-[0.05] grayscale"
           />
         ) : (
           <div className="text-watermark">
@@ -190,20 +194,20 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
       <div 
         id="printable-section"
-        className={`${styles.spacing} p-6 md:p-10 tex2jax_process relative overflow-visible`} 
+        className={`${styles.spacing} p-2 md:p-3 tex2jax_process relative overflow-visible`} 
         style={{ 
           backgroundColor: '#ffffff', 
           color: '#000000', 
           fontFamily: fontFamily,
-          lineHeight: (medium === 'Urdu') ? '1.8' : '1.1',
+          lineHeight: (medium === 'Urdu') ? '1.7' : '1.1',
           boxSizing: 'border-box',
-          paddingBottom: '15mm',
+          paddingBottom: '3mm',
           width: '100%',
           margin: '0 auto'
         }}
         dir="ltr"
       >
-        {/* 🔹 LOGO WATERMARK FOR PREVIEW (Sticky Implementation - Fixes it within paper boundaries) */}
+        {/* 🔹 LOGO WATERMARK FOR PREVIEW */}
         <div 
           className="absolute inset-0 pointer-events-none z-0 print:hidden overflow-hidden"
           style={{ opacity: 0.05 }}
@@ -213,18 +217,19 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                 <img 
                   src={instituteProfile.logoUrl} 
                   alt="Preview Watermark" 
-                  className="w-2/3 max-w-[500px] object-contain filter grayscale"
+                  className="w-2/3 max-w-[400px] object-contain filter grayscale"
                 />
               ) : (
-                <div className="text-6xl font-black uppercase tracking-tighter -rotate-45 text-gray-400 opacity-20 text-center whitespace-nowrap">
+                <div className="text-5xl font-black uppercase tracking-tighter -rotate-45 text-gray-400 opacity-20 text-center whitespace-nowrap">
                   {instituteProfile?.instituteName || "APLUS EXAMGEN"}
                 </div>
               )}
           </div>
         </div>
 
-        <div className="border-b-2 border-black pb-1 z-10 relative print:mt-0" dir="ltr">
-          <div className="flex items-center justify-between mb-1">
+        {/* 🔹 EXTREMELY COMPACT HEADER */}
+        <div className="border-b-2 border-black pb-0.5 z-10 relative print:mt-0" dir="ltr">
+          <div className="flex items-center justify-between mb-0.5">
             {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers ? (
               <div className={`${styles.logoSize} flex-shrink-0`}>
                 <img 
@@ -237,16 +242,16 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               <div className={`${styles.logoSize} flex-shrink-0 invisible`} />
             )}
 
-            <div className="flex-grow text-center px-4">
-              <h1 style={{ fontSize: styles.headerTitle }} className="font-bold uppercase tracking-wide leading-tight">
+            <div className="flex-grow text-center px-1">
+              <h1 style={{ fontSize: styles.headerTitle }} className="font-bold uppercase tracking-tight leading-none mb-0.5">
                 {instituteProfile?.instituteName || "INSTITUTE NAME"}
               </h1>
-              <p style={{ fontSize: styles.headerInfo }} className="flex items-center justify-center gap-4">
+              <p style={{ fontSize: styles.headerInfo }} className="flex items-center justify-center gap-2 leading-none opacity-80">
                 <span>{instituteProfile?.address}</span>
                 {instituteProfile?.showContactOnPapers && (
                   <>
-                    <span className="opacity-50">|</span>
-                    <span className="font-semibold">Contact: {instituteProfile?.contactNumber}</span>
+                    <span className="opacity-30">|</span>
+                    <span className="font-semibold">{instituteProfile?.contactNumber}</span>
                   </>
                 )}
               </p>
@@ -254,25 +259,30 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
             <div className={`${styles.logoSize} flex-shrink-0 invisible`} aria-hidden="true" />
           </div>
           
-          <div style={{ fontSize: styles.headerInfo }} className="flex justify-between items-center font-semibold border-t-2 border-black pt-1 px-2">
+          <div style={{ fontSize: styles.headerInfo }} className="flex justify-between items-center font-bold border-t border-black pt-0.5 px-1 uppercase tracking-tighter">
             <span>Class: <span className="font-normal">{classLevel}</span></span>
             <span>Subject: <span className="font-normal">{subject}</span></span>
             <span>Time: <span className="font-normal">{timeAllowed}</span></span>
             <span>Total Marks: <span className="font-normal">{totalMarks}</span></span>
           </div>
           
-          <div style={{ fontSize: styles.headerInfo }} className="flex justify-between items-center font-semibold border-t border-black mt-1 pt-1 px-2">
+          <div style={{ fontSize: styles.headerInfo }} className="flex justify-between items-center font-bold border-t border-black mt-0.5 pt-0.5 px-1">
             <span>Student: __________________________</span>
-            <span>Roll No: ________</span>
+            <div className="flex gap-3">
+              <span>Roll No: ________</span>
+              {paperCode && (
+                <span>Paper Code: <span className="font-bold border-2 border-black px-1 py-0 rounded ml-0.5">{paperCode}</span></span>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="z-10 relative mt-2" dir={baseDir}>
+        {/* 🔹 QUESTIONS START IMMEDIATELY */}
+        <div className="z-10 relative mt-0.5" dir={baseDir}>
           {!hasQuestions ? (
-            <div className="flex items-center justify-center h-48 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg m-4">
+            <div className="flex items-center justify-center h-24 text-gray-400 border border-dashed border-gray-300 rounded m-1">
                 <div className="text-center">
-                  <p className="font-bold">No questions selected for this paper.</p>
-                  <p className="text-xs mt-1">Please select questions in Step 5.</p>
+                  <p className="font-bold text-sm">No questions selected.</p>
                 </div>
             </div>
           ) : (
@@ -286,21 +296,21 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               let localQuestionCounter = 0;
 
               return (
-                <div key={idx} className="mb-4 break-inside-avoid">
-                  <div style={{ fontSize: styles.sectionTitle }} className="font-bold mb-1 flex justify-between items-baseline border-b border-gray-300 pb-0" dir={baseDir}>
+                <div key={idx} className="mb-0.5 break-inside-avoid">
+                  {/* 🔹 REMOVED MARKS DISPLAY FROM SECTION HEADER */}
+                  <div style={{ fontSize: styles.sectionTitle }} className="font-bold mb-0.5 border-b border-gray-300 pb-0" dir={baseDir}>
                     <h3 className="uppercase">{section.title}</h3>
-                    <span style={{ fontSize: styles.headerInfo }} className="font-normal">Marks: {section.attemptCount * section.marksPerQuestion}</span>
                   </div>
                   {section.type === 'MCQ' ? (
                     <div className={`grid grid-cols-1 ${styles.mcqGap}`}>
                       {sectionQuestions.map((q) => {
                         localQuestionCounter++;
                         return (
-                          <div key={q.id} style={{ fontSize: styles.questionText }} className="break-inside-avoid mb-1">
+                          <div key={q.id} style={{ fontSize: styles.questionText }} className="break-inside-avoid mb-0.5">
                             <div className="font-semibold w-full">
                               {renderQuestionText(q, localQuestionCounter)}
                             </div>
-                            <div className={`grid ${medium === 'Both' ? 'grid-cols-2 gap-x-2' : styles.optionGrid} ${baseDir === 'rtl' ? 'pr-5' : 'pl-5'} mt-1`} dir={baseDir}>
+                            <div className={`grid ${medium === 'Both' ? 'grid-cols-2 gap-x-1.5' : styles.optionGrid} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} dir={baseDir}>
                               {q.options?.map((_, oIdx) => (
                                 <div key={oIdx} style={{ fontSize: styles.optionText }} className="flex items-start gap-1">
                                   <span className="font-bold">({String.fromCharCode(97 + oIdx)})</span> 
@@ -314,19 +324,17 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                     </div>
                   ) : (
                     <div className={`${styles.spacing}`}>
-                      {/* Group questions into units if sub-parts exist */}
                       {Array.from({ length: completeQuestionsCount }).map((_, qIdx) => {
                         localQuestionCounter++;
                         const startIndex = qIdx * partsPerQuestion;
                         
                         return (
-                          <div key={qIdx} className="mb-2 break-inside-avoid">
+                          <div key={qIdx} className="mb-0.5 break-inside-avoid">
                             {section.subParts && section.subParts.length > 0 ? (
-                               /* Render as Grouped Unit */
-                               <div className="space-y-1">
+                               <div className="space-y-0">
                                   <div className="font-bold" style={{ fontSize: styles.questionText }}>
                                     {medium === 'Both' ? (
-                                      <div className="flex w-full items-start gap-8" dir="ltr">
+                                      <div className="flex w-full items-start gap-4" dir="ltr">
                                         <div className="flex-1 text-left font-bold" dir="ltr">{localQuestionCounter}.</div>
                                         <div className="flex-1 text-right font-bold" dir="rtl">{localQuestionCounter}.</div>
                                       </div>
@@ -334,22 +342,21 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                       <span dir="ltr">{localQuestionCounter}.</span>
                                     )}
                                   </div>
-                                  <div className={`${baseDir === 'rtl' ? 'pr-6' : 'pl-6'} space-y-1`}>
+                                  <div className={`${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} space-y-0`}>
                                     {section.subParts.map((part, pIdx) => {
                                       const qPart = sectionQuestions[startIndex + pIdx];
                                       return qPart ? (
-                                        <div key={pIdx} style={{ fontSize: styles.questionText }} className="flex gap-2 items-start italic opacity-90">
+                                        <div key={pIdx} style={{ fontSize: styles.questionText }} className="flex gap-1.5 items-start opacity-90">
                                            <div className="flex-grow">
                                               {renderQuestionText(qPart, part.label)}
                                            </div>
-                                           <span className="text-[0.8em] font-bold">[{part.marks}]</span>
+                                           <span className="text-[0.75em] font-bold">[{part.marks}]</span>
                                         </div>
                                       ) : null;
                                     })}
                                   </div>
                                </div>
                             ) : (
-                               /* Render as Individual Question */
                                <div style={{ fontSize: styles.questionText }} className="w-full">
                                  {renderQuestionText(sectionQuestions[startIndex], localQuestionCounter)}
                                </div>
@@ -366,18 +373,18 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         </div>
 
         {showAnswerKey && hasQuestions && (
-          <div className="mt-8 border-t border-dashed border-gray-400 pt-4 break-inside-avoid z-10 relative page-break-before" dir="ltr">
-            <div className="text-center mb-2">
-              <h3 className="font-extrabold text-base uppercase border-b border-black inline-block px-4 tracking-tighter">Answer Key</h3>
+          <div className="mt-1 border-t border-dashed border-gray-400 pt-0.5 break-inside-avoid z-10 relative page-break-before" dir="ltr">
+            <div className="text-center mb-0.5">
+              <h3 className="font-extrabold text-xs uppercase border-b border-black inline-block px-2 tracking-tighter">Key</h3>
             </div>
-            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-x-3 gap-y-1">
+            <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-x-1.5 gap-y-0 text-[8px]">
               {questions.map((q) => {
                 if (!q.correctAnswer && q.type !== 'MCQ') return null;
                 globalAnswerKeyCounter++;
                 return (
-                  <div key={q.id} className="flex items-center justify-between border-b border-gray-100 py-1 px-1 text-[10px]">
+                  <div key={q.id} className="flex items-center justify-between border-b border-gray-100 py-0 px-0.5">
                     <span className="font-bold text-gray-700">Q.{globalAnswerKeyCounter}</span>
-                    <span className="font-mono bg-gray-50 px-1.5 rounded font-bold border border-gray-100">{q.correctAnswer || '-'}</span>
+                    <span className="font-mono bg-gray-50 px-0.5 rounded font-bold border border-gray-100">{q.correctAnswer || '-'}</span>
                   </div>
                 );
               })}
@@ -385,9 +392,8 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           </div>
         )}
 
-        <div className="pt-2 border-t border-gray-200 text-center text-[7px] text-gray-400 mt-10 z-10 relative flex justify-between uppercase font-bold tracking-widest" dir="ltr">
+        <div className="pt-0.5 border-t border-gray-200 text-center text-[6px] text-gray-400 mt-1 z-10 relative flex justify-between uppercase font-bold tracking-widest" dir="ltr">
           <span>Aplus ExamGen</span>
-          <span>Paper Generated Successfully</span>
           <span>Software by: Nauman Ali</span>
         </div>
       </div>
@@ -405,7 +411,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
             @page {
               size: A4;
-              margin: 0 !important; 
+              margin: 5mm !important; 
             }
 
             .print-container {
@@ -419,7 +425,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
             #printable-section {
               margin: 0 !important;
-              padding: 10mm !important; 
+              padding: 1.5mm 3mm !important; 
               width: 100% !important;
               box-shadow: none !important;
               min-height: 297mm !important;
@@ -444,17 +450,17 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
             }
 
             .print-watermark img {
-              width: 65% !important;
-              max-width: 500px !important;
+              width: 40% !important;
+              max-width: 300px !important;
               filter: grayscale(100%) !important;
-              opacity: 0.07 !important;
+              opacity: 0.5 !important;
             }
 
             .text-watermark {
-              font-size: 80px !important;
+              font-size: 50px !important;
               font-weight: 900 !important;
               transform: rotate(-45deg) !important;
-              opacity: 0.06 !important;
+              opacity: 0.5 !important;
               white-space: nowrap !important;
             }
           }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ViewState, User, PaperPattern } from './types';
 import { subscribeToAuth, logoutUser, refreshUserProfile } from './services/authService';
@@ -12,6 +13,7 @@ import { PaperPatterns } from './components/PaperPatterns';
 import { HelpSupport } from './components/HelpSupport';
 import { AboutUs } from './components/AboutUs';
 import { ManageContent } from './components/ManageContent';
+import { TeachersDirectory } from './components/TeachersDirectory';
 import { ThemeProvider } from './context/ThemeContext';
 import { LOCAL_STORAGE_SESSION_KEY } from './constants';
 
@@ -190,6 +192,12 @@ const App: React.FC = () => {
             user={currentUser}
             onBack={() => setCurrentView('DASHBOARD')}
             onUsePattern={handleUsePattern}
+          />
+        )}
+        {currentView === 'TEACHERS_DIRECTORY' && currentUser && (
+          <TeachersDirectory 
+            user={currentUser}
+            onBack={() => setCurrentView('DASHBOARD')}
           />
         )}
         {currentView === 'HELP_SUPPORT' && currentUser && (

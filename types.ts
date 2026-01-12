@@ -109,6 +109,7 @@ export interface SavedPaper {
   medium?: 'English' | 'Urdu' | 'Both';
   fontSize?: number;
   timeAllowed?: string; // New: stored from pattern
+  paperCode?: string; // Automatic 4-digit code
 }
 
 export type ViewState = 
@@ -123,4 +124,5 @@ export type ViewState =
   | 'HELP_SUPPORT'
   | 'UPLOAD_PAPER'
   | 'MANAGE_CONTENT'
-  | 'ABOUT_US';
+  | 'ABOUT_US'
+  | 'TEACHERS_DIRECTORY';

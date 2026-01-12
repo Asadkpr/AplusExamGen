@@ -31,45 +31,60 @@ export const AboutUs: React.FC<AboutUsProps> = ({ onBack }) => {
         <div className="max-w-3xl mx-auto space-y-8">
           
           {/* CEO Section */}
-          <div className="bg-gray-800 border border-gold-600/30 rounded-2xl shadow-2xl overflow-hidden">
-             <div className="bg-gray-900/50 p-8 text-center border-b border-gray-700 relative">
-               <div className="w-32 h-32 rounded-full border-4 border-gold-500 mx-auto mb-4 overflow-hidden bg-gray-700 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.3)]">
-                 <User size={64} className="text-gold-500/50" />
-                 {/* 
-                    To use a real image, replace the User icon with:
-                    <img src="path/to/ceo.jpg" alt="CEO" className="w-full h-full object-cover" />
-                 */}
-               </div>
-               <h2 className="text-2xl font-bold text-white tracking-wide">NAUMAN ALI</h2>
-               <p className="text-gold-500 font-medium uppercase tracking-widest text-sm mt-1">Founder & CEO</p>
-               <div className="w-16 h-1 bg-gold-500 mx-auto mt-4 rounded-full"></div>
-             </div>
-             
-             <div className="p-8 text-gray-300 leading-relaxed text-center space-y-4">
-               <h3 className="text-xl font-semibold text-white mb-2">Welcome to APlus ExamGen</h3>
-               <p className="italic text-gray-400">“Pakistan’s most reliable and intelligent exam generator designed for teachers.”</p>
-               
-               <div className="text-left text-sm md:text-base space-y-4 mt-6 px-4 md:px-12">
-                 <p>
-                   I am <strong>Nauman Ali</strong>, founder of APlus ExamGen and passionate about empowering educators with modern digital tools.
-                   After years of teaching and managing academic systems, I realized how much time teachers spend preparing papers.
-                 </p>
-                 <p>
-                   APlus ExamGen is created with a single purpose:
-                 </p>
-                 <div className="bg-gold-500/10 border-l-4 border-gold-500 p-4 rounded-r-lg my-4">
-                   <p className="font-bold text-gold-500 text-center">To save teachers’ time and improve the quality of assessments.</p>
-                 </div>
-                 <p>
-                   Every feature — from automated test generation to customizable patterns — is built after carefully studying real classroom needs.
-                   Our mission is to make paper-making fast, accurate, and effortless for every teacher in Pakistan.
-                 </p>
-                 <p className="font-medium text-white text-center pt-2">
-                   Welcome to the future of smart paper creation.
-                 </p>
-               </div>
-             </div>
-          </div>
+<div className="bg-gray-800 border border-gold-600/30 rounded-2xl shadow-2xl overflow-hidden">
+  <div className="bg-gray-900/50 p-8 text-center border-b border-gray-700 relative">
+    
+    <div className="w-32 h-32 rounded-full border-4 border-gold-500 mx-auto mb-4 overflow-hidden bg-gray-700 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+  <img
+    src="/ceo.jpeg"
+    alt="CEO - Nauman Ali"
+    className="w-full h-full object-cover rounded-full object-[center_30%]"
+  />
+</div>
+
+
+
+    <h2 className="text-2xl font-bold text-white tracking-wide">NAUMAN ALI</h2>
+    <p className="text-gold-500 font-medium uppercase tracking-widest text-sm mt-1">
+      Founder & CEO
+    </p>
+    <div className="w-16 h-1 bg-gold-500 mx-auto mt-4 rounded-full"></div>
+  </div>
+
+  <div className="p-8 text-gray-300 leading-relaxed text-center space-y-4">
+    <h3 className="text-xl font-semibold text-white mb-2">
+      Welcome to APlus ExamGen
+    </h3>
+
+    <p className="italic text-gray-400">
+      “Pakistan’s most reliable and intelligent exam generator designed for teachers.”
+    </p>
+
+    <div className="text-left text-sm md:text-base space-y-4 mt-6 px-4 md:px-12">
+      <p>
+        I am <strong>Nauman Ali</strong>, founder of APlus ExamGen and passionate about empowering educators with modern digital tools.
+        After years of teaching and managing academic systems, I realized how much time teachers spend preparing papers.
+      </p>
+
+      <p>APlus ExamGen is created with a single purpose:</p>
+
+      <div className="bg-gold-500/10 border-l-4 border-gold-500 p-4 rounded-r-lg my-4">
+        <p className="font-bold text-gold-500 text-center">
+          To save teachers’ time and improve the quality of assessments.
+        </p>
+      </div>
+
+      <p>
+        Every feature — from automated test generation to customizable patterns — is built after carefully studying real classroom needs.
+        Our mission is to make paper-making fast, accurate, and effortless for every teacher in Pakistan.
+      </p>
+
+      <p className="font-medium text-white text-center pt-2">
+        Welcome to the future of smart paper creation.
+      </p>
+    </div>
+  </div>
+</div>
 
           {/* Contact Section (Replicated from requirements) */}
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-8">

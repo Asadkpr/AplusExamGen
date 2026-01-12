@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Chapter, Question, QuestionType, Subtopic } from '../types';
 import { CLASSES } from '../constants';
@@ -374,12 +373,40 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                           </button>
                                         </div>
                                         <div className="flex-grow cursor-pointer" onClick={() => toggleSelectQuestion(q.id)}>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getTypeColor(q.type)}`}>{q.type}</span>
-                                                {q.subtopic && <span className={`text-[10px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700 ${isUrduPaper ? 'font-urdu' : ''}`}>{q.subtopic}</span>}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getTypeColor(q.type)}`}>{q.type}</span>
+                                                  {q.subtopic && <span className={`text-[10px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700 ${isUrduPaper ? 'font-urdu' : ''}`}>{q.subtopic}</span>}
+                                                </div>
+                                                <span className="text-[10px] font-black text-gray-500">Marks: {q.marks}</span>
                                             </div>
-                                            <p className="text-white font-medium text-sm leading-relaxed">{q.text}</p>
-                                            {q.textUrdu && <p className="text-lg text-right text-gold-100/70 mt-3 font-urdu leading-loose" dir="rtl">{q.textUrdu}</p>}
+                                            
+                                            <p className="text-white font-medium text-[12px] leading-relaxed">{q.text}</p>
+                                            {q.textUrdu && <p className="text-[12px] text-right text-gold-100/70 mt-3 font-urdu leading-loose" dir="rtl">{q.textUrdu}</p>}
+
+                                            {/* 🔹 MCQ OPTIONS PREVIEW */}
+                                            {q.type === 'MCQ' && (
+                                              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                 {q.options && (
+                                                   <div className="space-y-1.5">
+                                                      {q.options.map((opt, oIdx) => (
+                                                        <div key={oIdx} className={`px-2 py-1 rounded text-[12px] flex items-center gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-gray-400 border border-gray-700/50'}`}>
+                                                           <span className="font-black opacity-50">{String.fromCharCode(65 + oIdx)}.</span> {opt}
+                                                        </div>
+                                                      ))}
+                                                   </div>
+                                                 )}
+                                                 {q.optionsUrdu && (
+                                                   <div className="space-y-1">
+                                                      {q.optionsUrdu.map((opt, oIdx) => (
+                                                        <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-gold-100/40 border border-gray-700/50'}`} dir="rtl">
+                                                           <span className="font-black opacity-30 text-xs">({String.fromCharCode(97 + oIdx)})</span> {opt}
+                                                        </div>
+                                                      ))}
+                                                   </div>
+                                                 )}
+                                              </div>
+                                            )}
                                         </div>
                                         <div className="flex flex-col gap-2 border-l border-gray-700 pl-4 justify-center">
                                             <button onClick={(e) => { e.stopPropagation(); handleEditClick(q); }} className="p-2 bg-blue-900/20 text-blue-400 rounded hover:bg-blue-500 hover:text-white transition-all shadow-sm"><Edit size={16} /></button>
@@ -435,7 +462,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                           const stHidden = visibility.hiddenSubtopicNames.includes(st.name);
                                           return (
                                             <div key={st.id} className="flex items-center justify-between group/st py-1 border-b border-gray-800 last:border-0">
-                                              <span className={`text-xs font-medium transition-colors ${stHidden || isHidden ? 'text-gray-600 line-through' : 'text-gray-300'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>
+                                              <span className={`text-[12px] font-medium transition-colors ${stHidden || isHidden ? 'text-gray-600 line-through' : 'text-gray-300'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>
                                                 {st.name}
                                               </span>
                                               <button 
@@ -486,11 +513,11 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-xs text-gold-500 font-bold">English Text</label>
-                                    <textarea rows={3} value={editForm.text} onChange={e => setEditForm({...editForm, text: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-sm focus:border-gold-500 outline-none" />
+                                    <textarea rows={3} value={editForm.text} onChange={e => setEditForm({...editForm, text: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-[12px] focus:border-gold-500 outline-none" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs text-gold-500 font-bold">Urdu Text (Nastaliq)</label>
-                                    <textarea rows={3} dir="rtl" value={editForm.textUrdu || ''} onChange={e => setEditForm({...editForm, textUrdu: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-lg focus:border-gold-500 outline-none font-urdu" />
+                                    <textarea rows={3} dir="rtl" value={editForm.textUrdu || ''} onChange={e => setEditForm({...editForm, textUrdu: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-[12px] focus:border-gold-500 outline-none font-urdu" />
                                 </div>
                             </div>
 
@@ -505,7 +532,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                         const newOpts = [...(editForm.options || ['', '', '', ''])];
                                                         newOpts[i] = e.target.value;
                                                         setEditForm({...editForm, options: newOpts});
-                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-xs text-white" placeholder={`Option ${String.fromCharCode(65+i)}`} />
+                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-[12px] text-white" placeholder={`Option ${String.fromCharCode(65+i)}`} />
                                                 ))}
                                             </div>
                                         </div>
@@ -517,7 +544,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                         const newOpts = [...(editForm.optionsUrdu || ['', '', '', ''])];
                                                         newOpts[i] = e.target.value;
                                                         setEditForm({...editForm, optionsUrdu: newOpts});
-                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-lg text-white font-urdu" placeholder={`آپشن ${String.fromCharCode(65+i)}`} />
+                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-[12px] text-white font-urdu" placeholder={`آپشن ${String.fromCharCode(65+i)}`} />
                                                 ))}
                                             </div>
                                         </div>
@@ -556,7 +583,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
               </button>
               <button 
                 onClick={() => setSelectedQuestionIds([])}
-                className="flex items-center gap-2 text-gray-400 hover:text-white font-bold uppercase tracking-widest text-[10px] transition-colors"
+                className="flex items-center gap-2 text-gray-400 font-bold uppercase tracking-widest text-[10px] transition-colors"
               >
                 <X size={16} /> Clear Selection
               </button>

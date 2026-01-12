@@ -273,10 +273,19 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-900 selection:bg-gold-500 selection:text-black">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="flex justify-center mb-4">
-          <div className="p-3 bg-gray-800 rounded-full border-2 border-gold-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-            {view === 'LOGIN' ? <Lock className="w-8 h-8 text-gold-500" /> : <HelpCircle className="w-8 h-8 text-gold-500" />}
-          </div>
-        </div>
+  <div className="w-24 h-24 bg-gray-800 rounded-full border-2 border-gold-500 shadow-[0_0_18px_rgba(245,158,11,0.25)] flex items-center justify-center overflow-hidden">
+  <img
+    src="/logo.png"
+    alt="Logo"
+    className="w-full h-full rounded-full object-cover"
+  />
+</div>
+
+
+
+
+</div>
+
         <h2 className="text-3xl font-extrabold text-gold-500 tracking-wider uppercase">{APP_NAME}</h2>
         <p className="mt-2 text-sm text-gold-100/70">{APP_TAGLINE}</p>
       </div>

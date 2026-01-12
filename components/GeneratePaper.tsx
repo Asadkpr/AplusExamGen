@@ -64,11 +64,13 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [originalSections, setOriginalSections] = useState<PaperPatternSection[]>([]);
   const [effectiveSections, setEffectiveSections] = useState<PaperPatternSection[]>([]);
   const [paperTime, setPaperTime] = useState<string>('2:00 Hours');
+  const [paperCode, setPaperCode] = useState<string>('');
   
   const [autoSelectQuestions, setAutoSelectQuestions] = useState(true);
   const [selectedMedium, setSelectedMedium] = useState<'English' | 'Urdu' | 'Both'>('English');
   const [showAnswerKey, setShowAnswerKey] = useState(false);
-  const [fontSize, setFontSize] = useState(12);
+  // Default font size set to 13
+  const [fontSize, setFontSize] = useState(13);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [availableChapters, setAvailableChapters] = useState<Chapter[]>([]);
   const [questionPool, setQuestionPool] = useState<Question[]>([]);
@@ -102,8 +104,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setEffectiveSections(initialPaper.sections);
       setOriginalSections(initialPaper.sections); // Use stored sections as base
       setSelectedMedium(initialPaper.medium || 'English');
-      setFontSize(initialPaper.fontSize || 12);
+      // Use stored font size or default to 13 (clamped at 13)
+      setFontSize(Math.min(initialPaper.fontSize || 13, 13));
       setPaperTime(initialPaper.timeAllowed || '2:00 Hours');
+      setPaperCode(initialPaper.paperCode || '');
       
       // Map questions to sectionSelections
       const selections: Record<string, string[]> = {};
@@ -327,7 +331,14 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setEffectiveSections(updatedSections);
       setStep(6);
     }
-    else if (step === 6) setStep(7);
+    else if (step === 6) {
+      // 🔹 GENERATE PAPER CODE IF NOT EXISTS
+      if (!paperCode) {
+        const code = Math.floor(1000 + Math.random() * 9000).toString();
+        setPaperCode(code);
+      }
+      setStep(7);
+    }
   };
 
   const handlePatternSelect = (p: PaperPattern) => {
@@ -374,7 +385,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       selectedSubtopicIds: selectedSubtopics,
       medium: selectedMedium,
       fontSize: fontSize,
-      timeAllowed: paperTime
+      timeAllowed: paperTime,
+      paperCode: paperCode
     };
 
     if (initialPaper?.id) {
@@ -476,7 +488,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                          onChange={(e) => setFontSize(parseInt(e.target.value))} 
                          className="bg-gray-800 border border-gray-700 text-white text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer min-w-[65px]"
                        >
-                         {[8, 9, 10, 11, 12, 13, 14, 15, 16].map(size => (<option key={size} value={size}>{size}px</option>))}
+                         {[8, 9, 10, 11, 12, 13].map(size => (<option key={size} value={size}>{size}px</option>))}
                        </select>
                     </div>
                     <Button onClick={() => setShowAnswerKey(!showAnswerKey)} variant={showAnswerKey ? 'primary' : 'secondary'} className="!w-auto text-[10px] py-1.5 px-3 flex items-center h-9 font-black"><Key size={14} className="mr-1.5 text-gold-500" /> {showAnswerKey ? 'Hide Key' : 'Show Key'}</Button>
@@ -697,10 +709,30 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                                             {qData.subtopic && <p className={`text-[8px] text-gray-500 uppercase font-bold ${isUrduPaper ? 'font-urdu' : ''}`}>Topic: {qData.subtopic}</p>}
                                                          </div>
                                                          <p className="text-sm text-white leading-snug">{qData.text}</p>
+                                                         
+                                                         {/* 🔹 MCQ OPTIONS PREVIEW IN PARTS */}
+                                                         {qData.type === 'MCQ' && qData.options && (
+                                                           <div className="mt-2 grid grid-cols-2 gap-2 text-[9px]">
+                                                              {qData.options.map((opt, oi) => (
+                                                                <div key={oi} className={`px-1.5 py-0.5 rounded border ${qData.correctAnswer === String.fromCharCode(65 + oi) ? 'bg-gold-500/10 text-gold-500 border-gold-500/20' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                                                                  <span className="font-black mr-1 opacity-50">{String.fromCharCode(65 + oi)}:</span> {opt}
+                                                                </div>
+                                                              ))}
+                                                           </div>
+                                                         )}
                                                        </div>
                                                        {qData.textUrdu && (
                                                          <div className="border-t md:border-t-0 md:border-l border-gray-700/50 pt-2 md:pt-0 md:pl-4">
                                                            <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{qData.textUrdu}</p>
+                                                           {qData.type === 'MCQ' && qData.optionsUrdu && (
+                                                             <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-right" dir="rtl">
+                                                                {qData.optionsUrdu.map((opt, oi) => (
+                                                                  <div key={oi} className={`text-xs px-1 rounded font-urdu ${qData.correctAnswer === String.fromCharCode(65 + oi) ? 'text-gold-500 bg-gold-500/5' : 'text-gray-500'}`}>
+                                                                    ({String.fromCharCode(97 + oi)}) {opt}
+                                                                  </div>
+                                                                ))}
+                                                             </div>
+                                                           )}
                                                          </div>
                                                        )}
                                                      </div>
@@ -743,10 +775,30 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                                 <div>
                                                   <p className="text-xs sm:text-sm text-white leading-snug font-medium">{q.text}</p>
                                                   {q.subtopic && <p className={`text-[8px] text-gray-500 mt-1 uppercase tracking-widest font-black border-t border-gray-700/50 pt-1 inline-block ${isUrduPaper ? 'font-urdu' : ''}`}>Topic: {q.subtopic}</p>}
+                                                  
+                                                  {/* 🔹 MCQ OPTIONS PREVIEW IN MANUAL LIST */}
+                                                  {q.type === 'MCQ' && q.options && (
+                                                    <div className="mt-2 grid grid-cols-2 gap-2">
+                                                       {q.options.map((opt, oi) => (
+                                                         <div key={oi} className={`text-[9px] px-2 py-0.5 rounded border ${q.correctAnswer === String.fromCharCode(65 + oi) ? 'bg-gold-500/10 text-gold-500 border-gold-500/30 font-bold' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>
+                                                            {String.fromCharCode(65 + oi)}. {opt}
+                                                         </div>
+                                                       ))}
+                                                    </div>
+                                                  )}
                                                 </div>
                                                 {q.textUrdu && (
                                                   <div className="border-t md:border-t-0 md:border-l border-gray-700/50 pt-2 md:pt-0 md:pl-4">
                                                     <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>
+                                                    {q.type === 'MCQ' && q.optionsUrdu && (
+                                                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-right" dir="rtl">
+                                                         {q.optionsUrdu.map((opt, oi) => (
+                                                           <div key={oi} className={`text-xs px-1 rounded font-urdu ${q.correctAnswer === String.fromCharCode(65 + oi) ? 'text-gold-500 bg-gold-500/10' : 'text-gray-400/50'}`}>
+                                                             ({String.fromCharCode(97 + oi)}) {opt}
+                                                           </div>
+                                                         ))}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 )}
                                               </div>
@@ -780,12 +832,33 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                   <div key={q.id} onClick={() => !isAlreadyInUnit && swapQuestionPart(q.id)} className={`p-4 rounded-xl border transition-all ${isAlreadyInUnit ? 'opacity-30 border-gray-700 cursor-not-allowed grayscale' : 'border-gray-700 bg-gray-900/40 cursor-pointer hover:border-gold-500 hover:bg-gray-800/50'}`}>
                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="flex items-start justify-between gap-4">
-                                           <p className="text-sm text-white leading-snug">{q.text}</p>
+                                           <div>
+                                              <p className="text-sm text-white leading-snug">{q.text}</p>
+                                              {/* 🔹 MCQ OPTIONS PREVIEW IN SWAP MODAL */}
+                                              {q.type === 'MCQ' && q.options && (
+                                                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                                                   {q.options.map((opt, oi) => (
+                                                     <div key={oi} className="text-[8px] text-gray-500">
+                                                        <span className="font-black mr-1">{String.fromCharCode(65 + oi)}:</span> {opt}
+                                                     </div>
+                                                   ))}
+                                                </div>
+                                              )}
+                                           </div>
                                            {isAlreadyInUnit ? <CheckCircle size={18} className="text-gold-500 shrink-0" /> : <ChevronRight size={18} className="text-gray-600 shrink-0" />}
                                         </div>
                                         {q.textUrdu && (
                                           <div className="border-t md:border-t-0 md:border-l border-gray-700/50 pt-2 md:pt-0 md:pl-4">
                                             <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>
+                                            {q.type === 'MCQ' && q.optionsUrdu && (
+                                              <div className="mt-1 flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-right opacity-50" dir="rtl">
+                                                 {q.optionsUrdu.map((opt, oi) => (
+                                                   <div key={oi} className="text-[10px] font-urdu">
+                                                     ({String.fromCharCode(97 + oi)}) {opt}
+                                                   </div>
+                                                 ))}
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                      </div>
@@ -823,7 +896,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        instituteProfile={user.instituteProfile} classLevel={selectedClass} subject={selectedSubject} 
                        totalMarks={effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0)} 
                        sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={1} medium={selectedMedium} showAnswerKey={showAnswerKey}
-                       baseFontSize={fontSize} timeAllowed={paperTime}
+                       baseFontSize={fontSize} timeAllowed={paperTime} paperCode={paperCode}
                      />
                   </div>
                </div>

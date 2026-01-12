@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from '../types';
 import { getAllUsers } from '../services/authService';
@@ -13,21 +14,20 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onNavigate }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
+  const [userCount, setUserCount] = useState<number>(0);
   const { isDarkMode, toggleTheme } = useTheme();
   
-  // Consistent Admin check across components
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
   const isLocalMode = user.id === 'local-admin' || user.id.startsWith('local-');
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchCounts = async () => {
       if (isAdmin) {
         const users = await getAllUsers();
-        setRegisteredUsers(users.filter(u => u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com'));
+        setUserCount(users.filter(u => u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com').length);
       }
     };
-    fetchUsers();
+    fetchCounts();
   }, [isAdmin]);
 
   const sidebarItems = [
@@ -36,7 +36,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onNavigate
     { id: 'PAPER_PATTERNS', label: 'Paper Patterns', icon: <Layout size={20} /> },
     ...(isAdmin ? [
       { id: 'UPLOAD_PAPER', label: 'Upload Paper', icon: <UploadCloud size={20} /> },
-      { id: 'MANAGE_CONTENT', label: 'Question Bank', icon: <Database size={20} /> }
+      { id: 'MANAGE_CONTENT', label: 'Question Bank', icon: <Database size={20} /> },
+      { id: 'TEACHERS_DIRECTORY', label: 'Teachers Directory', icon: <Users size={20} /> }
     ] : []),
     { id: 'PROFILE_SETTINGS', label: 'Profile Setup', icon: <UserCog size={20} /> },
     { id: 'ABOUT_US', label: 'About Us', icon: <Info size={20} /> },
@@ -47,12 +48,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onNavigate
     { id: 'GENERATE_PAPER', label: 'Generate Paper', desc: 'Create new exam', icon: <FilePlus2 className="w-10 h-10 text-gold-500" /> },
     { id: 'SAVED_PAPERS', label: 'Saved Papers', desc: 'View past exams', icon: <FolderOpen className="w-10 h-10 text-gold-400" /> },
     { id: 'PAPER_PATTERNS', label: 'Paper Patterns', desc: 'Manage Layouts', icon: <Layout className="w-10 h-10 text-gold-400" /> },
-    ...(isAdmin ? [{ 
-      id: 'UPLOAD_PAPER', label: 'Upload Paper', desc: 'Import Questions', icon: <UploadCloud className="w-10 h-10 text-gold-400" /> 
-    },
-    { 
-      id: 'MANAGE_CONTENT', label: 'Question Bank', desc: 'Edit Content', icon: <Database className="w-10 h-10 text-gold-400" /> 
-    }] : []),
+    ...(isAdmin ? [
+      { id: 'UPLOAD_PAPER', label: 'Upload Paper', desc: 'Import Questions', icon: <UploadCloud className="w-10 h-10 text-gold-400" /> },
+      { id: 'MANAGE_CONTENT', label: 'Question Bank', desc: 'Edit Content', icon: <Database className="w-10 h-10 text-gold-400" /> },
+      { id: 'TEACHERS_DIRECTORY', label: 'Teachers Directory', desc: 'View registered users', icon: <Users className="w-10 h-10 text-gold-400" /> }
+    ] : []),
     { id: 'PROFILE_SETTINGS', label: 'Profile Setup', desc: 'Institute details', icon: <UserCog className="w-10 h-10 text-gold-400" /> },
     { id: 'HELP_SUPPORT', label: 'Help & Support', desc: 'FAQs & Contact', icon: <HelpCircle className="w-10 h-10 text-gold-400" /> },
   ];
@@ -95,7 +95,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onNavigate
           <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div><h1 className="text-2xl font-bold text-white">{isAdmin ? "Welcome, Master Admin" : `Welcome, ${user.name}`}</h1><p className="text-gray-400 text-sm mt-1">{isAdmin ? "Manage system and directory." : "Select an option to manage exams."}</p></div>
             {isAdmin && (
-               <div className="bg-gold-500/10 border border-gold-500/30 px-4 py-2 rounded-lg flex items-center gap-3"><div className="bg-gold-500 p-2 rounded-full text-black"><Users size={16} /></div><div><p className="text-xs text-gold-500 uppercase font-bold">Teachers</p><p className="text-xl font-bold text-white leading-none">{registeredUsers.length}</p></div></div>
+               <div className="bg-gold-500/10 border border-gold-500/30 px-4 py-2 rounded-lg flex items-center gap-3"><div className="bg-gold-500 p-2 rounded-full text-black"><Users size={16} /></div><div><p className="text-xs text-gold-500 uppercase font-bold">Teachers</p><p className="text-xl font-bold text-white leading-none">{userCount}</p></div></div>
             )}
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
@@ -103,19 +103,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onNavigate
                <button key={item.id} onClick={() => onNavigate(item.id as ViewState)} className="group bg-gray-800 border border-gray-700 hover:border-gold-500/50 rounded-xl p-6 flex flex-col items-center justify-center text-center transition-all hover:shadow-lg hover:-translate-y-1"><div className="bg-gray-750 p-4 rounded-full mb-4 group-hover:bg-gold-500/10">{item.icon}</div><h2 className="text-base font-bold text-white mb-2">{item.label}</h2><p className="text-xs text-gray-500">{item.desc}</p></button>
             ))}
           </div>
-          {isAdmin && (
-            <div className="animate-fadeIn"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><School className="text-gold-500" />Teachers Directory</h3>
-               <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-lg">
-                  {registeredUsers.length === 0 ? <div className="p-8 text-center text-gray-500">No teachers registered yet.</div> : (
-                    <div className="overflow-x-auto"><table className="w-full text-left text-sm text-gray-400"><thead className="bg-gray-900/50 text-gold-500 uppercase text-xs font-bold border-b border-gray-700"><tr><th className="px-6 py-4">Name / Institute</th><th className="px-6 py-4">Contact</th><th className="px-6 py-4">Location</th><th className="px-6 py-4">Joined</th></tr></thead><tbody className="divide-y divide-gray-700">
-                          {registeredUsers.map((u) => (
-                            <tr key={u.id} className="hover:bg-gray-750"><td className="px-6 py-4"><div className="font-bold text-white">{u.name}</div><div className="text-xs text-gray-500">{u.instituteProfile?.instituteName || "No Institute"}</div></td><td className="px-6 py-4"><div className="flex items-center gap-2 text-xs mb-1"><Mail size={12} /> {u.email}</div><div className="flex items-center gap-2 text-xs"><Phone size={12} /> {u.mobile}</div></td><td className="px-6 py-4 text-xs">{u.instituteProfile?.city || "Unknown"}</td><td className="px-6 py-4 text-xs">{new Date(u.createdAt).toLocaleDateString()}</td></tr>
-                          ))}
-                    </tbody></table></div>
-                  )}
-               </div>
-            </div>
-          )}
         </div>
       </main>
     </div>

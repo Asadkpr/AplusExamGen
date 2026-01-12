@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -6,8 +5,7 @@ import { CLASSES } from '../constants';
 import { getSubjects, addSubject, deleteSubject, renameSubject } from '../services/subjectService';
 import { getChapters, addChapter, deleteChapter, renameChapter } from '../services/chapterService';
 import { saveUploadedChapterContent } from '../services/questionService';
-// Import GoogleGenAI from @google/genai
-// Fix: Uncommented GoogleGenAI import
+// Correctly import GoogleGenAI from @google/genai
 //import { GoogleGenAI } from "@google/genai";
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, X, Info, 
@@ -48,6 +46,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
   const [parsedCount, setParsedCount] = useState(0);
   const [isConvertingMath, setIsConvertingMath] = useState(false);
 
+  // Fix: Defined isAdmin which was previously missing and causing crashes
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
   const isUrduPaper = isUrduStyleSubject(selectedSubject);
 
@@ -65,8 +64,8 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     try {
       const allSubjectsMap = await getSubjects();
       setAvailableSubjects(allSubjectsMap[selectedClass] || []);
-    } finally {
-      // Logic for cleanup
+    } catch (e) {
+      console.error("Failed to load subjects", e);
     }
   };
 
@@ -78,8 +77,8 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     try {
       const chapters = await getChapters(selectedSubject, selectedClass);
       setAvailableChapters(chapters);
-    } finally {
-      // Logic for cleanup
+    } catch (e) {
+      console.error("Failed to load chapters", e);
     }
   };
 
@@ -223,7 +222,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     const rows = [
       ["Atomic Structure", "MCQ", "Who discovered the electron?", "الیکٹران کس نے دریافت کیا؟", "J.J. Thomson", "Rutherford", "Bohr", "Dalton", "جے جے ثامسن", "ردرفورڈ", "بوہر", "ڈالٹن", "A", "1"],
       ["Chemical Bonding", "SHORT", "Define Ionic Bond.", "آئیونک بانڈ کی تعریف کریں۔", "", "", "", "", "", "", "", "", "", "2"],
-      ["Mathematics", "MCQ", "Solve: x square = 4", "حل کریں: x اسکوائر برابر ہے 4 کے", "2", "-2", "Both", "None", "2", "-2", "دونوں", "کوئی نہیں", "C", "1"]
+      ["Mathematics", "MCQ", "Solve: x^2 = 4", "حل کریں: x^2 = 4", "2", "-2", "Both", "None", "2", "-2", "دونوں", "کوئی نہیں", "C", "1"]
     ];
 
     const csvContent = [
@@ -300,21 +299,38 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
   };
 
   const convertMathToLatex = async (questions: Question[]) => {
+    // Safety check for API key
+    if (!process.env.API_KEY) {
+      console.warn("API Key missing. Uploading without auto-conversion.");
+      return questions;
+    }
+
     setIsConvertingMath(true);
-    // Fix: Using correct initialization with named parameter for apiKey as per @google/genai guidelines
+    // Initialize Gemini 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const batch = questions.map(q => ({
+      id: q.id,
       text: q.text,
       textUrdu: q.textUrdu,
-      options: q.options
+      options: q.options,
+      optionsUrdu: q.optionsUrdu
     }));
 
-    const prompt = `You are a Mathematics Professor. Convert all mathematical expressions, equations, and symbols in the provided questions (both English and Urdu) into professional, high-quality LaTeX 'Pure Mathematics' format.
-    Input: ${JSON.stringify(batch)}`;
+    const prompt = `You are an expert Mathematics Professor and LaTeX specialist. 
+    Your mission: Transform all complex LaTeX mathematical structures in the provided JSON array into a simplified, linear 'pure math' format that uses slashes for fractions.
+    
+    STRICT RULES:
+    1. CONVERT all fractions: Change any instance of \\frac{a}{b} into (a/b) or a/b. 
+       - Example: \\frac{3}{2} MUST become 3/2
+       - Example: b = \\frac{5}{3} MUST become b = 5/3
+    2. DELIMITERS: Wrap ALL identified mathematical expressions, variables (x, y, θ, etc.), and formulas in single dollar signs '$' for inline rendering (e.g., $x^2$, $3/4$).
+    3. LANGUAGES: Process both 'text' (English) and 'textUrdu' (Urdu) fields. Do NOT translate natural language; only convert the math notation.
+    4. OUTPUT: Return ONLY a valid JSON array of objects with the exact same structure and IDs.
+
+    Input JSON: ${JSON.stringify(batch)}`;
 
     try {
-      // Fix: Using ai.models.generateContent directly as per @google/genai guidelines
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: prompt,
@@ -323,18 +339,21 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         }
       });
 
-      // Fix: Accessing .text property directly (not as a method)
       const jsonStr = response.text?.trim() || '[]';
       const convertedBatch = JSON.parse(jsonStr);
       
-      return questions.map((q, i) => ({
-        ...q,
-        text: convertedBatch[i]?.text || q.text,
-        textUrdu: convertedBatch[i]?.textUrdu || q.textUrdu,
-        options: convertedBatch[i]?.options || q.options
-      }));
+      return questions.map((q, i) => {
+        const converted = convertedBatch.find((c: any) => c.id === q.id) || convertedBatch[i];
+        return {
+          ...q,
+          text: converted?.text || q.text,
+          textUrdu: converted?.textUrdu || q.textUrdu,
+          options: converted?.options || q.options,
+          optionsUrdu: converted?.optionsUrdu || q.optionsUrdu
+        };
+      });
     } catch (e) {
-      console.error("Pure Math conversion error", e);
+      console.error("Math conversion failed. Falling back to original data.", e);
       return questions;
     } finally {
       setIsConvertingMath(false);
@@ -354,8 +373,16 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         }
 
         const success = await saveUploadedChapterContent(selectedChapter.id, selectedSubject, selectedClass, finalQuestions, parsedSubtopics);
-        if (success) { setParsedCount(finalQuestions.length); setUploadSuccess(true); await loadChapters(); }
-    } catch (error: any) { alert(error.message || "Error uploading data."); } finally { setIsUploading(false); }
+        if (success) { 
+          setParsedCount(finalQuestions.length); 
+          setUploadSuccess(true); 
+          await loadChapters(); 
+        }
+    } catch (error: any) { 
+      alert(error.message || "Error uploading data."); 
+    } finally { 
+      setIsUploading(false); 
+    }
   };
 
   return (
@@ -654,9 +681,35 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                           <span className={`text-[9px] text-gray-500 ml-auto italic ${isUrduPaper ? 'font-urdu' : ''}`}>{q.subtopic}</span>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                          <p className="text-sm text-white leading-relaxed">{q.text}</p>
-                                          {q.textUrdu && <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>}
+                                          <p className="text-[12px] text-white leading-relaxed">{q.text}</p>
+                                          {q.textUrdu && <p className="text-[12px] text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>}
                                         </div>
+                                        
+                                        {/* 🔹 MCQ OPTIONS PREVIEW FOR UPLOAD */}
+                                        {q.type === 'MCQ' && (
+                                          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-800 pt-3">
+                                            {q.options && (
+                                              <div className="space-y-1">
+                                                {q.options.map((opt, oIdx) => (
+                                                  <div key={oIdx} className="text-[12px] text-gray-400 flex items-center gap-1.5">
+                                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
+                                                    <span className="truncate">{opt}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                            {q.optionsUrdu && (
+                                              <div className="space-y-0.5" dir="rtl">
+                                                {q.optionsUrdu.map((opt, oIdx) => (
+                                                  <div key={oIdx} className="text-[12px] text-gold-100/50 font-urdu flex items-center gap-1.5">
+                                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
+                                                    <span>{opt}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
                                      </div>
                                    ))}
                                 </div>
@@ -664,7 +717,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
                              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-700">
                                <Button onClick={handleConfirmUpload} isLoading={isUploading || isConvertingMath} disabled={parsedQuestions.length === 0} className="flex-grow py-4 text-lg shadow-xl">
-                                 {isConvertingMath ? "Formatting Content..." : `Confirm & Save ${parsedQuestions.length} Questions`}
+                                 {isConvertingMath ? "Optimizing Math Notation..." : `Confirm & Save ${parsedQuestions.length} Questions`}
                                 </Button>
                                 <Button variant="secondary" onClick={() => { setFile(null); setParsedQuestions([]); }} className="!w-auto px-8">Cancel</Button>
                              </div>

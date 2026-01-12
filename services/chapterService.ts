@@ -1,4 +1,3 @@
-
 import { db } from '../firebaseConfig';
 // Standard modular firestore imports from lite version
 import { 
@@ -19,12 +18,13 @@ import { getUploadedSubtopicsMap } from './questionService';
 import { executeAsAdmin } from './authService';
 
 const COLLECTION = 'chapters';
-const VISIBILITY_COLLECTION = 'visibility_settings';
-const VISIBILITY_DOC = 'global';
+export const VISIBILITY_COLLECTION = 'visibility_settings';
+export const VISIBILITY_DOC = 'global';
 
 export interface VisibilityState {
   hiddenChapterIds: string[];
   hiddenSubtopicNames: string[];
+  hiddenPatternIds?: string[]; // Track hidden system patterns
   renamedChapterMap?: Record<string, string>; // Maps ID -> New Name
 }
 
@@ -37,18 +37,20 @@ export const getVisibilitySettings = async (): Promise<VisibilityState> => {
       return {
         hiddenChapterIds: data.hiddenChapterIds || [],
         hiddenSubtopicNames: data.hiddenSubtopicNames || [],
+        hiddenPatternIds: data.hiddenPatternIds || [],
         renamedChapterMap: data.renamedChapterMap || {}
       };
     }
   } catch (e) {}
-  return { hiddenChapterIds: [], hiddenSubtopicNames: [], renamedChapterMap: {} };
+  return { hiddenChapterIds: [], hiddenSubtopicNames: [], hiddenPatternIds: [], renamedChapterMap: {} };
 };
 
-export const toggleVisibility = async (idOrName: string, type: 'chapter' | 'subtopic', hide: boolean): Promise<void> => {
+export const toggleVisibility = async (idOrName: string, type: 'chapter' | 'subtopic' | 'pattern', hide: boolean): Promise<void> => {
   const updateOp = async () => {
     const current = await getVisibilitySettings();
     let hiddenChapterIds = [...current.hiddenChapterIds];
     let hiddenSubtopicNames = [...current.hiddenSubtopicNames];
+    let hiddenPatternIds = [...(current.hiddenPatternIds || [])];
 
     if (type === 'chapter') {
       if (hide) {
@@ -56,18 +58,25 @@ export const toggleVisibility = async (idOrName: string, type: 'chapter' | 'subt
       } else {
         hiddenChapterIds = hiddenChapterIds.filter(id => id !== idOrName);
       }
-    } else {
+    } else if (type === 'subtopic') {
       if (hide) {
         if (!hiddenSubtopicNames.includes(idOrName)) hiddenSubtopicNames.push(idOrName);
       } else {
         hiddenSubtopicNames = hiddenSubtopicNames.filter(name => name !== idOrName);
+      }
+    } else if (type === 'pattern') {
+      if (hide) {
+        if (!hiddenPatternIds.includes(idOrName)) hiddenPatternIds.push(idOrName);
+      } else {
+        hiddenPatternIds = hiddenPatternIds.filter(id => id !== idOrName);
       }
     }
 
     await setDoc(doc(db, VISIBILITY_COLLECTION, VISIBILITY_DOC), {
       ...current,
       hiddenChapterIds,
-      hiddenSubtopicNames
+      hiddenSubtopicNames,
+      hiddenPatternIds
     }, { merge: true });
   };
 
@@ -82,7 +91,11 @@ export const toggleVisibility = async (idOrName: string, type: 'chapter' | 'subt
 
 export const getChapters = async (subject: string, classLevel: string, filterHidden: boolean = false): Promise<Chapter[]> => {
   const visibility = await getVisibilitySettings();
-  const defaults = getDefaultChapters(subject, classLevel);
+  const defaults =
+  subject.toLowerCase() === 'physics'
+    ? []
+    : getDefaultChapters(subject, classLevel);
+
   const customChapters: Chapter[] = [];
 
   const fetchCustomOp = async () => {
@@ -139,11 +152,27 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
         ...ch,
         subtopics: ch.subtopics.filter(st => !visibility.hiddenSubtopicNames.includes(st.name))
       }));
-  } else {
-    // Even if not filtering for generation, we usually want to hide deleted ones in the management view 
-    // unless specifically requested to show them. For Upload Paper, we hide them.
-    combinedChapters = combinedChapters.filter(ch => !visibility.hiddenChapterIds.includes(ch.id));
   }
+
+  // 🔹 IMPROVED NUMERICAL SORTING
+  // Ensures "Chapter 1", "Chapter 2", "Chapter 10" appear in correct sequence
+  // Extracts the first number found in the name for comparison.
+  combinedChapters.sort((a, b) => {
+    const extractNum = (str: string) => {
+      const match = str.match(/\d+/);
+      return match ? parseInt(match[0], 10) : Infinity;
+    };
+    
+    const numA = extractNum(a.name);
+    const numB = extractNum(b.name);
+    
+    if (numA !== numB) {
+      return numA - numB;
+    }
+    
+    // Fallback to alpha sort if numbers are same or missing
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
 
   return combinedChapters;
 };
