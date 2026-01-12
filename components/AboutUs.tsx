@@ -52,7 +52,7 @@ export const AboutUs: React.FC<AboutUsProps> = ({ onBack }) => {
   </div>
 
   <div className="p-8 text-gray-300 leading-relaxed text-center space-y-4">
-    <h3 className="text-xl font-semibold text-white mb-2">
+    <h3 className="text-xl font-semibold text-gold-500 mb-2">
       Welcome to APlus ExamGen
     </h3>
 
