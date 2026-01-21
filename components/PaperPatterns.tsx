@@ -25,6 +25,13 @@ const PREDEFINED_TYPES = [
   'مکالمہ', 'درخواست', 'تلخیص نگاری', 'الفاظ معنی', 'آیات کا ترجمہ', 'احادیث کی تشریح'
 ];
 
+const ENGLISH_SPECIFIC_TYPES = [
+  'MCQ', 'Short', 'Long', 'Translate', 'Summary', 'Idioms', 'Essay', 'Passage', 'Sentences', 'Alternate', 'Voice'
+];
+
+const ENGLISH_MCQ_SUBTYPES = ['Verb', 'Spelling', 'Meaning', 'Grammar'];
+const SECTION_HEADINGS = ['None', 'SECTION – I', 'SECTION – II', 'OBJECTIVE PART', 'SUBJECTIVE PART'];
+
 const isUrdu = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
 const getSectionTagStyles = (type: string) => {
@@ -37,22 +44,37 @@ const getSectionTagStyles = (type: string) => {
   return 'bg-gray-500/10 text-gray-400 border-gray-500/30 ring-gray-500/5';
 };
 
-const getAutoTitle = (type: string, count: number, marks: number, index: number): string | null => {
+const getAutoTitle = (type: string, count: number, marks: number, index: number, isEnglish?: boolean): string | null => {
   const isUrduType = isUrdu(type);
   const marksCalc = isUrduType 
     ? `(${count * marks} = ${marks} × ${count})`
     : `(${count} x ${marks} = ${count * marks} Marks)`;
   
   let baseTitle = '';
-  if (type === 'MCQ') {
-    baseTitle = isUrduType ? "تمام سوالات کے جوابات دیں" : "Attempt all. Circle the correct answer";
-  } else if (type === 'SHORT') {
-    baseTitle = isUrduType ? `کوئی سے ${count} مختصر سوالات کے جوابات دیں` : `Write short answers to any ${count} questions.`;
-  } else if (type === 'LONG') {
-    baseTitle = isUrduType ? `کوئی سے ${count} تفصیلی سوالات کے جوابات دیں` : `Attempt any ${count} questions.`;
+  const upperType = type.toUpperCase();
+
+  if (isEnglish) {
+    if (upperType === 'MCQ') {
+      baseTitle = "Choose the correct option from the following.";
+    } else if (upperType === 'SHORT') {
+      baseTitle = `Write short answers to any ${count} questions.`;
+    } else if (upperType === 'LONG') {
+      baseTitle = `Answer the following long questions.`;
+    } else {
+      const suggestions = TYPE_TITLE_MAPPING[type] || [];
+      baseTitle = suggestions[0] || type;
+    }
   } else {
-    const suggestions = TYPE_TITLE_MAPPING[type] || [];
-    baseTitle = suggestions[0] || type;
+    if (upperType === 'MCQ') {
+      baseTitle = isUrduType ? "تمام سوالات کے جوابات دیں" : "Attempt all. Circle the correct answer";
+    } else if (upperType === 'SHORT') {
+      baseTitle = isUrduType ? `کوئی سے ${count} مختصر سوالات کے جوابات دیں` : `Write short answers to any ${count} questions.`;
+    } else if (upperType === 'LONG') {
+      baseTitle = isUrduType ? `کوئی سے ${count} تفصیلی سوالات کے جوابات دیں` : `Attempt any ${count} questions.`;
+    } else {
+      const suggestions = TYPE_TITLE_MAPPING[type] || [];
+      baseTitle = suggestions[0] || type;
+    }
   }
 
   const cleanBase = baseTitle
@@ -70,9 +92,17 @@ const getAutoTitle = (type: string, count: number, marks: number, index: number)
 };
 
 const TYPE_TITLE_MAPPING: Record<string, string[]> = {
-  'MCQ': ['Attempt all. Circle the correct answer', 'Circle the Correct Answer', 'Objective Part'],
-  'SHORT': ['Write short answers to any (?) questions.', 'Section I: Short Answers', 'Answer any (?) questions.'],
-  'LONG': ['Attempt any (?) questions.', 'Detailed Answers', 'Section II: Descriptive'],
+  'MCQ': ['Attempt all. Circle the correct answer', 'Choose the correct option', 'Circle the Correct Answer', 'Objective Part'],
+  'Short': ['Write short answers to any (?) questions.', 'Section I: Short Answers', 'Answer any (?) questions.'],
+  'Long': ['Detailed Answers', 'Attempt any (?) questions.', 'Section II: Descriptive'],
+  'Translate': ['Translate into Urdu', 'Urdu Translation', 'Translation (Eng to Urdu)'],
+  'Summary': ['Write a Summary of...', 'Passage Summary', 'Summary Writing'],
+  'Idioms': ['Use Idioms in sentences', 'Idiomatic Expressions', 'English Idioms'],
+  'Essay': ['Write an Essay on...', 'Descriptive Essay', 'English Essay'],
+  'Passage': ['Read the passage and answer...', 'Comprehension Passage', 'Unseen Passage'],
+  'Sentences': ['Make sentences using...', 'Sentence Making', 'Vocabulary Use'],
+  'Alternate': ['Alternate question for...', 'Supplementary Question', 'Alternative Choice'],
+  'Voice': ['Change the Voice', 'Active and Passive Voice', 'Direct/Indirect Speech'],
   'NUMERICAL': ['Solve the Numericals', 'Mathematical Problems', 'Numericals'],
   'Letter': ['Write a Letter to...', 'Formal Letter', 'Informal Letter'],
   'Application': ['Write an Application for...', 'Official Application', 'School Application'],
@@ -81,8 +111,7 @@ const TYPE_TITLE_MAPPING: Record<string, string[]> = {
   'Pair of words': ['Use Pairs of Words in sentences', 'Pairs of Words', 'Vocabulary Check'],
   'Translate passage In urdu': ['Translate into Urdu', 'Urdu Translation', 'Translation (Eng to Urdu)'],
   'Translate passage to English': ['Translate into English', 'English Translation', 'Translation (Urdu to Eng)'],
-  'Essay': ['Write an Essay on...', 'Descriptive Essay', 'English Essay'],
-  'تشریح اشعار': ['اشعار کی تشریح کریں', 'حصہ نظم: تشریح', 'اشعار کا خلاصہ'],
+  'تشریح اشعار': ['اشعار کی تشریح کریں', 'حصہ نظم: تشریح', 'اشعار का خلاصہ'],
   'سیاق و سباق کے حوالے سے تشریح': ['سیاق و سباق کے ساتھ تشریح', 'عبارت کی تشریح', 'نثر پاروں کی تشریح'],
   'سبق کا خلاصہ': ['سبق کا خلاصہ لکھیں', 'خلاصہ نویسی', 'سبق کا خلاصہ'],
   'نظم کا مرکزی خیال': ['نظم کا مرکزی خیال لکھیں', 'مرکزی خیال', 'خلاصہ نظم'],
@@ -191,10 +220,13 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     });
     setSections(JSON.parse(JSON.stringify(pattern.sections)));
     
+    const currentSubject = (pattern.subject || selectedSubject).toLowerCase();
+    const isEnglishSubject = currentSubject === 'english';
+
     const modes: Record<string, boolean> = {};
     const expanded: Record<string, boolean> = {};
     pattern.sections.forEach((s, index) => {
-      const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, index);
+      const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, index, isEnglishSubject);
       if (s.title && s.title !== autoTitle) {
         modes[s.id] = true;
       }
@@ -213,14 +245,17 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     const sectionId = generateId();
     const type = 'MCQ';
     const index = sections.length;
-    const autoTitle = getAutoTitle(type, 10, 1, index);
+    const currentSubject = (editingPattern?.subject || selectedSubject).toLowerCase();
+    const isEnglishSubject = currentSubject === 'english';
+    const autoTitle = getAutoTitle(type, 10, 1, index, isEnglishSubject);
     const newSection: PaperPatternSection = {
       id: sectionId, 
       type: type, 
       title: autoTitle || `Q${index + 1}. Attempt all. (10 x 1 = 10 Marks)`, 
       questionCount: 10, 
       attemptCount: 10, 
-      marksPerQuestion: 1
+      marksPerQuestion: 1,
+      heading: 'None'
     };
     setSections([...sections, newSection]);
   };
@@ -231,13 +266,15 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
         if (s.id !== id) return s;
         
         let nextSection = { ...s, [field]: value };
+        const currentSubject = (editingPattern?.subject || selectedSubject).toLowerCase();
+        const isEnglishSubject = currentSubject === 'english';
 
-        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion') {
+        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion' || field === 'heading') {
            if (!customTitleModes[id]) {
-             const updatedType = field === 'type' ? value : s.type;
-             const updatedCount = field === 'attemptCount' ? value : s.attemptCount;
-             const updatedMarks = field === 'marksPerQuestion' ? value : s.marksPerQuestion;
-             const autoTitle = getAutoTitle(updatedType, updatedCount, updatedMarks, idx);
+             const updatedType = field === 'type' ? value : nextSection.type;
+             const updatedCount = field === 'attemptCount' ? value : nextSection.attemptCount;
+             const updatedMarks = field === 'marksPerQuestion' ? value : nextSection.marksPerQuestion;
+             const autoTitle = getAutoTitle(updatedType, updatedCount, updatedMarks, idx, isEnglishSubject);
              if (autoTitle) {
                nextSection.title = autoTitle;
              }
@@ -257,7 +294,6 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
       if (s.id !== sectionId) return s;
       const parts = [...(s.subParts || [])];
       const nextLabel = String.fromCharCode(97 + parts.length); // a, b, c...
-      // Default type to the parent section's type
       parts.push({ id: generateId(), label: `(${nextLabel})`, marks: 0, type: s.type });
       return { ...s, subParts: parts };
     }));
@@ -267,10 +303,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     setSections(prev => prev.map(s => {
       if (s.id !== sectionId) return s;
       const parts = s.subParts?.map(p => p.id === partId ? { ...p, [field]: value } : p);
-      
-      // If we update marks of sub-parts, we might want to sync the main marksPerQuestion
       const totalPartMarks = parts?.reduce((acc, p) => acc + (p.marks || 0), 0) || s.marksPerQuestion;
-      
       return { ...s, subParts: parts, marksPerQuestion: totalPartMarks };
     }));
   };
@@ -290,9 +323,11 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
   const handleRemoveSection = (id: string) => {
     setSections(prev => {
       const filtered = prev.filter(s => s.id !== id);
+      const currentSubject = (editingPattern?.subject || selectedSubject).toLowerCase();
+      const isEnglishSubject = currentSubject === 'english';
       return filtered.map((s, idx) => {
         if (customTitleModes[s.id]) return s;
-        const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, idx);
+        const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, idx, isEnglishSubject);
         if (autoTitle) return { ...s, title: autoTitle };
         return s;
       });
@@ -451,7 +486,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                  <div key={pattern.id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gold-500 flex flex-col h-full transition-all group">
                     <div className="flex justify-between items-start mb-3">
                        <h3 className="font-bold text-white text-lg leading-tight group-hover:text-gold-500 transition-colors">{pattern.name}</h3>
-                       {pattern.classLevel && <span className="text-[9px] bg-gray-900 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700 font-bold uppercase">{pattern.classLevel}</span>}
+                       {pattern.classLevel && <span className="text-[9px] bg-gray-900 text-gold-500/70 border border-gold-500/20 px-1.5 py-0.5 rounded font-black uppercase">{pattern.classLevel}</span>}
                     </div>
                     
                     <div className="mb-6 flex-grow">
@@ -463,9 +498,6 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                                  <span className="w-px h-2.5 bg-current opacity-20"></span>
                                  <span className="text-white brightness-125 font-black">{s.attemptCount}/{s.questionCount}</span>
                                </span>
-                               {s.subParts && s.subParts.length > 0 && (
-                                 <span className="text-[8px] text-gray-500 italic pl-2">Has {s.subParts.length} parts</span>
-                               )}
                              </div>
                           ))}
                        </div>
@@ -481,7 +513,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
 
                     {isAdmin && (
                       <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-700/30">
-                        <button onClick={() => handleEditPattern(pattern)} className="p-1.5 text-blue-400 hover:bg-blue-900/20 rounded transition-colors"><Edit size={14} /></button>
+                        <button onClick={() => handleEditPattern(pattern)} className="p-1.5 text-gold-500 hover:bg-gold-500/10 rounded transition-colors"><Edit size={14} /></button>
                         <button onClick={() => handleDeletePattern(pattern.id)} className="p-1.5 text-red-400 hover:bg-red-900/20 rounded transition-colors"><Trash2 size={14} /></button>
                       </div>
                     )}
@@ -496,6 +528,8 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
   const renderCreateForm = () => {
     const classSubjects = (formData.classLevel ? (subjectsMap[formData.classLevel] || []) : [])
       .filter(s => s !== (editingPattern?.subject || selectedSubject));
+    const currentSubject = (editingPattern?.subject || selectedSubject).toLowerCase();
+    const isEnglishSubject = currentSubject === 'english';
 
     return (
       <div className="animate-fadeIn max-w-5xl mx-auto pb-20">
@@ -601,15 +635,8 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                           </div>
                         );
                       })}
-                      {classSubjects.length === 0 && (
-                        <div className="p-8 text-center text-gray-500 italic text-xs">No other subjects found for {formData.classLevel}</div>
-                      )}
                     </div>
                   </div>
-                )}
-                
-                {!formData.classLevel && (
-                  <p className="text-[10px] text-gray-500 italic">Please select a Target Class first to enable this menu.</p>
                 )}
               </div>
            </div>
@@ -620,15 +647,23 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
            </div>
            
            <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-gray-500 mb-3 px-2 uppercase tracking-widest">
-              <div className="col-span-3 text-center">Section Type</div><div className="col-span-3">Display Title</div><div className="col-span-2 text-center">Total Qs</div><div className="col-span-2 text-center">Attempt Limit</div><div className="col-span-1 text-center">Marks/Q</div><div className="col-span-1 text-center">Action</div>
+              {isEnglishSubject && <div className="col-span-2 text-center">Section Heading</div>}
+              <div className={isEnglishSubject ? "col-span-2 text-center" : "col-span-3 text-center"}>Section Type</div>
+              <div className={isEnglishSubject ? "col-span-2" : "col-span-3"}>Display Title</div>
+              <div className="col-span-2 text-center">Total Qs</div>
+              <div className={isEnglishSubject ? "col-span-1 text-center" : "col-span-2 text-center"}>Attempt</div>
+              <div className="col-span-1 text-center">Marks/Q</div>
+              <div className="col-span-1 text-center">Action</div>
            </div>
            
            <div className="space-y-4 mb-8">
                {sections.map((s, idx) => {
-                 const isCustomType = !PREDEFINED_TYPES.includes(s.type);
+                 const isCustomType = !PREDEFINED_TYPES.includes(s.type) && !ENGLISH_SPECIFIC_TYPES.includes(s.type);
                  const isCustomTitleMode = customTitleModes[s.id] || isCustomType;
                  const rawSuggestions = TYPE_TITLE_MAPPING[s.type] || [];
                  const isExpanded = expandedSectionParts[s.id];
+                 const isEnglish = (editingPattern?.subject || selectedSubject).toLowerCase() === 'english';
+                 const isObjectivePart = s.type.toUpperCase() === 'MCQ';
 
                  const suggestions = rawSuggestions.map(rs => {
                    const isUrduType = isUrdu(s.type);
@@ -639,18 +674,35 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                    
                    if (isUrduType) {
                      let urduBody = clean;
-                     if (s.type === 'SHORT') urduBody = `کوئی سے ${s.attemptCount} مختصر سوالات کے جوابات دیں`;
-                     if (s.type === 'LONG') urduBody = `کوئی سے ${s.attemptCount} تفصیلی سوالات کے جوابات دیں`;
-                     if (s.type === 'MCQ') urduBody = "تمام سوالات کے جوابات دیں";
+                     if (s.type.toUpperCase() === 'SHORT') urduBody = `کوئی سے ${s.attemptCount} مختصر سوالات کے جوابات دیں`;
+                     if (s.type.toUpperCase() === 'LONG') urduBody = `کوئی سے ${s.attemptCount} تفصیلی سوالات کے جوابات دیں`;
+                     if (s.type.toUpperCase() === 'MCQ') urduBody = "تمام سوالات کے جوابات دیں";
                      return `سوال نمبر ${idx + 1}. ${urduBody} ${marksCalc}`;
                    }
                    return `Q${idx + 1}. ${clean} ${marksCalc}`;
                  });
 
+                 // No filtering for English types anymore, show all available
+                 const typesToRender = isEnglishSubject ? ENGLISH_SPECIFIC_TYPES : PREDEFINED_TYPES;
+
                  return (
                    <div key={s.id} className="space-y-2">
                      <div className="bg-gray-900/50 border border-gray-700 p-3 rounded-xl grid grid-cols-12 gap-2 items-center hover:border-gray-500 transition-colors">
-                        <div className="col-span-3">
+                        {isEnglishSubject && (
+                          <div className="col-span-2">
+                            <select 
+                              value={s.heading || 'None'} 
+                              onChange={e => handleUpdateSection(s.id, 'heading', e.target.value)} 
+                              className="w-full bg-gray-800 text-white text-[10px] p-2 rounded-lg border border-gray-700 outline-none"
+                            >
+                              {SECTION_HEADINGS.map(h => (
+                                <option key={h} value={h}>{h}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className={isEnglishSubject ? "col-span-2" : "col-span-3"}>
                           {isCustomType ? (
                             <div className="flex gap-1">
                               <input 
@@ -668,17 +720,15 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                               onChange={e => handleUpdateSection(s.id, 'type', e.target.value === 'OTHER' ? '' : e.target.value)} 
                               className={`w-full bg-gray-800 text-white text-[10px] p-2 rounded-lg border border-gray-700 outline-none ${isUrdu(s.type) ? 'font-urdu' : ''}`}
                             >
-                              {PREDEFINED_TYPES.map(t => (
-                                <option key={t} value={t} className={isUrdu(t) ? 'font-urdu' : ''}>
-                                  {t}
-                                </option>
+                              {typesToRender.map(t => (
+                                <option key={t} value={t} className={isUrdu(t) ? 'font-urdu' : ''}>{t}</option>
                               ))}
                               <option value="OTHER">Other...</option>
                             </select>
                           )}
                         </div>
                         
-                        <div className="col-span-3">
+                        <div className={isEnglishSubject ? "col-span-2" : "col-span-3"}>
                           {isCustomTitleMode ? (
                              <div className="flex gap-1">
                                <input 
@@ -692,7 +742,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                                  <button 
                                    onClick={() => {
                                      setCustomTitleModes(prev => ({...prev, [s.id]: false}));
-                                     const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, idx);
+                                     const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, idx, isEnglishSubject);
                                      handleUpdateSection(s.id, 'title', autoTitle || suggestions[0] || `سوال نمبر ${idx+1}. Title`);
                                    }} 
                                    className="p-1 text-gray-500 hover:text-white"
@@ -725,7 +775,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                         </div>
 
                         <div className="col-span-2"><input type="number" value={s.questionCount} onChange={e => handleUpdateSection(s.id, 'questionCount', parseInt(e.target.value) || 0)} className="w-full bg-gray-800 text-white text-[10px] p-2 rounded-lg border border-gray-700 text-center outline-none" /></div>
-                        <div className="col-span-2"><input type="number" value={s.attemptCount} onChange={e => handleUpdateSection(s.id, 'attemptCount', parseInt(e.target.value) || 0)} className="w-full bg-gray-800 text-gold-500 font-bold text-[10px] p-2 rounded-lg border border-gray-700 text-center outline-none" /></div>
+                        <div className={isEnglishSubject ? "col-span-1" : "col-span-2"}><input type="number" value={s.attemptCount} onChange={e => handleUpdateSection(s.id, 'attemptCount', parseInt(e.target.value) || 0)} className="w-full bg-gray-800 text-gold-500 font-bold text-[10px] p-2 rounded-lg border border-gray-700 text-center outline-none" /></div>
                         <div className="col-span-1">
                           <input 
                             type="number" 
@@ -736,7 +786,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                           />
                         </div>
                         <div className="col-span-1 flex justify-center gap-1">
-                           {(s.type === 'LONG' || s.type === 'NUMERICAL') && (
+                           {((isEnglish && (s.type === 'Short' || s.type === 'MCQ')) || (!isEnglish && (s.type.toUpperCase() === 'LONG' || s.type.toUpperCase() === 'NUMERICAL'))) && (
                              <button 
                                onClick={() => handleToggleParts(s.id)}
                                className={`p-1.5 rounded transition-all ${isExpanded ? 'bg-gold-500 text-black' : 'text-gold-500 hover:bg-gold-500/10'}`}
@@ -749,17 +799,11 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                         </div>
                      </div>
 
-                     {/* Sub-parts Configuration UI */}
                      {isExpanded && (
                        <div className="ml-8 p-4 bg-gray-800/50 border border-gold-500/30 rounded-xl animate-fadeIn space-y-3">
                           <div className="flex justify-between items-center mb-2 text-[10px] font-black uppercase tracking-widest text-gold-500">
                              <div className="flex items-center gap-2">
                                <Info size={12} /> Manage Sub-parts for Question {idx + 1}
-                             </div>
-                             <div className="grid grid-cols-12 gap-3 flex-grow ml-8 text-gray-500">
-                                <div className="col-span-2">Label</div>
-                                <div className="col-span-4">Type / Category</div>
-                                <div className="col-span-3">Marks</div>
                              </div>
                              <button 
                                onClick={() => handleAddPart(s.id)}
@@ -770,56 +814,63 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                           </div>
 
                           <div className="space-y-2">
-                             {s.subParts?.map((part, pIdx) => (
-                               <div key={part.id} className="grid grid-cols-12 gap-3 items-center">
-                                  <div className="col-span-2">
-                                     <input 
-                                       value={part.label} 
-                                       onChange={e => handleUpdatePart(s.id, part.id, 'label', e.target.value)}
-                                       className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-white text-center outline-none focus:border-gold-500 font-bold"
-                                       placeholder="(a)"
-                                     />
-                                  </div>
-                                  <div className="col-span-4">
-                                     <select 
-                                       value={part.type || s.type} 
-                                       onChange={e => handleUpdatePart(s.id, part.id, 'type', e.target.value)}
-                                       className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-white outline-none focus:border-gold-500"
-                                     >
-                                        {PREDEFINED_TYPES.map(pt => (
-                                          <option key={pt} value={pt}>{pt}</option>
-                                        ))}
-                                     </select>
-                                  </div>
-                                  <div className="col-span-3 flex items-center gap-2">
-                                     <input 
-                                       type="number"
-                                       value={part.marks} 
-                                       onChange={e => handleUpdatePart(s.id, part.id, 'marks', parseInt(e.target.value) || 0)}
-                                       className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-gold-500 font-black text-center outline-none focus:border-gold-500"
-                                     />
-                                  </div>
-                                  <div className="col-span-3 flex justify-end">
-                                     <button 
-                                       onClick={() => handleRemovePart(s.id, part.id)}
-                                       className="p-1.5 text-red-400 hover:bg-red-900/30 rounded transition-all"
-                                     >
-                                       <Trash2 size={12} />
-                                     </button>
-                                  </div>
-                               </div>
-                             ))}
-                             {(!s.subParts || s.subParts.length === 0) && (
-                               <p className="text-center text-[10px] text-gray-500 italic py-2">No sub-parts defined. Each question will be treated as a single unit.</p>
-                             )}
+                             {s.subParts?.map((part, pIdx) => {
+                               // No heading-based filtering for subparts either
+                               const partTypes = isEnglishSubject ? ENGLISH_SPECIFIC_TYPES : PREDEFINED_TYPES;
+
+                               return (
+                                 <div key={part.id} className="grid grid-cols-12 gap-3 items-center">
+                                    <div className="col-span-2">
+                                       <input 
+                                         value={part.label} 
+                                         onChange={e => handleUpdatePart(s.id, part.id, 'label', e.target.value)}
+                                         className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-white text-center outline-none focus:border-gold-500 font-bold"
+                                         placeholder="(a)"
+                                       />
+                                    </div>
+                                    <div className="col-span-4">
+                                       <select 
+                                         value={part.type || s.type} 
+                                         onChange={e => handleUpdatePart(s.id, part.id, 'type', e.target.value)}
+                                         className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-white outline-none focus:border-gold-500"
+                                       >
+                                          {(isEnglish && isObjectivePart) ? (
+                                            <>
+                                              {ENGLISH_MCQ_SUBTYPES.map(st => (
+                                                <option key={st} value={st}>{st}</option>
+                                              ))}
+                                              <option disabled>──────────</option>
+                                              {ENGLISH_SPECIFIC_TYPES.map(pt => (
+                                                <option key={pt} value={pt}>{pt}</option>
+                                              ))}
+                                            </>
+                                          ) : (
+                                            partTypes.map(pt => (
+                                              <option key={pt} value={pt}>{pt}</option>
+                                            ))
+                                          )}
+                                       </select>
+                                    </div>
+                                    <div className="col-span-3 flex items-center gap-2">
+                                       <input 
+                                         type="number"
+                                         value={part.marks} 
+                                         onChange={e => handleUpdatePart(s.id, part.id, 'marks', parseInt(e.target.value) || 0)}
+                                         className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-gold-500 font-black text-center outline-none focus:border-gold-500"
+                                       />
+                                    </div>
+                                    <div className="col-span-3 flex justify-end">
+                                       <button 
+                                         onClick={() => handleRemovePart(s.id, part.id)}
+                                         className="p-1.5 text-red-400 hover:bg-red-900/30 rounded transition-all"
+                                       >
+                                         <Trash2 size={12} />
+                                       </button>
+                                    </div>
+                                 </div>
+                               );
+                             })}
                           </div>
-                          
-                          {s.subParts && s.subParts.length > 0 && (
-                            <div className="pt-3 border-t border-gray-700 flex justify-between items-center text-[10px]">
-                               <span className="text-gray-400">Sum of sub-part marks:</span>
-                               <span className="bg-gold-500 text-black px-2 py-0.5 rounded font-black">{s.subParts.reduce((acc, p) => acc + p.marks, 0)} Marks Total</span>
-                            </div>
-                          )}
                        </div>
                      )}
                    </div>

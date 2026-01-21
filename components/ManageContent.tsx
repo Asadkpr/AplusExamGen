@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { User, Chapter, Question, QuestionType, Subtopic } from '../types';
 import { CLASSES } from '../constants';
 import { getSubjects } from '../services/subjectService';
-import { getChapters, getVisibilitySettings, toggleVisibility, VisibilityState } from '../services/chapterService';
-import { getQuestionsForChapters, updateChapterQuestion, deleteChapterQuestion, getAllClassUploadedContent } from '../services/questionService';
+import { getChapters, getVisibilitySettings, toggleVisibility, VisibilityState, deleteChapterPermanently } from '../services/chapterService';
+import { getQuestionsForChapters, updateChapterQuestion, deleteChapterQuestion, getAllClassUploadedContent, deleteSubtopicPermanently } from '../services/questionService';
 import { Button } from './Button';
-import { Input } from './Input';
+import { Input } from './Input'; 
 import { 
   ArrowLeft, Search, Filter, Edit, Trash2, Save, X, 
   CheckCircle, AlertTriangle, Database, BookOpen, Layers,
@@ -65,15 +65,12 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   const loadSubjectsAndCounts = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch subject list for this class
       const allSubjectsMap = await getSubjects();
       const subjects = allSubjectsMap[selectedClass] || [];
       setAvailableSubjects(subjects);
       
-      // 2. Performance Fix: Fetch all class content in one single bulk request
       const classContent = await getAllClassUploadedContent(selectedClass);
       
-      // 3. Process counts in memory (Zero network lag)
       const counts: Record<string, number> = {};
       subjects.forEach(subj => {
           const chaptersForSubj = classContent.filter(item => item.subject.toLowerCase().trim() === subj.toLowerCase().trim());
@@ -151,7 +148,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   };
 
   const handleDeleteClick = async (q: Question) => {
-    if (!window.confirm("Delete this question?")) return;
+    if (!window.confirm("Delete this question permanently?")) return;
     setIsLoading(true);
     const success = await deleteChapterQuestion(q.chapterId, q.id);
     setIsLoading(false);
@@ -164,7 +161,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   };
 
   const handleBulkDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete ${selectedQuestionIds.length} selected questions?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedQuestionIds.length} selected questions permanently?`)) return;
     
     setIsLoading(true);
     let successCount = 0;
@@ -193,20 +190,52 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
     setVisibility(vis);
   };
 
+  const handleDeleteChapterPerm = async (ch: Chapter) => {
+    if (!window.confirm(`WARNING: PERMANENT ACTION\nAre you sure you want to delete chapter "${ch.name}"? This will wipe ALL questions and topics in this chapter from the database.`)) return;
+    
+    setIsLoading(true);
+    const success = await deleteChapterPermanently(ch.id);
+    if (success) {
+      alert("Chapter and its content deleted permanently.");
+      loadChaptersAndVisibility(selectedSubject);
+      loadAllQuestions(selectedSubject);
+    } else {
+      alert("Delete failed.");
+    }
+    setIsLoading(false);
+  };
+
+  const handleDeleteSubtopicPerm = async (chapterId: string, subtopicName: string) => {
+    if (!window.confirm(`WARNING: PERMANENT ACTION\nAre you sure you want to delete the topic "${subtopicName}"? This will delete all questions associated with this topic in this chapter.`)) return;
+    
+    setIsLoading(true);
+    const success = await deleteSubtopicPermanently(chapterId, subtopicName);
+    if (success) {
+      alert("Topic and its questions deleted permanently.");
+      loadChaptersAndVisibility(selectedSubject);
+      loadAllQuestions(selectedSubject);
+    } else {
+      alert("Delete failed.");
+    }
+    setIsLoading(false);
+  };
+
   const handleSaveEdit = async () => {
     if (!editingQuestion || !editForm.text) return;
     setIsSaving(true);
     
     const updatedQuestion: Question = {
         ...editingQuestion,
-        text: editForm.text,
+        text: editForm.text || '',
         textUrdu: editForm.textUrdu,
-        type: editForm.type as QuestionType,
+        type: (editForm.type as QuestionType) || 'MCQ',
         marks: editForm.marks || 1,
         subtopic: editForm.subtopic,
         options: editForm.options,
         optionsUrdu: editForm.optionsUrdu,
-        correctAnswer: editForm.correctAnswer
+        correctAnswer: editForm.correctAnswer,
+        id: editingQuestion.id,
+        chapterId: editingQuestion.chapterId
     };
 
     const success = await updateChapterQuestion(editingQuestion.chapterId, updatedQuestion);
@@ -319,7 +348,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                           onClick={() => setActiveTab('VISIBILITY')}
                           className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'VISIBILITY' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-gray-500 hover:text-white'}`}
                         >
-                          <Eye size={14} /> Visibility
+                          <Eye size={14} /> Visibility & Deletion
                         </button>
                       </div>
                     )}
@@ -382,9 +411,8 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                             </div>
                                             
                                             <p className="text-white font-medium text-[12px] leading-relaxed">{q.text}</p>
-                                            {q.textUrdu && <p className="text-[12px] text-right text-gold-100/70 mt-3 font-urdu leading-loose" dir="rtl">{q.textUrdu}</p>}
+                                            {q.textUrdu && <p className="text-[12px] text-right text-gray-100 mt-3 font-urdu leading-loose" dir="rtl">{q.textUrdu}</p>}
 
-                                            {/* 🔹 MCQ OPTIONS PREVIEW */}
                                             {q.type === 'MCQ' && (
                                               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                                                  {q.options && (
@@ -399,7 +427,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                  {q.optionsUrdu && (
                                                    <div className="space-y-1">
                                                       {q.optionsUrdu.map((opt, oIdx) => (
-                                                        <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-gold-100/40 border border-gray-700/50'}`} dir="rtl">
+                                                        <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-gray-100 opacity-60 border border-gray-700/50'}`} dir="rtl">
                                                            <span className="font-black opacity-30 text-xs">({String.fromCharCode(97 + oIdx)})</span> {opt}
                                                         </div>
                                                       ))}
@@ -425,59 +453,86 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                             )}
                           </>
                         ) : (
-                          /* VISIBILITY MANAGEMENT TAB */
+                          /* VISIBILITY & PERMANENT DELETION TAB */
                           <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-                             <div className="bg-gold-500/10 border border-gold-500/30 p-4 rounded-xl flex items-center gap-4 text-sm mb-6">
-                                <Info className="text-gold-500 shrink-0" size={24} />
-                                <p className="text-gray-300">
-                                  Hiding a chapter or topic here will remove it from the <strong>Generate Paper</strong> screen for <strong>other users</strong>. Use the eye icons to toggle visibility.
-                                </p>
+                             <div className="bg-red-900/10 border border-red-500/30 p-4 rounded-xl flex items-center gap-4 text-sm mb-6 shadow-lg">
+                                <AlertTriangle className="text-red-500 shrink-0" size={28} />
+                                <div className="space-y-1">
+                                  <p className="text-white font-bold uppercase tracking-tighter">Admin Control: Visibility & Deletion</p>
+                                  <p className="text-gray-300 text-xs">
+                                    <strong>Visibility:</strong> Eye icons toggle item presence on the generation screen.<br/>
+                                    <strong>Permanent Delete:</strong> Trash icons WIPE items and their associated questions from the database forever.
+                                  </p>
+                                </div>
                              </div>
 
                              <div className="space-y-4">
                                {chapters.map(ch => {
                                  const isHidden = visibility.hiddenChapterIds.includes(ch.id);
                                  return (
-                                   <div key={ch.id} className={`bg-gray-800 border rounded-2xl overflow-hidden transition-all ${isHidden ? 'border-red-500/30 opacity-70 grayscale-[0.5]' : 'border-gray-700 hover:border-gold-500/50'}`}>
-                                      <div className={`p-5 flex items-center justify-between transition-colors ${isHidden ? 'bg-red-900/10' : 'bg-gray-750/50'}`}>
+                                   <div key={ch.id} className={`bg-gray-800 border rounded-2xl overflow-hidden transition-all shadow-xl ${isHidden ? 'border-red-500/50 opacity-90' : 'border-gray-700 hover:border-gold-500/50'}`}>
+                                      <div className={`p-5 flex items-center justify-between transition-colors ${isHidden ? 'bg-red-900/20' : 'bg-gray-750/50'}`}>
                                         <div className="flex items-center gap-4">
                                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold border transition-colors ${isHidden ? 'bg-red-900/20 border-red-500 text-red-400' : 'bg-gold-500/10 border-gold-500 text-gold-500'}`}>
-                                            {ch.name.match(/\d+/) || '0'}
+                                            {ch.name.match(/\d+/) || 'CH'}
                                           </div>
                                           <div>
-                                            <h3 className={`font-bold transition-colors ${isHidden ? 'text-red-400 line-through' : 'text-white'} ${isUrduPaper ? 'font-urdu text-lg' : ''}`}>{ch.name}</h3>
+                                            <h3 className={`font-bold transition-colors ${isHidden ? 'text-red-400' : 'text-white'} ${isUrduPaper ? 'font-urdu text-lg' : ''}`}>{ch.name}</h3>
                                             <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">{ch.subtopics.length} Topics total</span>
                                           </div>
                                         </div>
-                                        <button 
-                                          onClick={() => handleToggleVisibility(ch.id, 'chapter', isHidden)}
-                                          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold uppercase tracking-widest text-[10px] transition-all ${isHidden ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' : 'bg-gray-900 text-gray-400 hover:text-white border border-gray-700'}`}
-                                        >
-                                          {isHidden ? <><EyeOff size={14} /> Hidden</> : <><Eye size={14} /> Visible</>}
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                          <button 
+                                            onClick={() => handleToggleVisibility(ch.id, 'chapter', isHidden)}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest text-[9px] transition-all border ${isHidden ? 'bg-red-500 text-white border-red-400' : 'bg-gray-900 text-gray-400 hover:text-white border-gray-700'}`}
+                                            title={isHidden ? "Click to show chapter" : "Click to hide chapter"}
+                                          >
+                                            {isHidden ? <><EyeOff size={14} /> Hidden</> : <><Eye size={14} /> Visible</>}
+                                          </button>
+                                          
+                                          {/* PERMANENT DELETE CHAPTER */}
+                                          <button 
+                                            onClick={() => handleDeleteChapterPerm(ch)}
+                                            className="p-2 bg-red-900/30 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all border border-red-500/30"
+                                            title="Permanently Delete Chapter & Content"
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        </div>
                                       </div>
                                       
-                                      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 bg-gray-900/30">
+                                      <div className="p-4 grid grid-cols-1 gap-2 bg-gray-900/30">
                                         {ch.subtopics.map(st => {
                                           const stHidden = visibility.hiddenSubtopicNames.includes(st.name);
                                           return (
-                                            <div key={st.id} className="flex items-center justify-between group/st py-1 border-b border-gray-800 last:border-0">
-                                              <span className={`text-[12px] font-medium transition-colors ${stHidden || isHidden ? 'text-gray-600 line-through' : 'text-gray-300'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>
-                                                {st.name}
+                                            <div key={st.id} className="flex items-center justify-between group/st py-2 px-4 rounded-xl hover:bg-gray-800/50 transition-all border border-transparent hover:border-gray-700">
+                                              <span className={`text-[12px] font-medium transition-colors ${stHidden || isHidden ? 'text-gray-500' : 'text-gray-300'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>
+                                                {st.name} {stHidden && <span className="text-[8px] text-red-500 font-black uppercase ml-2">(Hidden)</span>}
                                               </span>
-                                              <button 
-                                                onClick={() => handleToggleVisibility(st.name, 'subtopic', stHidden)}
-                                                disabled={isHidden}
-                                                className={`p-1.5 rounded transition-all ${stHidden ? 'text-red-500 bg-red-900/20' : 'text-gray-600 hover:text-gold-500 group-hover/st:text-gray-400'} ${isHidden ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
-                                                title={isHidden ? "Chapter is hidden" : stHidden ? "Click to Show" : "Click to Hide"}
-                                              >
-                                                {stHidden ? <EyeOff size={12} /> : <Eye size={12} />}
-                                              </button>
+                                              <div className="flex items-center gap-2 opacity-0 group-hover/st:opacity-100 transition-opacity">
+                                                <button 
+                                                  onClick={() => handleToggleVisibility(st.name, 'subtopic', stHidden)}
+                                                  disabled={isHidden}
+                                                  className={`p-1.5 rounded transition-all ${stHidden ? 'text-red-500 bg-red-900/20' : 'text-gray-400 hover:text-gold-500 hover:bg-gold-500/10'}`}
+                                                  title={isHidden ? "Chapter must be visible" : stHidden ? "Click to Show" : "Click to Hide"}
+                                                >
+                                                  {stHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                                                </button>
+                                                
+                                                {/* PERMANENT DELETE TOPIC */}
+                                                <button 
+                                                  onClick={() => handleDeleteSubtopicPerm(ch.id, st.name)}
+                                                  className="p-1.5 text-red-500 hover:bg-red-500 hover:text-white rounded transition-all"
+                                                  title="Permanently Delete Topic & its Questions"
+                                                >
+                                                  <Trash2 size={14} />
+                                                </button>
+                                              </div>
                                             </div>
                                           );
                                         })}
                                         {ch.subtopics.length === 0 && (
-                                          <p className="col-span-full text-center text-[10px] text-gray-700 uppercase py-4 font-black tracking-widest">No individual topics found</p>
+                                          <p className="text-center text-[10px] text-gray-700 uppercase py-4 font-black tracking-widest">No individual topics found in database</p>
                                         )}
                                       </div>
                                    </div>
@@ -565,7 +620,6 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
             )}
         </main>
 
-        {/* Floating Action Bar for Bulk Selection */}
         {selectedQuestionIds.length > 0 && step === 3 && activeTab === 'QUESTIONS' && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fadeIn bg-gray-800 border-2 border-gold-500 px-6 py-4 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.6)] flex items-center gap-8 backdrop-blur-md">
             <div className="flex items-center gap-3 border-r border-gray-700 pr-8">
@@ -579,7 +633,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                 onClick={handleBulkDelete}
                 className="flex items-center gap-2 text-red-400 hover:text-red-300 font-bold uppercase tracking-widest text-[10px] transition-colors"
               >
-                <Trash2 size={16} /> Delete All
+                <Trash2 size={16} /> Delete Permanently
               </button>
               <button 
                 onClick={() => setSelectedQuestionIds([])}

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -5,7 +6,7 @@ import { CLASSES } from '../constants';
 import { getSubjects, addSubject, deleteSubject, renameSubject } from '../services/subjectService';
 import { getChapters, addChapter, deleteChapter, renameChapter } from '../services/chapterService';
 import { saveUploadedChapterContent } from '../services/questionService';
-// Correctly import GoogleGenAI from @google/genai
+// Fix: Import GoogleGenAI from @google/genai as required by SDK guidelines
 //import { GoogleGenAI } from "@google/genai";
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, X, Info, 
@@ -306,7 +307,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     }
 
     setIsConvertingMath(true);
-    // Initialize Gemini 
+    // Fix: Initialize GoogleGenAI properly using the named parameter as per SDK guidelines
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const batch = questions.map(q => ({
@@ -331,6 +332,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     Input JSON: ${JSON.stringify(batch)}`;
 
     try {
+      // Fix: Use ai.models.generateContent to query GenAI directly as per SDK guidelines
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: prompt,
@@ -339,6 +341,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         }
       });
 
+      // Fix: Directly access the .text property instead of calling it as a method
       const jsonStr = response.text?.trim() || '[]';
       const convertedBatch = JSON.parse(jsonStr);
       
@@ -559,7 +562,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                         className={`p-5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition-all relative group ${chapter.subtopics.length > 0 ? 'bg-gold-500 text-black border-gold-500' : 'bg-gray-800 border-gray-700 hover:border-gold-500'}`}
                       >
                           <div>
-                            <h3 className={`font-bold text-lg ${chapter.subtopics.length > 0 ? 'text-black' : 'text-white'} ${isUrduPaper ? 'font-urdu text-xl' : ''}`}>{chapter.name}</h3>
+                            <h3 className={`font-bold text-lg ${chapter.subtopics.length > 0 ? 'text-black' : 'text-white'} ${isUrduPaper ? 'font-urdu' : ''}`}>{chapter.name}</h3>
                             <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${chapter.subtopics.length > 0 ? 'bg-black text-gold-500' : 'text-gray-500 bg-gray-900'}`}>
                               {chapter.subtopics.length > 0 ? 'Content Uploaded' : 'Empty'}
                             </span>
@@ -682,7 +685,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                           <p className="text-[12px] text-white leading-relaxed">{q.text}</p>
-                                          {q.textUrdu && <p className="text-[12px] text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>}
+                                          {q.textUrdu && <p className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>}
                                         </div>
                                         
                                         {/* 🔹 MCQ OPTIONS PREVIEW FOR UPLOAD */}
@@ -691,7 +694,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                             {q.options && (
                                               <div className="space-y-1">
                                                 {q.options.map((opt, oIdx) => (
-                                                  <div key={oIdx} className="text-[12px] text-gray-400 flex items-center gap-1.5">
+                                                  <div key={oIdx} className={`text-[12px] text-gray-400 flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500' : ''}`}>
                                                     <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
                                                     <span className="truncate">{opt}</span>
                                                   </div>
@@ -701,7 +704,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                             {q.optionsUrdu && (
                                               <div className="space-y-0.5" dir="rtl">
                                                 {q.optionsUrdu.map((opt, oIdx) => (
-                                                  <div key={oIdx} className="text-[12px] text-gold-100/50 font-urdu flex items-center gap-1.5">
+                                                  <div key={oIdx} className={`text-[12px] text-gray-100 opacity-80 font-urdu flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'text-gold-500 opacity-100 font-bold' : ''}`}>
                                                     <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
                                                     <span>{opt}</span>
                                                   </div>

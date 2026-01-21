@@ -14,7 +14,7 @@ import {
   Printer, RefreshCw, AlertCircle, Save, GraduationCap, 
   FileText, Check, Plus, Trash2, Download, Wand2, Fingerprint,
   Eraser, FileType, FileDown, Key, Database, Home, Type as TypeIcon, Layout,
-  Shuffle, Repeat, MoreVertical, X
+  Shuffle, Repeat, MoreVertical, X, AlignJustify, Settings
 } from 'lucide-react';
 
 
@@ -71,6 +71,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   // Default font size set to 13
   const [fontSize, setFontSize] = useState(13);
+  const [lineSpacing, setLineSpacing] = useState(2); // 0-10 scale, default to 2
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [availableChapters, setAvailableChapters] = useState<Chapter[]>([]);
   const [questionPool, setQuestionPool] = useState<Question[]>([]);
@@ -106,6 +107,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setSelectedMedium(initialPaper.medium || 'English');
       // Use stored font size or default to 13 (clamped at 13)
       setFontSize(Math.min(initialPaper.fontSize || 13, 13));
+      setLineSpacing(initialPaper.lineSpacing ?? 2);
       setPaperTime(initialPaper.timeAllowed || '2:00 Hours');
       setPaperCode(initialPaper.paperCode || '');
       
@@ -223,6 +225,22 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       });
     });
     return finalQuestions;
+  };
+
+  const getChaptersDisplay = () => {
+    return availableChapters
+      .filter(ch => selectedChapters.includes(ch.id))
+      .map(ch => {
+        const match = ch.name.match(/\d+/);
+        return match ? match[0] : ch.name;
+      })
+      .sort((a, b) => {
+        const numA = parseInt(a);
+        const numB = parseInt(b);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.localeCompare(b);
+      })
+      .join(', ');
   };
 
   const triggerAutoSelect = () => {
@@ -383,8 +401,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       createdBy: user.name,
       selectedChapterIds: selectedChapters,
       selectedSubtopicIds: selectedSubtopics,
+      formattedChapters: getChaptersDisplay(),
       medium: selectedMedium,
       fontSize: fontSize,
+      lineSpacing: lineSpacing,
       timeAllowed: paperTime,
       paperCode: paperCode
     };
@@ -481,26 +501,69 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                     <h2 className="hidden xl:block text-xl font-black text-white uppercase tracking-tighter mr-4">
                       Paper Preview
                     </h2>
-                    <div className="bg-gray-900/50 border border-gray-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner">
-                       <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest whitespace-nowrap">Body Size:</span>
-                       <select 
-                         value={fontSize} 
-                         onChange={(e) => setFontSize(parseInt(e.target.value))} 
-                         className="bg-gray-800 border border-gray-700 text-white text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer min-w-[65px]"
-                       >
-                         {[8, 9, 10, 11, 12, 13].map(size => (<option key={size} value={size}>{size}px</option>))}
-                       </select>
+                    
+                    <div className="flex items-center gap-2">
+                       <div className="bg-gray-900/50 border border-gray-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner">
+                          <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest whitespace-nowrap">Font:</span>
+                          <select 
+                            value={fontSize} 
+                            onChange={(e) => setFontSize(parseInt(e.target.value))} 
+                            className="bg-gray-800 border border-gray-700 text-white text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer min-w-[65px]"
+                          >
+                            {[8, 9, 10, 11, 12, 13].map(size => (<option key={size} value={size}>{size}px</option>))}
+                          </select>
+                       </div>
+
+                       <div className="bg-gray-900/50 border border-gray-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner">
+                          <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest whitespace-nowrap">Spacing:</span>
+                          <select 
+                            value={lineSpacing} 
+                            onChange={(e) => setLineSpacing(parseInt(e.target.value))} 
+                            className="bg-gray-800 border border-gray-700 text-white text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer min-w-[65px]"
+                          >
+                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => (<option key={val} value={val}>{val}</option>))}
+                          </select>
+                       </div>
                     </div>
+
                     <Button onClick={() => setShowAnswerKey(!showAnswerKey)} variant={showAnswerKey ? 'primary' : 'secondary'} className="!w-auto text-[10px] py-1.5 px-3 flex items-center h-9 font-black"><Key size={14} className="mr-1.5 text-gold-500" /> {showAnswerKey ? 'Hide Key' : 'Show Key'}</Button>
-                    <Button onClick={handleSaveOrUpdate} variant="secondary" className="!w-auto text-[10px] py-1.5 px-3 flex items-center h-9 font-black"><Save size={14} className="mr-1.5 text-gold-500" /> {initialPaper ? 'Update' : 'Save'}</Button>
+                    
+                    {/* 🔹 PAPER ACTIONS DROPDOWN (Consolidated & UX Improved) */}
                     <div className="relative group">
-                      <Button variant="primary" className="!w-auto text-[10px] py-1.5 px-4 flex items-center h-9 font-black shadow-lg"><Download size={14} className="mr-1.5" /> Download <ChevronDown size={12} className="ml-1 opacity-50" /></Button>
-                      <div className="absolute right-0 mt-2 w-40 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl hidden group-hover:block z-50 overflow-hidden animate-fadeIn">
-                        <button onClick={handleDownloadWord} className="w-full text-left px-4 py-2.5 text-[10px] text-gray-300 hover:bg-gold-500 hover:text-black flex items-center gap-2 transition-colors border-b border-gray-700 font-black uppercase"><FileType size={14} /> Word</button>
-                        <button onClick={() => window.print()} className="w-full text-left px-4 py-2.5 text-[10px] text-gray-300 hover:bg-gold-500 hover:text-black flex items-center gap-2 font-black uppercase"><FileDown size={14} /> PDF/Print</button>
+                      <Button variant="primary" className="!w-auto text-[10px] py-1.5 px-5 flex items-center h-9 font-black shadow-lg">
+                        <Settings size={14} className="mr-2" /> Paper Actions <ChevronDown size={12} className="ml-2 opacity-50" />
+                      </Button>
+                      {/* Fixed UX by using pt-3 to bridge the gap between button and menu */}
+                      <div className="absolute right-0 top-full pt-2 w-48 hidden group-hover:block z-[110] animate-fadeIn">
+                        <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden">
+                          <button 
+                            onClick={handleSaveOrUpdate} 
+                            className="w-full text-left px-4 py-3 text-[11px] text-gray-300 hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-gray-700 font-black uppercase"
+                          >
+                            <Save size={16} className="text-gold-500 group-hover:text-black" /> {initialPaper ? 'Update Paper' : 'Save Paper'}
+                          </button>
+                          <button 
+                            onClick={() => window.print()} 
+                            className="w-full text-left px-4 py-3 text-[11px] text-gray-300 hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-gray-700 font-black uppercase"
+                          >
+                            <FileDown size={16} className="text-gold-500 group-hover:text-black" /> PDF Download
+                          </button>
+                          <button 
+                            onClick={handlePrint} 
+                            className="w-full text-left px-4 py-3 text-[11px] text-gray-300 hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase"
+                          >
+                            <Printer size={16} className="text-gold-500 group-hover:text-black" /> Print Paper
+                          </button>
+                          <button 
+                            onClick={handleDownloadWord} 
+                            className="w-full text-left px-4 py-2.5 text-[10px] text-gray-400 hover:bg-gray-700 flex items-center gap-3 transition-colors font-bold border-t border-gray-700/50 italic"
+                          >
+                            <FileType size={14} /> Export to Word
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <Button onClick={() => handlePrint()} className="!w-auto text-[10px] py-1.5 px-5 flex items-center h-9 font-black shadow-lg"><Printer size={16} className="mr-2" /> Print</Button>
+
                   </div>
                 ) : (
                   <nav className="flex items-center w-full max-w-2xl">
@@ -723,11 +786,11 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                                        </div>
                                                        {qData.textUrdu && (
                                                          <div className="border-t md:border-t-0 md:border-l border-gray-700/50 pt-2 md:pt-0 md:pl-4">
-                                                           <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{qData.textUrdu}</p>
+                                                           <p className="text-lg text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{qData.textUrdu}</p>
                                                            {qData.type === 'MCQ' && qData.optionsUrdu && (
                                                              <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-right" dir="rtl">
                                                                 {qData.optionsUrdu.map((opt, oi) => (
-                                                                  <div key={oi} className={`text-xs px-1 rounded font-urdu ${qData.correctAnswer === String.fromCharCode(65 + oi) ? 'text-gold-500 bg-gold-500/5' : 'text-gray-500'}`}>
+                                                                  <div key={oi} className={`text-xs px-1 rounded font-urdu ${qData.correctAnswer === String.fromCharCode(65 + oi) ? 'text-gold-500 bg-gold-500/5' : 'text-gray-100 opacity-60'}`}>
                                                                     ({String.fromCharCode(97 + oi)}) {opt}
                                                                   </div>
                                                                 ))}
@@ -780,7 +843,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                                   {q.type === 'MCQ' && q.options && (
                                                     <div className="mt-2 grid grid-cols-2 gap-2">
                                                        {q.options.map((opt, oi) => (
-                                                         <div key={oi} className={`text-[9px] px-2 py-0.5 rounded border ${q.correctAnswer === String.fromCharCode(65 + oi) ? 'bg-gold-500/10 text-gold-500 border-gold-500/30 font-bold' : 'bg-gray-900 text-gray-500 border-gray-700'}`}>
+                                                         // Fix: Use 'q' instead of 'qData' which is not in scope here
+                                                         <div key={oi} className={`text-[9px] px-2 py-0.5 rounded border ${q.correctAnswer === String.fromCharCode(65 + oi) ? 'bg-gold-500/10 text-gold-500 border-gold-500/30 font-bold' : 'bg-gray-900 text-gray-400 border-gray-700'}`}>
                                                             {String.fromCharCode(65 + oi)}. {opt}
                                                          </div>
                                                        ))}
@@ -789,11 +853,11 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                                 </div>
                                                 {q.textUrdu && (
                                                   <div className="border-t md:border-t-0 md:border-l border-gray-700/50 pt-2 md:pt-0 md:pl-4">
-                                                    <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>
+                                                    <p className="text-lg text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>
                                                     {q.type === 'MCQ' && q.optionsUrdu && (
                                                       <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-right" dir="rtl">
                                                          {q.optionsUrdu.map((opt, oi) => (
-                                                           <div key={oi} className={`text-xs px-1 rounded font-urdu ${q.correctAnswer === String.fromCharCode(65 + oi) ? 'text-gold-500 bg-gold-500/10' : 'text-gray-400/50'}`}>
+                                                           <div key={oi} className={`text-xs px-1 rounded font-urdu ${q.correctAnswer === String.fromCharCode(65 + oi) ? 'text-gold-500 bg-gold-500/10' : 'text-gray-100 opacity-60'}`}>
                                                              ({String.fromCharCode(97 + oi)}) {opt}
                                                            </div>
                                                          ))}
@@ -849,7 +913,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                         </div>
                                         {q.textUrdu && (
                                           <div className="border-t md:border-t-0 md:border-l border-gray-700/50 pt-2 md:pt-0 md:pl-4">
-                                            <p className="text-lg text-right text-gold-100/80 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>
+                                            <p className="text-lg text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>
                                             {q.type === 'MCQ' && q.optionsUrdu && (
                                               <div className="mt-1 flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-right opacity-50" dir="rtl">
                                                  {q.optionsUrdu.map((opt, oi) => (
@@ -896,7 +960,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        instituteProfile={user.instituteProfile} classLevel={selectedClass} subject={selectedSubject} 
                        totalMarks={effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0)} 
                        sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={1} medium={selectedMedium} showAnswerKey={showAnswerKey}
-                       baseFontSize={fontSize} timeAllowed={paperTime} paperCode={paperCode}
+                       baseFontSize={fontSize} lineSpacing={lineSpacing} timeAllowed={paperTime} paperCode={paperCode}
+                       chaptersDisplay={getChaptersDisplay()}
                      />
                   </div>
                </div>

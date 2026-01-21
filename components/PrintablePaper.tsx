@@ -12,8 +12,10 @@ interface PrintablePaperProps {
   medium?: 'English' | 'Urdu' | 'Both';
   showAnswerKey?: boolean;
   baseFontSize?: number;
+  lineSpacing?: number; // 0-10 scale
   timeAllowed?: string;
   paperCode?: string;
+  chaptersDisplay?: string;
 }
 
 declare global {
@@ -33,8 +35,10 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   medium = 'English',
   showAnswerKey = false,
   baseFontSize = 13,
+  lineSpacing = 2,
   timeAllowed = '2:00 Hours',
-  paperCode
+  paperCode,
+  chaptersDisplay
 }) => {
 
   useEffect(() => {
@@ -62,7 +66,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           spacing: 'space-y-0',
           logoSize: 'w-8 h-8',
           mcqGap: 'gap-y-0',
-          optionGrid: 'grid-cols-2 gap-0'
+          optionGrid: 'grid-cols-2 gap-x-2 gap-y-0.5'
         };
       default:
         return {
@@ -74,7 +78,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           spacing: 'space-y-0',
           logoSize: 'w-14 h-14',
           mcqGap: 'gap-y-0',
-          optionGrid: 'grid-cols-4 gap-1'
+          optionGrid: 'grid-cols-2 gap-x-4 gap-y-1'
         };
     }
   };
@@ -95,6 +99,10 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   const styles = getLayoutStyles(layoutMode, baseFontSize);
   const fontFamily = getFontFamily(subject);
   
+  // Dynamic Spacing Calculation (mapped from 0-10 scale)
+  const verticalMargin = `${(lineSpacing * 0.1) + 0.05}rem`;
+  const mcqGapValue = `${(lineSpacing * 0.05)}rem`;
+
   // CRITICAL: baseDir follows MEDIUM, not SUBJECT. 
   const baseDir = (medium === 'Urdu') ? 'rtl' : 'ltr';
 
@@ -114,16 +122,16 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
     
     if (medium === 'Both') {
       return (
-        <div className="flex w-full items-start gap-4" dir="ltr">
+        <div className="grid grid-cols-2 gap-4 w-full" dir="ltr">
           {/* English Side */}
-          <div className="flex-1 text-left flex gap-1.5" style={{ fontFamily: "'Times New Roman', serif" }}>
+          <div className="text-left flex gap-1.5" style={{ fontFamily: "'Times New Roman', serif" }}>
             <span className="font-bold whitespace-nowrap">{counter}{suffix}</span>
-            <span>{mainText}</span>
+            <span className="pt-[0.15rem] leading-[1.1]">{mainText}</span>
           </div>
           {/* Urdu Side */}
           {urduText && (
             <div 
-              className="flex-1 text-right flex gap-1.5 justify-start items-start" 
+              className="text-right flex gap-1.5 justify-start items-start" 
               style={{ fontFamily: urduFontStack, lineHeight: '1.8' }} 
               dir="rtl"
             >
@@ -154,11 +162,11 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
     if (medium === 'Both') {
       return (
-        <div className="flex w-full items-start justify-between gap-2" dir="ltr">
-          <span className="flex-1 text-left" style={{ fontFamily: "'Times New Roman', serif" }}>{optEng}</span>
+        <div className="grid grid-cols-2 gap-2 w-full" dir="ltr">
+          <span className="text-left pt-[0.15rem] leading-[1.1]" style={{ fontFamily: "'Times New Roman', serif" }}>{optEng}</span>
           {optUrdu && (
             <span 
-              className="flex-1 text-right text-[0.85em]" 
+              className="text-right text-[0.85em]" 
               style={{ fontFamily: urduFontStack, lineHeight: '1.6' }} 
               dir="rtl"
             >
@@ -194,7 +202,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
       <div 
         id="printable-section"
-        className={`${styles.spacing} p-2 md:p-3 tex2jax_process relative overflow-visible`} 
+        className={`p-2 md:p-3 tex2jax_process relative overflow-visible`} 
         style={{ 
           backgroundColor: '#ffffff', 
           color: '#000000', 
@@ -263,15 +271,20 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
             <span>Class: <span className="font-normal">{classLevel}</span></span>
             <span>Subject: <span className="font-normal">{subject}</span></span>
             <span>Time: <span className="font-normal">{timeAllowed}</span></span>
-            <span>Total Marks: <span className="font-normal">{totalMarks}</span></span>
+            <div className="flex gap-2">
+              <span>Total Marks: <span className="font-normal">{totalMarks}</span></span>
+              {paperCode && (
+                <span>Paper Code: <span className="font-bold border-2 border-black px-1 py-0 rounded ml-0.5">{paperCode}</span></span>
+              )}
+            </div>
           </div>
           
           <div style={{ fontSize: styles.headerInfo }} className="flex justify-between items-center font-bold border-t border-black mt-0.5 pt-0.5 px-1">
             <span>Student: __________________________</span>
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <span>Roll No: ________</span>
-              {paperCode && (
-                <span>Paper Code: <span className="font-bold border-2 border-black px-1 py-0 rounded ml-0.5">{paperCode}</span></span>
+              {chaptersDisplay && (
+                <span>CH: <span className="font-normal">{chaptersDisplay}</span></span>
               )}
             </div>
           </div>
@@ -295,22 +308,30 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               
               let localQuestionCounter = 0;
 
+              // Logic to render SECTION heading only once for a block of questions
+              const showHeading = section.heading && section.heading !== 'None' && (idx === 0 || sections[idx-1].heading !== section.heading);
+
               return (
-                <div key={idx} className="mb-0.5 break-inside-avoid">
-                  {/* 🔹 REMOVED MARKS DISPLAY FROM SECTION HEADER */}
-                  <div style={{ fontSize: styles.sectionTitle }} className="font-bold mb-0.5 border-b border-gray-300 pb-0" dir={baseDir}>
+                <div key={idx} className="break-inside-avoid" style={{ marginBottom: verticalMargin }}>
+                  {showHeading && (
+                    <div className="text-center my-2 border-y border-black py-0.5 font-bold uppercase tracking-widest" style={{ fontSize: styles.sectionTitle }}>
+                      {section.heading}
+                    </div>
+                  )}
+                  <div style={{ fontSize: styles.sectionTitle }} className="font-bold mb-1 border-b border-gray-300 pb-0" dir={baseDir}>
                     <h3 className="uppercase">{section.title}</h3>
                   </div>
                   {section.type === 'MCQ' ? (
-                    <div className={`grid grid-cols-1 ${styles.mcqGap}`}>
+                    <div className={`grid grid-cols-1`} style={{ gap: mcqGapValue }}>
                       {sectionQuestions.map((q) => {
                         localQuestionCounter++;
                         return (
-                          <div key={q.id} style={{ fontSize: styles.questionText }} className="break-inside-avoid mb-0.5">
+                          <div key={q.id} style={{ fontSize: styles.questionText, marginBottom: mcqGapValue }} className="break-inside-avoid">
                             <div className="font-semibold w-full">
                               {renderQuestionText(q, localQuestionCounter)}
                             </div>
-                            <div className={`grid ${medium === 'Both' ? 'grid-cols-2 gap-x-1.5' : styles.optionGrid} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} dir={baseDir}>
+                            {/* 🔹 OPTIONS IN 2 COLUMNS (Two lines for 4 options) */}
+                            <div className={`grid ${styles.optionGrid} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} dir={baseDir}>
                               {q.options?.map((_, oIdx) => (
                                 <div key={oIdx} style={{ fontSize: styles.optionText }} className="flex items-start gap-1">
                                   <span className="font-bold">({String.fromCharCode(97 + oIdx)})</span> 
@@ -323,20 +344,20 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                       })}
                     </div>
                   ) : (
-                    <div className={`${styles.spacing}`}>
+                    <div>
                       {Array.from({ length: completeQuestionsCount }).map((_, qIdx) => {
                         localQuestionCounter++;
                         const startIndex = qIdx * partsPerQuestion;
                         
                         return (
-                          <div key={qIdx} className="mb-0.5 break-inside-avoid">
+                          <div key={qIdx} className="break-inside-avoid" style={{ marginBottom: verticalMargin }}>
                             {section.subParts && section.subParts.length > 0 ? (
                                <div className="space-y-0">
                                   <div className="font-bold" style={{ fontSize: styles.questionText }}>
                                     {medium === 'Both' ? (
-                                      <div className="flex w-full items-start gap-4" dir="ltr">
-                                        <div className="flex-1 text-left font-bold" dir="ltr">{localQuestionCounter}.</div>
-                                        <div className="flex-1 text-right font-bold" dir="rtl">{localQuestionCounter}.</div>
+                                      <div className="grid grid-cols-2 gap-4 w-full" dir="ltr">
+                                        <div className="text-left font-bold" dir="ltr">{localQuestionCounter}.</div>
+                                        <div className="text-right font-bold" dir="rtl">{localQuestionCounter}.</div>
                                       </div>
                                     ) : (
                                       <span dir="ltr">{localQuestionCounter}.</span>
@@ -453,14 +474,14 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               width: 40% !important;
               max-width: 300px !important;
               filter: grayscale(100%) !important;
-              opacity: 0.5 !important;
+              opacity: 1 !important;
             }
 
             .text-watermark {
               font-size: 50px !important;
               font-weight: 900 !important;
               transform: rotate(-45deg) !important;
-              opacity: 0.5 !important;
+              opacity: 1 !important;
               white-space: nowrap !important;
             }
           }

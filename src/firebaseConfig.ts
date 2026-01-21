@@ -1,8 +1,8 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-// Modular firestore import using lite version for improved compatibility
-import { getFirestore } from "firebase/firestore/lite";
+// Fixed: Changed modular firestore import to non-lite version to resolve export issues
+import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {

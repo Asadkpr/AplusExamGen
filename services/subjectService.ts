@@ -1,6 +1,6 @@
 
 import { db } from '../firebaseConfig';
-// Standard modular firestore imports from lite version
+// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
 import { 
   collection, 
   getDocs, 
@@ -10,7 +10,7 @@ import {
   where, 
   doc, 
   updateDoc 
-} from 'firebase/firestore/lite';
+} from 'firebase/firestore';
 import { SUBJECTS_BY_CLASS } from '../constants';
 import { executeAsAdmin } from './authService';
 

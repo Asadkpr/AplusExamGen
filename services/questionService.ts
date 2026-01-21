@@ -1,6 +1,6 @@
 
 import { db } from '../firebaseConfig';
-// Standard modular firestore imports from lite version
+// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
 import { 
   doc, 
   setDoc, 
@@ -9,8 +9,9 @@ import {
   query, 
   where, 
   getDocs, 
-  updateDoc 
-} from 'firebase/firestore/lite';
+  updateDoc,
+  deleteDoc
+} from 'firebase/firestore';
 import { Question, Subtopic, Chapter } from '../types';
 import { executeAsAdmin } from './authService';
 
@@ -26,9 +27,6 @@ interface UploadedContent {
   updatedAt: number;
 }
 
-/**
- * Fetches all metadata for a class level in one go to prevent N+1 query problems.
- */
 export const getAllClassUploadedContent = async (classLevel: string): Promise<UploadedContent[]> => {
   const cleanClass = classLevel.trim();
   
@@ -51,7 +49,6 @@ export const getAllClassUploadedContent = async (classLevel: string): Promise<Up
       } else { throw e; }
     }
 
-    // Aggressively cache the results
     try {
        const stored = localStorage.getItem(CONTENT_CACHE_KEY);
        const cache = stored ? JSON.parse(stored) : {};
@@ -323,6 +320,56 @@ export const deleteChapterQuestion = async (chapterId: string, questionId: strin
       try {
         await executeAsAdmin(deleteOp);
         return true;
+      } catch (err) {}
+    }
+    return false;
+  }
+};
+
+/**
+ * Permanently deletes a subtopic and all its associated questions from a chapter.
+ */
+export const deleteSubtopicPermanently = async (chapterId: string, subtopicName: string): Promise<boolean> => {
+  const deleteOp = async () => {
+    const docRef = doc(db, COLLECTION, chapterId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return true;
+
+    const data = docSnap.data() as UploadedContent;
+    const cleanName = subtopicName.trim().toLowerCase();
+    
+    // Filter out the subtopic
+    const updatedSubtopics = data.subtopics.filter(st => st.name.trim().toLowerCase() !== cleanName);
+    
+    // Filter out all questions that belong to this subtopic
+    const updatedQuestions = data.questions.filter(q => (q.subtopic || "").trim().toLowerCase() !== cleanName);
+    
+    const safeData = JSON.parse(JSON.stringify({
+      ...data,
+      subtopics: updatedSubtopics,
+      questions: updatedQuestions,
+      updatedAt: Date.now()
+    }));
+
+    await setDoc(docRef, safeData);
+
+    // Update Cache
+    try {
+      const stored = localStorage.getItem(CONTENT_CACHE_KEY);
+      const cache = stored ? JSON.parse(stored) : {};
+      cache[chapterId] = safeData;
+      localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {}
+
+    return true;
+  };
+
+  try {
+    return await deleteOp();
+  } catch (e: any) {
+    if (e.code === 'permission-denied') {
+      try {
+        await executeAsAdmin(deleteOp);
       } catch (err) {}
     }
     return false;

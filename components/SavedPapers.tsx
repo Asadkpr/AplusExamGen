@@ -47,13 +47,24 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user }) => {
 
   const handleDownloadWord = () => {
     if (!selectedPaper) return;
-    const questionsHtml = selectedPaper.questions.map((q, i) => `<p><b>${i+1}.</b> ${q.text}</p>`).join('');
+    
+    const medium = selectedPaper.medium || 'English';
+    
+    const questionsHtml = selectedPaper.questions.map((q, i) => {
+      let text = q.text;
+      if (medium === 'Urdu') text = q.textUrdu || q.text;
+      else if (medium === 'Both') text = `${q.text} <br/> ${q.textUrdu || ''}`;
+      
+      return `<p><b>${i+1}.</b> ${text}</p>`;
+    }).join('');
+
     const content = `
     <html>
       <head><meta charset="utf-8"></head>
       <body>
         <h1 style="text-align:center">${selectedPaper.instituteProfile?.instituteName || "Institute"}</h1>
         <h2 style="text-align:center">${selectedPaper.title}</h2>
+        <p style="text-align:center">Class: ${selectedPaper.classLevel} | Subject: ${selectedPaper.subject} | Time: ${selectedPaper.timeAllowed || ''}</p>
         <hr/>
         ${questionsHtml}
       </body>
@@ -216,8 +227,13 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user }) => {
                   sections={selectedPaper.sections} 
                   questions={selectedPaper.questions} 
                   layoutMode={1} 
+                  medium={selectedPaper.medium}
                   showAnswerKey={showAnswerKey}
+                  baseFontSize={selectedPaper.fontSize}
+                  lineSpacing={selectedPaper.lineSpacing}
+                  timeAllowed={selectedPaper.timeAllowed}
                   paperCode={selectedPaper.paperCode}
+                  chaptersDisplay={selectedPaper.formattedChapters}
                 />
             </div>
           </div>

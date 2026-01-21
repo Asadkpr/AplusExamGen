@@ -8,7 +8,7 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 
-// Grouped modular firestore imports from lite version to resolve named export resolution issues
+// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
 import { 
   doc, 
   getDoc, 
@@ -18,7 +18,7 @@ import {
   getDocs, 
   query, 
   where 
-} from 'firebase/firestore/lite';
+} from 'firebase/firestore';
 
 import { User } from '../types';
 import { LOCAL_STORAGE_SESSION_KEY } from '../constants';

@@ -119,14 +119,14 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
           </div>
         </div>
         <h2 className="text-3xl font-extrabold text-gold-500 tracking-wider uppercase">{APP_NAME}</h2>
-        <p className="mt-2 text-sm text-gold-100/70">{APP_TAGLINE}</p>
+        <p className="mt-2 text-sm text-gray-400 font-bold tracking-tight">{APP_TAGLINE}</p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md animate-fadeIn">
         <div className="bg-gray-800 py-8 px-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-gray-700 sm:rounded-xl sm:px-10">
           <div className="mb-6 text-center">
-             <h3 className="text-xl font-bold text-white">Create New Account</h3>
-             <p className="text-sm text-gray-400">Please fill in your details below</p>
+             <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Create New Account</h3>
+             <p className="text-sm text-gray-500">Please fill in your details below</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -169,14 +169,14 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
             />
 
             <div className="mb-4 bg-gray-750/30 p-3 rounded-lg border border-gray-700">
-              <label className="flex items-center space-x-2 text-sm text-gold-100 mb-2 cursor-pointer select-none">
+              <label className="flex items-center space-x-2 text-sm text-gray-100 mb-2 cursor-pointer select-none font-bold uppercase tracking-tight">
                 <input 
                   type="checkbox" 
                   checked={sameAsMobile} 
                   onChange={handleSameAsMobile}
                   className="rounded bg-gray-700 border-gray-600 text-gold-500 focus:ring-gold-500 accent-gold-500 w-4 h-4 cursor-pointer"
                 />
-                <span className="font-medium">WhatsApp (Same as Mobile)</span>
+                <span className="font-bold">WhatsApp (Same as Mobile)</span>
               </label>
               <Input 
                 label="WhatsApp Number"
@@ -216,7 +216,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
               placeholder="Re-enter password"
             />
 
-            <div className="flex items-start bg-gray-900/50 p-3 rounded border border-gray-700">
+            <div className="flex items-start bg-gray-900/30 p-3 rounded border border-gray-700">
               <div className="flex items-center h-5">
                 <input
                   id="terms"
@@ -228,7 +228,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
                 />
               </div>
               <div className="ml-3 text-sm">
-                <label htmlFor="terms" className="font-medium text-gray-300 cursor-pointer select-none">
+                <label htmlFor="terms" className="font-bold text-gray-400 cursor-pointer select-none">
                   I agree to the Terms & Conditions
                 </label>
                 {errors.terms && <p className="text-xs text-red-400 mt-1">{errors.terms}</p>}
@@ -243,10 +243,10 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-600"></div>
+                <div className="w-full border-t border-gray-700"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-800 text-gray-400">
+                <span className="px-2 bg-gray-800 text-gray-500 font-medium">
                   Already have an account?
                 </span>
               </div>
@@ -255,7 +255,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
             <div className="mt-4 text-center">
               <button 
                 onClick={onNavigateLogin} 
-                className="flex items-center justify-center w-full gap-2 text-gold-500 hover:text-gold-400 font-medium transition-colors p-2 rounded hover:bg-gray-700/30"
+                className="flex items-center justify-center w-full gap-2 text-gold-600 hover:text-gold-500 font-bold transition-colors p-2 rounded uppercase tracking-widest text-xs"
               >
                 <ArrowLeft size={16} /> Log in here
               </button>

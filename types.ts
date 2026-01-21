@@ -1,4 +1,3 @@
-
 export interface InstituteProfile {
   instituteName: string;
   instituteType: string;
@@ -73,6 +72,7 @@ export interface PaperPatternSectionPart {
 export interface PaperPatternSection {
   id: string;
   type: QuestionType;
+  heading?: string; // New: SECTION - I, SECTION - II etc.
   title: string;
   questionCount: number;
   attemptCount: number;
@@ -106,8 +106,10 @@ export interface SavedPaper {
   // Metadata for state restoration
   selectedChapterIds?: string[];
   selectedSubtopicIds?: string[];
+  formattedChapters?: string; // Human readable chapter list e.g. "1, 2, 5"
   medium?: 'English' | 'Urdu' | 'Both';
   fontSize?: number;
+  lineSpacing?: number; // Spacing between questions (0-10 scale)
   timeAllowed?: string; // New: stored from pattern
   paperCode?: string; // Automatic 4-digit code
 }

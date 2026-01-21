@@ -12,14 +12,14 @@ export const Select: React.FC<SelectProps> = ({ label, error, options, placehold
   return (
     <div className="mb-4 w-full">
       {label && (
-        <label className="block text-sm font-medium text-gold-100 mb-1">
+        <label className="block text-sm font-bold text-gray-100 mb-1 uppercase tracking-tight">
           {label}
         </label>
       )}
       <div className="relative">
         <select
           className={`w-full px-4 py-2 border rounded-lg appearance-none bg-gray-800 text-white focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-colors ${
-            error ? 'border-red-500' : 'border-gray-600'
+            error ? 'border-red-500' : 'border-gray-700'
           } ${className}`}
           {...props}
         >

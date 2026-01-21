@@ -1,5 +1,6 @@
+
 import { db } from '../firebaseConfig';
-// Modular firestore imports from lite version
+// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
 import { 
   collection, 
   getDocs, 
@@ -7,7 +8,7 @@ import {
   deleteDoc, 
   doc,
   getDoc
-} from 'firebase/firestore/lite';
+} from 'firebase/firestore';
 import { PaperPattern } from '../types';
 //import { PAPER_PATTERNS as DEFAULT_PATTERNS } from '../constants';
 import { executeAsAdmin } from './authService';

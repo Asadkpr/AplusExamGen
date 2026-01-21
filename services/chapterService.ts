@@ -1,5 +1,6 @@
+
 import { db } from '../firebaseConfig';
-// Standard modular firestore imports from lite version
+// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
 import { 
   collection, 
   getDocs, 
@@ -11,13 +12,14 @@ import {
   getDoc, 
   setDoc, 
   updateDoc 
-} from 'firebase/firestore/lite';
+} from 'firebase/firestore';
 import { Chapter, Subtopic } from '../types';
 import { getChaptersForSubject as getDefaultChapters } from '../constants';
 import { getUploadedSubtopicsMap } from './questionService';
 import { executeAsAdmin } from './authService';
 
 const COLLECTION = 'chapters';
+const UPLOADED_COLLECTION = 'uploaded_content';
 export const VISIBILITY_COLLECTION = 'visibility_settings';
 export const VISIBILITY_DOC = 'global';
 
@@ -99,7 +101,7 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
   const customChapters: Chapter[] = [];
 
   const fetchCustomOp = async () => {
-    const q = query(collection(db, COLLECTION), where("subject", "==", subject), where("classLevel", "==", classLevel));
+    const q = query(collection(db, COLLECTION), where("subject", "==", subject), where("classLevel", "==", cleanClass));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
@@ -111,6 +113,8 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
       } as Chapter;
     });
   };
+
+  const cleanClass = classLevel.trim();
 
   try {
     const fetched = await fetchCustomOp();
@@ -155,8 +159,6 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
   }
 
   // 🔹 IMPROVED NUMERICAL SORTING
-  // Ensures "Chapter 1", "Chapter 2", "Chapter 10" appear in correct sequence
-  // Extracts the first number found in the name for comparison.
   combinedChapters.sort((a, b) => {
     const extractNum = (str: string) => {
       const match = str.match(/\d+/);
@@ -170,7 +172,6 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
       return numA - numB;
     }
     
-    // Fallback to alpha sort if numbers are same or missing
     return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   });
 
@@ -206,7 +207,6 @@ export const addChapter = async (subject: string, classLevel: string, name: stri
 
 export const renameChapter = async (id: string, newName: string): Promise<boolean> => {
   const updateOp = async () => {
-    // 1. Try to update custom chapter in Firestore
     const docRef = doc(db, COLLECTION, id);
     try {
       const docSnap = await getDoc(docRef);
@@ -214,11 +214,8 @@ export const renameChapter = async (id: string, newName: string): Promise<boolea
         await updateDoc(docRef, { name: newName.trim() });
         return true;
       }
-    } catch (e) {
-      // If error is not permission related, it might just not exist
-    }
+    } catch (e) {}
 
-    // 2. If not in customs, it's a default. Handle via rename map.
     const visibility = await getVisibilitySettings();
     const renamedMap = { ...(visibility.renamedChapterMap || {}) };
     renamedMap[id] = newName.trim();
@@ -244,17 +241,14 @@ export const renameChapter = async (id: string, newName: string): Promise<boolea
 
 export const deleteChapter = async (id: string): Promise<void> => {
   const deleteOp = async () => {
-    // 1. Try deleting from customs
     const docRef = doc(db, COLLECTION, id);
     try {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         await deleteDoc(docRef);
-        return;
       }
     } catch (e) {}
 
-    // 2. If not found or failed, it's likely a default. Add to hidden list.
     const visibility = await getVisibilitySettings();
     const hiddenIds = [...visibility.hiddenChapterIds];
     if (!hiddenIds.includes(id)) {
@@ -271,5 +265,43 @@ export const deleteChapter = async (id: string): Promise<void> => {
     if (e.code === 'permission-denied') {
       try { await executeAsAdmin(deleteOp); } catch (err) {}
     }
+  }
+};
+
+/**
+ * Permanently deletes a chapter from 'chapters' AND its content from 'uploaded_content'
+ */
+export const deleteChapterPermanently = async (id: string): Promise<boolean> => {
+  const deleteOp = async () => {
+    // 1. Delete from Chapters Metadata
+    const chapterRef = doc(db, COLLECTION, id);
+    await deleteDoc(chapterRef).catch(() => {});
+
+    // 2. Delete from Uploaded Content (Questions/Topics)
+    const contentRef = doc(db, UPLOADED_COLLECTION, id);
+    await deleteDoc(contentRef).catch(() => {});
+
+    // 3. Clean Visibility Settings
+    const visibility = await getVisibilitySettings();
+    const updatedHidden = visibility.hiddenChapterIds.filter(cid => cid !== id);
+    await setDoc(doc(db, VISIBILITY_COLLECTION, VISIBILITY_DOC), {
+      ...visibility,
+      hiddenChapterIds: updatedHidden
+    }, { merge: true });
+
+    return true;
+  };
+
+  try {
+    return await deleteOp();
+  } catch (e: any) {
+    if (e.code === 'permission-denied') {
+      try {
+        return await executeAsAdmin(deleteOp);
+      } catch (err) {
+        console.error("Admin permanent delete failed", err);
+      }
+    }
+    return false;
   }
 };
