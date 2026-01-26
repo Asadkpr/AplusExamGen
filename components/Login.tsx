@@ -264,9 +264,16 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-900 text-theme-text-main transition-colors duration-300">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="flex justify-center mb-4">
-          <div className="p-3 bg-gray-800 rounded-full border-2 border-gold-500 shadow-lg">
-            {view === 'LOGIN' ? <Lock className="w-8 h-8 text-gold-500" /> : <HelpCircle className="w-8 h-8 text-gold-500" />}
-          </div>
+          {/* Circular Logo */}
+          <div className="w-24 h-24 rounded-full border-2 border-gold-500 shadow-lg overflow-hidden bg-gray-800 flex items-center justify-center">
+  <img 
+    src="/logo.png"    // <-- apna logo path
+    alt="App Logo"
+    className="w-20 h-20 rounded-full object-cover"
+  />
+</div>
+
+
         </div>
         <h2 className="text-3xl font-extrabold text-gold-500 tracking-wider uppercase">{APP_NAME}</h2>
         <p className="mt-2 text-sm text-theme-text-muted font-bold tracking-tight">{APP_TAGLINE}</p>
