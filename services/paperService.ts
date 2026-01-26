@@ -1,6 +1,7 @@
 
+
 import { db } from '../firebaseConfig';
-// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
+// Fix: Consolidated modular imports from firebase/firestore
 import { 
   collection, 
   getDocs, 
@@ -127,8 +128,9 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean): Promise<
     console.warn("Cloud fetch failed", error.code);
     if (error.code === 'permission-denied') {
        try {
-         const fetched = await executeAsAdmin(fetchOp);
-         papers.push(...fetched);
+         // Fix: Capture the result from executeAsAdmin into adminFetched to fix the 'fetched' is not defined error
+         const adminFetched = await executeAsAdmin(fetchOp);
+         papers.push(...adminFetched);
        } catch(err) {
          console.error("Admin fetch papers failed", err);
        }

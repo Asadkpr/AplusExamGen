@@ -30,16 +30,32 @@
           extend: {
             colors: {
               gray: {
-                900: 'var(--bg-900)',
-                800: 'var(--bg-800)',
-                750: 'var(--bg-750)',
-                700: 'var(--bg-700)',
-                500: 'var(--text-muted)',
-                400: 'var(--text-sub)',
-                100: 'var(--text-gold)',
+                950: 'var(--gray-950)',
+                900: 'var(--gray-900)',
+                850: 'var(--gray-850)',
+                800: 'var(--gray-800)',
+                750: 'var(--gray-750)',
+                700: 'var(--gray-700)',
+                600: 'var(--gray-600)',
+                500: 'var(--gray-500)',
+                400: 'var(--gray-400)',
+                300: 'var(--gray-300)',
+                200: 'var(--gray-200)',
+                100: 'var(--gray-100)',
+                50: 'var(--gray-50)',
               },
-              white: 'var(--text-main)',
-              black: 'var(--text-inv)',
+              surface: {
+                900: 'var(--gray-900)',
+                800: 'var(--gray-800)',
+                750: 'var(--gray-750)',
+                700: 'var(--gray-700)',
+              },
+              'theme-text': {
+                main: 'var(--text-main)',
+                inv: 'var(--text-inv)',
+                muted: 'var(--text-muted)',
+                sub: 'var(--text-sub)',
+              },
               brand: {
                 50: '#f0f9ff',
                 100: '#e0f2fe',
@@ -67,33 +83,61 @@
     </script>
     <style>
       :root {
-        --bg-900: #111827; 
-        --bg-800: #1f2937;
-        --bg-750: #2d3748;
-        --bg-700: #374151;
+        /* DARK MODE DEFAULTS */
+        --gray-950: #0a0f1a;
+        --gray-900: #111827; 
+        --gray-850: #1a2233;
+        --gray-800: #1f2937;
+        --gray-750: #2d3748;
+        --gray-700: #374151;
+        --gray-600: #4b5563;
+        --gray-500: #6b7280;
+        --gray-400: #9ca3af;
+        --gray-300: #d1d5db;
+        --gray-200: #e5e7eb;
+        --gray-100: #f3f4f6;
+        --gray-50: #f9fafb;
+        
         --text-main: #ffffff;
         --text-inv: #000000;
-        --text-muted: #6b7280;
-        --text-sub: #9ca3af;
-        --text-gold: #fef3c7;
+        --text-muted: #9ca3af;
+        --text-sub: #6b7280;
+        --bg-900: var(--gray-900);
       }
 
       .light-theme {
-        --bg-900: #ffffff;
-        --bg-800: #f3f4f6;
-        --bg-750: #e5e7eb;
-        --bg-700: #d1d5db;
-        --text-main: #111827;
+        /* LIGHT MODE INVERSIONS - HIGH CONTRAST */
+        --gray-950: #f1f5f9;
+        --gray-900: #ffffff; 
+        --gray-850: #f8fafc;
+        --gray-800: #f1f5f9; /* Soft light background for inputs */
+        --gray-750: #e2e8f0;
+        --gray-700: #cbd5e1;
+        --gray-600: #94a3b8;
+        --gray-50: #0f172a;
+        --gray-100: #1e293b;
+        --gray-200: #334155;
+        --gray-300: #475569;
+        --gray-400: #64748b;
+        --gray-500: #71717a;
+
+        --text-main: #0f172a; /* Deep Charcoal Black */
         --text-inv: #ffffff;
-        --text-muted: #374151; /* Darker muted text for visibility */
-        --text-sub: #1f2937;
-        --text-gold: #451a03; /* Deep dark brown for accent visibility */
+        --text-muted: #475569; /* Dark Gray */
+        --text-sub: #64748b;
+        --bg-900: #ffffff;
+      }
+
+      body {
+        background-color: var(--bg-900);
+        color: var(--text-main);
+        transition: background-color 0.2s ease, color 0.2s ease;
       }
 
       /* Global Urdu Typography */
       [dir="rtl"], .font-urdu {
         font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif !important;
-        line-height: 2 !important; /* Essential for Nastaliq dot spacing */
+        line-height: 2 !important;
       }
 
       /* PRINT OPTIMIZATION */
@@ -102,102 +146,27 @@
           size: A4;
           margin: 0;
         }
-
         html, body, #root, #root > div, main {
           display: block !important;
-          height: auto !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-          margin: 0 !important;
-          padding: 0 !important;
           background-color: white !important;
-          width: 100% !important;
+          color: black !important;
         }
-
-        header, nav, aside, footer, button, .print-hidden {
-          display: none !important;
-        }
-
-        body { visibility: hidden; }
-        .print-container, 
-        .print-container *, 
-        .print-watermark, 
-        .print-watermark * {
-          visibility: visible !important;
-        }
-
-        .print-watermark {
-          display: flex !important;
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
-          z-index: -1 !important;
-          pointer-events: none !important;
-          justify-content: center !important;
-          align-items: center !important;
-          opacity: 0.08 !important;
-        }
-
-        .print-watermark img {
-          width: 60% !important;
-          max-width: 500px !important;
-          filter: grayscale(100%) !important;
-        }
-
-        .print-container {
-          display: block !important;
-          position: relative !important;
-          width: 210mm !important;
-          margin: 0 auto !important;
-          background: white !important;
-          box-shadow: none !important;
-        }
-
-        #printable-section {
-          display: block !important;
-          width: 100% !important;
-          height: auto !important;
-          min-height: 297mm !important;
-          margin: 0 !important;
-          padding: 10mm !important;
-          box-shadow: none !important;
-          border: none !important;
-          background: white !important;
-          overflow: visible !important;
-        }
-
-        .break-inside-avoid {
-          page-break-inside: avoid !important;
-        }
-
-        * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
+        .print-hidden { display: none !important; }
       }
 
-      /* ULTRA BRIGHT VISIBLE SCROLLBAR */
       .custom-scrollbar::-webkit-scrollbar {
-        width: 12px;
-        height: 12px;
+        width: 10px;
+        height: 10px;
       }
       .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(31, 41, 55, 0.5);
-        border-radius: 10px;
+        background: transparent;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #fbbf24; /* Amber 400 */
+        background: #fbbf24;
         border-radius: 10px;
-        border: 2px solid #111827;
-        box-shadow: 0 0 10px rgba(251, 191, 36, 0.6); /* Glow for visibility */
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #f59e0b; /* Amber 500 */
+        border: 2px solid var(--bg-900);
       }
       
-      /* Smooth content transitions */
       .animate-fadeIn {
         animation: fadeIn 0.3s ease-out;
       }
@@ -220,8 +189,9 @@
   }
 }
 </script>
-  </head>
-  <body class="bg-gray-900 text-white antialiased">
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

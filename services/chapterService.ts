@@ -1,6 +1,6 @@
 
 import { db } from '../firebaseConfig';
-// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
+// Fix: Consolidated modular imports from firebase/firestore
 import { 
   collection, 
   getDocs, 
@@ -99,6 +99,7 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
     : getDefaultChapters(subject, classLevel);
 
   const customChapters: Chapter[] = [];
+  const cleanClass = classLevel.trim();
 
   const fetchCustomOp = async () => {
     const q = query(collection(db, COLLECTION), where("subject", "==", subject), where("classLevel", "==", cleanClass));
@@ -113,8 +114,6 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
       } as Chapter;
     });
   };
-
-  const cleanClass = classLevel.trim();
 
   try {
     const fetched = await fetchCustomOp();
@@ -297,7 +296,7 @@ export const deleteChapterPermanently = async (id: string): Promise<boolean> => 
   } catch (e: any) {
     if (e.code === 'permission-denied') {
       try {
-        return await executeAsAdmin(deleteOp);
+        await executeAsAdmin(deleteOp);
       } catch (err) {
         console.error("Admin permanent delete failed", err);
       }

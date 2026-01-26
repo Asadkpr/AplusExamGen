@@ -1,3 +1,4 @@
+
 export interface InstituteProfile {
   instituteName: string;
   instituteType: string;
@@ -19,6 +20,16 @@ export interface User {
   passwordHash: string; // In a real app, never store plain passwords. Simulating hash storage.
   createdAt: number;
   instituteProfile?: InstituteProfile;
+  isBlocked?: boolean; // New: Account status
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  type: 'general' | 'urgent' | 'update' | 'maintenance';
+  createdAt: number;
+  author: string;
 }
 
 export interface AuthState {
@@ -67,6 +78,10 @@ export interface PaperPatternSectionPart {
   label: string; // e.g. "(a)", "(b)"
   marks: number;
   type?: QuestionType; // e.g., 'LONG', 'NUMERICAL', 'SHORT'
+  specificChapters?: string[]; // Mandatory chapter numbers for this part
+  questionCount?: number; // Specific count for this part (important for English MCQs)
+  attemptCount?: number;  // Specific attempt limit for this part
+  isAlternative?: boolean; // New: If true, this part is separated by an "OR" from the previous one
 }
 
 export interface PaperPatternSection {
@@ -74,10 +89,15 @@ export interface PaperPatternSection {
   type: QuestionType;
   heading?: string; // New: SECTION - I, SECTION - II etc.
   title: string;
+  titleUrdu?: string; // Support for dual-language headings
+  titleFontSize?: number; // Adjustable font size for headings
+  hideSectionMarks?: boolean; // New: Toggle to hide (2x5=10) calculation
+  hideSubPartMarks?: boolean; // New: Toggle to hide individual marks next to questions
   questionCount: number;
   attemptCount: number;
   marksPerQuestion: number;
   subParts?: PaperPatternSectionPart[];
+  specificChapters?: string[]; // Mandatory chapter numbers e.g. ["1", "2"]
 }
 
 export interface PaperPattern {
@@ -127,4 +147,5 @@ export type ViewState =
   | 'UPLOAD_PAPER'
   | 'MANAGE_CONTENT'
   | 'ABOUT_US'
-  | 'TEACHERS_DIRECTORY';
+  | 'TEACHERS_DIRECTORY'
+  | 'NEWS_ANNOUNCEMENTS';

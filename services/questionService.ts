@@ -1,6 +1,6 @@
 
 import { db } from '../firebaseConfig';
-// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
+// Fix: Consolidated modular imports from firebase/firestore
 import { 
   doc, 
   setDoc, 

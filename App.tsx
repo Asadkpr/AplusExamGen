@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ViewState, User, PaperPattern } from './types';
+import { ViewState, User, PaperPattern, SavedPaper } from './types';
 import { subscribeToAuth, logoutUser, refreshUserProfile } from './services/authService';
 import { Login } from './components/Login';
 import { SignUp } from './components/SignUp';
@@ -14,6 +14,7 @@ import { HelpSupport } from './components/HelpSupport';
 import { AboutUs } from './components/AboutUs';
 import { ManageContent } from './components/ManageContent';
 import { TeachersDirectory } from './components/TeachersDirectory';
+import { NewsAnnouncements } from './components/NewsAnnouncements';
 import { ThemeProvider } from './context/ThemeContext';
 import { LOCAL_STORAGE_SESSION_KEY } from './constants';
 
@@ -23,14 +24,13 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   
   const [selectedPatternForGeneration, setSelectedPatternForGeneration] = useState<PaperPattern | undefined>(undefined);
+  const [selectedPaperToOpen, setSelectedPaperToOpen] = useState<SavedPaper | undefined>(undefined);
 
   useEffect(() => {
     // Firebase Auth Listener
     const unsubscribe = subscribeToAuth(async (user) => {
       if (user) {
         // --- DEEP CHECK LOGIC ---
-        // If user is logged in but instituteProfile is missing, it might be a sync error.
-        // Try to fetch one last time using Admin privileges before showing Setup screen.
         if (!user.instituteProfile) {
            console.log("Profile missing, attempting deep fetch...");
            try {
@@ -47,7 +47,6 @@ const App: React.FC = () => {
         setCurrentUser(user);
 
         // Smart Redirect: If user has profile, go to Dashboard. Otherwise Setup.
-        // Only switch view if we are in an Auth flow (Login/Signup/Setup) or freshly loaded
         if (currentView === 'LOGIN' || currentView === 'SIGNUP' || currentView === 'INSTITUTE_SETUP') {
           if (user.instituteProfile) {
             setCurrentView('DASHBOARD');
@@ -56,11 +55,8 @@ const App: React.FC = () => {
           }
         }
       } else {
-        // User is logged out (user is null)
+        // User is logged out
         setCurrentUser(null);
-        
-        // Only force redirect to LOGIN if we are currently on a protected route.
-        // If we are on SIGNUP, we should allow it to stay there.
         if (currentView !== 'LOGIN' && currentView !== 'SIGNUP') {
           setCurrentView('LOGIN');
         }
@@ -68,7 +64,6 @@ const App: React.FC = () => {
       setIsInitializing(false);
     });
 
-    // Safety timeout: If Firebase takes too long or fails (e.g. config error), stop loading
     const timer = setTimeout(() => {
       setIsInitializing(false);
     }, 2000);
@@ -77,7 +72,7 @@ const App: React.FC = () => {
       unsubscribe();
       clearTimeout(timer);
     }
-  }, []); // CRITICAL FIX: Empty dependency array prevents infinite loops/lag
+  }, []);
 
   const handleLogout = async () => {
     await logoutUser();
@@ -86,9 +81,6 @@ const App: React.FC = () => {
   };
 
   const handleAuthSuccess = async (user: User) => {
-    // Manually set state for Local Fallback scenarios
-    
-    // Safety Check: If profile is missing, try one last fetch before deciding view
     if (!user.instituteProfile) {
        try {
          const fresh = await refreshUserProfile(user.id);
@@ -117,12 +109,20 @@ const App: React.FC = () => {
       setCurrentView('INSTITUTE_SETUP');
     } else {
       setSelectedPatternForGeneration(undefined);
+      setSelectedPaperToOpen(undefined);
       setCurrentView(view);
     }
   };
 
   const handleUsePattern = (pattern: PaperPattern) => {
     setSelectedPatternForGeneration(pattern);
+    setSelectedPaperToOpen(undefined);
+    setCurrentView('GENERATE_PAPER');
+  };
+
+  const handleOpenPaper = (paper: SavedPaper) => {
+    setSelectedPaperToOpen(paper);
+    setSelectedPatternForGeneration(undefined);
     setCurrentView('GENERATE_PAPER');
   };
 
@@ -165,8 +165,9 @@ const App: React.FC = () => {
         {currentView === 'GENERATE_PAPER' && currentUser && (
           <GeneratePaper 
             user={currentUser}
-            onBack={() => setCurrentView('DASHBOARD')}
+            onBack={() => setCurrentView(selectedPaperToOpen ? 'SAVED_PAPERS' : 'DASHBOARD')}
             initialPattern={selectedPatternForGeneration}
+            initialPaper={selectedPaperToOpen}
           />
         )}
         {currentView === 'UPLOAD_PAPER' && currentUser && (
@@ -185,6 +186,7 @@ const App: React.FC = () => {
           <SavedPapers 
             onBack={() => setCurrentView('DASHBOARD')}
             user={currentUser}
+            onOpenPaper={handleOpenPaper}
           />
         )}
         {currentView === 'PAPER_PATTERNS' && currentUser && (
@@ -196,6 +198,12 @@ const App: React.FC = () => {
         )}
         {currentView === 'TEACHERS_DIRECTORY' && currentUser && (
           <TeachersDirectory 
+            user={currentUser}
+            onBack={() => setCurrentView('DASHBOARD')}
+          />
+        )}
+        {currentView === 'NEWS_ANNOUNCEMENTS' && currentUser && (
+          <NewsAnnouncements 
             user={currentUser}
             onBack={() => setCurrentView('DASHBOARD')}
           />

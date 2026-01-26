@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -6,12 +5,11 @@ import { CLASSES } from '../constants';
 import { getSubjects, addSubject, deleteSubject, renameSubject } from '../services/subjectService';
 import { getChapters, addChapter, deleteChapter, renameChapter } from '../services/chapterService';
 import { saveUploadedChapterContent } from '../services/questionService';
-// Fix: Import GoogleGenAI from @google/genai as required by SDK guidelines
-//import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, X, Info, 
   GraduationCap, FileText, ChevronRight, Plus, Trash2, Edit, RefreshCw, 
-  Database, ListChecks, AlertTriangle, FileDown
+  Database, ListChecks, AlertTriangle, FileDown, BookText
 } from 'lucide-react';
 import { Chapter, User, Question, Subtopic, QuestionType } from '../types';
 
@@ -27,6 +25,66 @@ const generateId = () => {
 const isUrduStyleSubject = (subject: string) => {
   const s = subject.toLowerCase();
   return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per');
+};
+
+const isEnglishSubject = (subject: string) => {
+  return subject.toLowerCase().includes('english');
+};
+
+const ENGLISH_SUBTYPES = [
+  'Verb', 'Spelling', 'Meaning', 'Grammar', 
+  'Translate', 'Summary', 'Paraphrase', 'Idioms', 
+  'Letter', 'Story', 'Essay', 'Dialogue', 
+  'Passage', 'Sentences', 'Alternate', 'Voice'
+];
+
+// Utility to detect if text contains Urdu characters
+const isUrduText = (text: string) => /[\u0600-\u06FF]/.test(text || '');
+
+// Utility to render text with support for *bold*, **bold**, <b>bold</b> and :underline: in preview
+const renderFormattedTextPreview = (text: string) => {
+  if (!text) return null;
+  
+  const isUrdu = isUrduText(text);
+
+  // Normalize: 
+  // 1. Convert bold markers (*, **, <b>) to a unified @@marker@@
+  // 2. Convert colon markers (:text:) to a unified ##marker##
+  const normalized = text
+    .replace(/<\/?b>/gi, '@@')
+    .replace(/\*\*([^*]+)\*\*/g, '@@$1@@')
+    .replace(/\*([^*]+)\*/g, '@@$1@@')
+    .replace(/:([^:]+):/g, '##$1##')
+    .replace(/@@/g, '**')
+    .replace(/##/g, '++');
+
+  const parts = normalized.split(/(\*\*.*?\*\*|\+\+.*?\+\+)/g);
+  return (
+    <span className={`${isUrdu ? 'font-urdu text-right block text-lg' : ''} whitespace-pre-wrap`} dir={isUrdu ? 'rtl' : 'ltr'}>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="text-gold-500 font-bold">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('++') && part.endsWith('++')) {
+          return <u key={i} className="underline decoration-gold-500/50">{part.slice(2, -2)}</u>;
+        }
+        return part;
+      })}
+    </span>
+  );
+};
+
+const getSubtypeColor = (type: string) => {
+  const t = type.toLowerCase();
+  if (t === 'verb') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+  if (t === 'spelling') return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
+  if (t === 'meaning' || t === 'synonym') return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+  if (t === 'grammar') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+  if (t === 'essay' || t === 'story' || t === 'letter' || t === 'dialogue') return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+  if (t === 'translate' || t === 'voice') return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+  if (t === 'passage' || t === 'summary' || t === 'paraphrase') return 'bg-teal-500/10 text-teal-400 border-teal-500/20';
+  if (t === 'idioms' || t === 'sentences') return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+  return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
 };
 
 export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
@@ -47,9 +105,9 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
   const [parsedCount, setParsedCount] = useState(0);
   const [isConvertingMath, setIsConvertingMath] = useState(false);
 
-  // Fix: Defined isAdmin which was previously missing and causing crashes
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
   const isUrduPaper = isUrduStyleSubject(selectedSubject);
+  const isEnglish = isEnglishSubject(selectedSubject);
 
   useEffect(() => {
     if (parsedQuestions.length > 0 && window.MathJax && window.MathJax.typesetPromise) {
@@ -220,11 +278,28 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       "OptA(Urdu)", "OptB(Urdu)", "OptC(Urdu)", "OptD(Urdu)", 
       "CorrectAnswer", "Marks"
     ];
-    const rows = [
-      ["Atomic Structure", "MCQ", "Who discovered the electron?", "الیکٹران کس نے دریافت کیا؟", "J.J. Thomson", "Rutherford", "Bohr", "Dalton", "جے جے ثامسن", "ردرفورڈ", "بوہر", "ڈالٹن", "A", "1"],
-      ["Chemical Bonding", "SHORT", "Define Ionic Bond.", "آئیونک بانڈ کی تعریف کریں۔", "", "", "", "", "", "", "", "", "", "2"],
-      ["Mathematics", "MCQ", "Solve: x^2 = 4", "حل کریں: x^2 = 4", "2", "-2", "Both", "None", "2", "-2", "دونوں", "کوئی نہیں", "C", "1"]
-    ];
+
+    let rows: string[][] = [];
+
+    if (isEnglish) {
+       rows = [
+         ["Verbs", "Verb", "I ___ (read) this book since morning.", "", "read", "have been reading", "had read", "was reading", "", "", "", "", "B", "1"],
+         ["Spellings", "Spelling", "Choose correct spelling of :Received::", "", "Received", "Recieved", "Receved", "Ricieved", "", "", "", "", "A", "1"],
+         ["Synonyms", "Meaning", "The word *Enormous* means:", "", "Small", "Huge", "Weak", "Fast", "", "", "", "", "B", "1"],
+         ["Grammar", "Grammar", "He is fond ___ music.", "", "of", "to", "with", "at", "", "", "", "", "A", "1"],
+         ["Vocabulary", "Sentences", "Magnificence", "", "", "", "", "", "", "", "", "", "", "1"],
+         ["Composition", "Letter", "Write a letter to your mother who is worried about your health.", "", "", "", "", "", "", "", "", "", "", "8"],
+         ["Composition", "Story", "A Friend in Need is a Friend Indeed.", "", "", "", "", "", "", "", "", "", "", "10"],
+         ["Composition", "Dialogue", "Write a dialogue between two friends on the importance of time.", "", "", "", "", "", "", "", "", "", "", "8"],
+         ["Poetry", "Paraphrase", "The waves beside them danced; @ but they Out-did the sparkling waves in glee.", "", "", "", "", "", "", "", "", "", "", "5"]
+       ];
+    } else {
+       rows = [
+         ["Atomic Structure", "MCQ", "Who discovered the :electron:?", "الیکٹران کس نے دریافت کیا؟", "J.J. Thomson", "Rutherford", "Bohr", "Dalton", "جے جے ثامسن", "ردرفورڈ", "بوہر", "ڈالٹن", "A", "1"],
+         ["Chemical Bonding", "SHORT", "Define *Ionic Bond*.", "آئیونک بانڈ کی تعریف کریں۔", "", "", "", "", "", "", "", "", "", "2"],
+         ["Physics", "MCQ", "1 Newton is equal to:@10^5 Dynes", "1 نیوٹن برابر ہے:@10^5 ڈائنز", "1 kg m/s", "1 kg m/s^2", "1 kg m^2/s", "1 g m/s", "1 کلوگرام میٹر/سیکنڈ", "1 کلوگرام میٹر/سیکنڈ^2", "1 کلوگرام میٹر^2/سیکنڈ", "1 گرام میٹر/سیکنڈ", "B", "1"]
+       ];
+    }
 
     const csvContent = [
       headers.join(","),
@@ -235,7 +310,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "APLUS_Question_Template.csv");
+    link.setAttribute("download", `APLUS_${selectedSubject}_Template.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -271,28 +346,92 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
          const firstRow = rows[0].toLowerCase();
          if (firstRow.includes('subtopic') || firstRow.includes('type') || firstRow.includes('question')) startIndex = 1;
       }
+
+      // Helper to process text and replace '@' with '\n'
+      const processValue = (val: string) => (val || '').replace(/@/g, '\n').trim();
+
       for (let i = startIndex; i < rows.length; i++) {
           const row = rows[i].trim();
           if (!row) continue;
           const cleanCols = parseCSVLine(row);
           if (cleanCols.length < 3) continue;
-          const subtopicName = cleanCols[0] ? cleanCols[0].trim() : 'General';
-          let typeStr = cleanCols[1] ? cleanCols[1].toUpperCase().trim() : 'MCQ';
-          const type = (['MCQ', 'SHORT', 'LONG', 'NUMERICAL', 'ESSAY', 'TRANSLATION'].includes(typeStr) ? typeStr : 'MCQ') as QuestionType;
-          const textEng = cleanCols[2] ? cleanCols[2].trim() : ''; 
-          const textUrdu = cleanCols.length > 3 ? cleanCols[3].trim() : '';
-          const optionsEng = [cleanCols[4], cleanCols[5], cleanCols[6], cleanCols[7]].filter(o => o !== undefined && o !== '');
+          
+          const subtopicName = cleanCols[0] ? processValue(cleanCols[0]) : 'General';
+          let typeStr = cleanCols[1] ? cleanCols[1].trim() : 'MCQ';
+          
+          let normalizedType = 'MCQ';
+          const upperType = typeStr.toUpperCase();
+          const baseTypes = ['MCQ', 'SHORT', 'LONG', 'NUMERICAL', 'ESSAY', 'TRANSLATION'];
+          const allValidTypes = [...baseTypes, ...ENGLISH_SUBTYPES.map(s => s.toUpperCase())];
+          
+          if (allValidTypes.includes(upperType)) {
+             normalizedType = upperType;
+             const matchSubtype = ENGLISH_SUBTYPES.find(s => s.toUpperCase() === upperType);
+             if (matchSubtype) normalizedType = matchSubtype;
+          } else if (isEnglish) {
+             const lowerTypeStr = typeStr.toLowerCase();
+             if (lowerTypeStr.includes('verb')) normalizedType = 'Verb';
+             else if (lowerTypeStr.includes('spell')) normalizedType = 'Spelling';
+             else if (lowerTypeStr.includes('mean') || lowerTypeStr.includes('synonym')) normalizedType = 'Meaning';
+             else if (lowerTypeStr.includes('gram')) normalizedType = 'Grammar';
+             else if (lowerTypeStr.includes('trans')) normalizedType = 'Translate';
+             else if (lowerTypeStr.includes('summ')) normalizedType = 'Summary';
+             else if (lowerTypeStr.includes('para')) normalizedType = 'Paraphrase';
+             else if (lowerTypeStr.includes('idiom') || lowerTypeStr.includes('phrase')) normalizedType = 'Idioms';
+             else if (lowerTypeStr.includes('lett')) normalizedType = 'Letter';
+             else if (lowerTypeStr.includes('stor')) normalizedType = 'Story';
+             else if (lowerTypeStr.includes('essay')) normalizedType = 'Essay';
+             else if (lowerTypeStr.includes('dial')) normalizedType = 'Dialogue';
+             else if (lowerTypeStr.includes('pass')) normalizedType = 'Passage';
+             else if (lowerTypeStr.includes('sent')) normalizedType = 'Sentences';
+             else if (lowerTypeStr.includes('alter')) normalizedType = 'Alternate';
+             else if (lowerTypeStr.includes('voice')) normalizedType = 'Voice';
+             else normalizedType = typeStr || 'MCQ';
+          } else {
+             normalizedType = typeStr || 'MCQ';
+          }
+          
+          const type = normalizedType as QuestionType;
+          let textEng = cleanCols[2] ? processValue(cleanCols[2]) : ''; 
+          
+          if (isEnglish && type === 'Paraphrase') {
+             // Backward compatibility for '/' as line break in paraphrases, plus the new '@' support
+             textEng = textEng.replace(/\//g, '\n');
+          }
+          
+          const textUrdu = cleanCols.length > 3 ? processValue(cleanCols[3]) : '';
+          
+          const isObjective = type === 'MCQ' || ['Verb', 'Spelling', 'Meaning', 'Grammar'].includes(type);
+          
+          const optionsEng = [cleanCols[4], cleanCols[5], cleanCols[6], cleanCols[7]]
+            .filter(o => o !== undefined && o !== '')
+            .map(o => processValue(o));
+
           let optionsUrdu: string[] | undefined = undefined;
           let correctAnswerIndex = 8;
           let marksIndex = 9;
           if (cleanCols.length >= 14) {
-            optionsUrdu = [cleanCols[8], cleanCols[9], cleanCols[10], cleanCols[11]].filter(o => o !== undefined && o !== '');
+            optionsUrdu = [cleanCols[8], cleanCols[9], cleanCols[10], cleanCols[11]]
+              .filter(o => o !== undefined && o !== '')
+              .map(o => processValue(o));
             correctAnswerIndex = 12; marksIndex = 13;
           }
           const correctAnswer = cleanCols.length > correctAnswerIndex ? cleanCols[correctAnswerIndex].trim() : '';
-          const marks = parseInt(cleanCols[marksIndex]) || (type === 'MCQ' ? 1 : 2);
+          const marks = parseInt(cleanCols[marksIndex]) || (isObjective ? 1 : 2);
+          
           if (subtopicName) subtopicsSet.add(subtopicName);
-          questions.push({ id: generateId(), chapterId: selectedChapter!.id, subtopic: subtopicName, type, text: textEng, textUrdu, options: type === 'MCQ' ? optionsEng : undefined, optionsUrdu: type === 'MCQ' ? optionsUrdu : undefined, correctAnswer, marks });
+          questions.push({ 
+            id: generateId(), 
+            chapterId: selectedChapter!.id, 
+            subtopic: subtopicName, 
+            type, 
+            text: textEng, 
+            textUrdu, 
+            options: isObjective ? optionsEng : undefined, 
+            optionsUrdu: isObjective ? optionsUrdu : undefined, 
+            correctAnswer, 
+            marks 
+          });
       }
       setParsedQuestions(questions);
       setParsedSubtopics(Array.from(subtopicsSet).map(name => ({ id: name, name: name })));
@@ -300,14 +439,12 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
   };
 
   const convertMathToLatex = async (questions: Question[]) => {
-    // Safety check for API key
     if (!process.env.API_KEY) {
       console.warn("API Key missing. Uploading without auto-conversion.");
       return questions;
     }
 
     setIsConvertingMath(true);
-    // Fix: Initialize GoogleGenAI properly using the named parameter as per SDK guidelines
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const batch = questions.map(q => ({
@@ -323,16 +460,14 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     
     STRICT RULES:
     1. CONVERT all fractions: Change any instance of \\frac{a}{b} into (a/b) or a/b. 
-       - Example: \\frac{3}{2} MUST become 3/2
-       - Example: b = \\frac{5}{3} MUST become b = 5/3
-    2. DELIMITERS: Wrap ALL identified mathematical expressions, variables (x, y, θ, etc.), and formulas in single dollar signs '$' for inline rendering (e.g., $x^2$, $3/4$).
-    3. LANGUAGES: Process both 'text' (English) and 'textUrdu' (Urdu) fields. Do NOT translate natural language; only convert the math notation.
-    4. OUTPUT: Return ONLY a valid JSON array of objects with the exact same structure and IDs.
+    2. DELIMITERS: Wrap ALL mathematical expressions in single dollar signs '$' for inline rendering.
+    3. LANGUAGES: Process both 'text' (English) and 'textUrdu' (Urdu) fields. Do NOT translate natural language.
+    4. FORMATTING: If you see bold markers like *text*, **text** or <b>text</b>, YOU MUST PRESERVE THEM EXACTLY. DO NOT STRIP THEM OUT.
+    5. OUTPUT: Return ONLY a valid JSON array of objects.
 
     Input JSON: ${JSON.stringify(batch)}`;
 
     try {
-      // Fix: Use ai.models.generateContent to query GenAI directly as per SDK guidelines
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: prompt,
@@ -341,7 +476,6 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         }
       });
 
-      // Fix: Directly access the .text property instead of calling it as a method
       const jsonStr = response.text?.trim() || '[]';
       const convertedBatch = JSON.parse(jsonStr);
       
@@ -356,7 +490,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         };
       });
     } catch (e) {
-      console.error("Math conversion failed. Falling back to original data.", e);
+      console.error("Math conversion failed.", e);
       return questions;
     } finally {
       setIsConvertingMath(false);
@@ -390,10 +524,10 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col font-sans transition-colors duration-300 tex2jax_process">
-      {/* Subject Modals */}
+      {/* Modals Logic */}
       {addSubjectModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Add New Subject</h3>
             <form onSubmit={handleSaveNewSubject}>
               <Input label="Subject Name" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="e.g. Physics" autoFocus />
@@ -408,7 +542,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
       {editSubjectModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Edit Subject</h3>
             <form onSubmit={handleUpdateSubject}>
               <div className="mb-4">
@@ -427,7 +561,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       {/* Chapter Modals */}
       {addChapterModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Add New Chapter</h3>
             <form onSubmit={handleSaveNewChapter}>
               <Input label="Chapter Name" value={newChapterName} onChange={(e) => setNewChapterName(e.target.value)} placeholder="e.g. Chapter 1: Introduction" autoFocus />
@@ -442,7 +576,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
       {editChapterModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Edit Chapter Name</h3>
             <form onSubmit={handleUpdateChapter}>
               <Input label="New Chapter Name" value={newChapterName} onChange={(e) => setNewChapterName(e.target.value)} placeholder="e.g. Chapter 1: Updated Title" autoFocus />
@@ -500,7 +634,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                     {availableSubjects.map(subj => (
                       <div 
                         key={subj} 
-                        className="bg-gray-800 border border-gray-700 hover:border-gold-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all hover:-translate-y-1 min-h-[140px] relative group"
+                        className={`bg-gray-800 border border-gray-700 hover:border-gold-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all hover:-translate-y-1 min-h-[140px] relative group ${isEnglishSubject(subj) ? 'ring-2 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : ''}`}
                         onClick={() => { setSelectedSubject(subj); setStep(3); }}
                       >
                         {isAdmin && (
@@ -519,6 +653,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                             </button>
                           </div>
                         )}
+                        {isEnglishSubject(subj) && <div className="absolute -top-2 -right-2 bg-emerald-500 text-black px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-tighter shadow-lg">Specialized Parsing</div>}
                         <span className="font-bold text-white text-lg text-center leading-tight">{subj}</span>
                       </div>
                     ))}
@@ -567,30 +702,11 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                               {chapter.subtopics.length > 0 ? 'Content Uploaded' : 'Empty'}
                             </span>
                           </div>
-                          
                           <div className="flex items-center gap-3">
                             {isAdmin && (
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button 
-                                  onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    setEditingChapter(chapter); 
-                                    setNewChapterName(chapter.name); 
-                                    setEditChapterModal(true); 
-                                  }} 
-                                  className={`p-2 rounded transition-all ${chapter.subtopics.length > 0 ? 'bg-black/20 text-black hover:bg-black/40' : 'bg-gray-900/80 text-blue-400 hover:bg-blue-900/40'}`}
-                                >
-                                  <Edit size={16} />
-                                </button>
-                                <button 
-                                  onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    handleDeleteChapterAction(chapter.id, chapter.name); 
-                                  }} 
-                                  className={`p-2 rounded transition-all ${chapter.subtopics.length > 0 ? 'bg-black/20 text-black hover:bg-black/40' : 'bg-gray-900/80 text-red-400 hover:bg-red-900/40'}`}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingChapter(chapter); setNewChapterName(chapter.name); setEditChapterModal(true); }} className={`p-2 rounded transition-all ${chapter.subtopics.length > 0 ? 'bg-black/20 text-black hover:bg-black/40' : 'bg-gray-900/80 text-blue-400 hover:bg-blue-900/40'}`}><Edit size={16} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteChapterAction(chapter.id, chapter.name); }} className={`p-2 rounded transition-all ${chapter.subtopics.length > 0 ? 'bg-black/20 text-black hover:bg-black/40' : 'bg-gray-900/80 text-red-400 hover:bg-red-900/40'}`}><Trash2 size={16} /></button>
                               </div>
                             )}
                             <div className={chapter.subtopics.length > 0 ? 'text-black' : 'text-gold-500'}>
@@ -599,15 +715,6 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                           </div>
                       </div>
                     ))}
-                    {isAdmin && (
-                      <div 
-                        onClick={() => setAddChapterModal(true)}
-                        className="p-5 bg-gray-900/50 border-2 border-dashed border-gray-700 hover:border-gold-500 hover:bg-gray-800 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all group"
-                      >
-                        <Plus size={24} className="text-gray-500 group-hover:text-gold-500 mb-1" />
-                        <span className="text-xs font-bold text-gray-500 group-hover:text-gold-500 uppercase">Add New Chapter</span>
-                      </div>
-                    )}
                   </>
                 )}
               </div>
@@ -639,14 +746,18 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                       <div className="space-y-6">
                         {!file ? (
                           <div className="space-y-6">
-                            <div className="flex justify-center">
+                            <div className="flex flex-col items-center gap-4">
                               <button 
                                 onClick={handleDownloadTemplate}
-                                className="flex items-center gap-2 text-gold-500 hover:text-gold-400 text-sm font-bold uppercase tracking-widest border border-gold-500/30 px-6 py-3 rounded-xl bg-gold-500/5 hover:bg-gold-500/10 transition-all shadow-lg group"
+                                className="flex items-center gap-2 text-emerald-500 hover:text-emerald-400 text-sm font-bold uppercase tracking-widest border border-emerald-500/30 px-6 py-3 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 transition-all shadow-lg group"
                               >
                                 <FileDown size={20} className="group-hover:translate-y-1 transition-transform" />
-                                Download CSV Template
+                                Download {isEnglish ? 'English Specialized' : 'Generic'} Template
                               </button>
+                              {isEnglish && <p className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest bg-emerald-500/5 px-4 py-1 rounded-full border border-emerald-500/10 flex items-center gap-2"><BookText size={12}/> English board-specific types supported</p>}
+                              <p className="text-[10px] text-gold-500 uppercase font-bold tracking-widest text-center px-4">
+                                Use the <b>*asterisks*</b> for bold, <b>:colons:</b> for underlined words, and the <b>@</b> symbol for line breaks.
+                              </p>
                             </div>
                             
                             <div className="border-2 border-dashed border-gray-600 rounded-2xl p-12 text-center hover:border-gold-500 bg-gray-900/50 cursor-pointer transition-all group relative">
@@ -676,45 +787,49 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                   <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Question Bank Preview</span>
                                 </div>
                                 <div className="max-h-[400px] overflow-y-auto custom-scrollbar divide-y divide-gray-800 p-2">
-                                   {parsedQuestions.map((q, idx) => (
-                                     <div key={idx} className="p-4 hover:bg-gray-800/30 transition-colors flex flex-col gap-2 tex2jax_process">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-[10px] font-bold bg-gray-800 text-gold-500 px-1.5 py-0.5 rounded border border-gray-700">Q.{idx+1}</span>
-                                          <span className="text-[9px] font-bold bg-gray-900 text-gray-400 px-1.5 py-0.5 rounded uppercase">{q.type}</span>
-                                          <span className={`text-[9px] text-gray-500 ml-auto italic ${isUrduPaper ? 'font-urdu' : ''}`}>{q.subtopic}</span>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                          <p className="text-[12px] text-white leading-relaxed">{q.text}</p>
-                                          {q.textUrdu && <p className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{q.textUrdu}</p>}
-                                        </div>
-                                        
-                                        {/* 🔹 MCQ OPTIONS PREVIEW FOR UPLOAD */}
-                                        {q.type === 'MCQ' && (
-                                          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-800 pt-3">
-                                            {q.options && (
-                                              <div className="space-y-1">
-                                                {q.options.map((opt, oIdx) => (
-                                                  <div key={oIdx} className={`text-[12px] text-gray-400 flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500' : ''}`}>
-                                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
-                                                    <span className="truncate">{opt}</span>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-                                            {q.optionsUrdu && (
-                                              <div className="space-y-0.5" dir="rtl">
-                                                {q.optionsUrdu.map((opt, oIdx) => (
-                                                  <div key={oIdx} className={`text-[12px] text-gray-100 opacity-80 font-urdu flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'text-gold-500 opacity-100 font-bold' : ''}`}>
-                                                    <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
-                                                    <span>{opt}</span>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
+                                   {parsedQuestions.map((q, idx) => {
+                                     const isSpecialType = isEnglish && ENGLISH_SUBTYPES.some(s => s.toLowerCase() === q.type.toLowerCase());
+                                     return (
+                                       <div key={idx} className="p-4 hover:bg-gray-800/30 transition-colors flex flex-col gap-2 tex2jax_process">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold bg-gray-800 text-gold-500 px-1.5 py-0.5 rounded border border-gray-700">Q.{idx+1}</span>
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-tighter ${isSpecialType ? getSubtypeColor(q.type) : getTypeColor(q.type)}`}>
+                                              {q.type}
+                                            </span>
+                                            <span className={`text-[9px] text-gray-500 ml-auto italic ${isUrduPaper ? 'font-urdu' : ''}`}>{renderFormattedTextPreview(q.subtopic || '')}</span>
                                           </div>
-                                        )}
-                                     </div>
-                                   ))}
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="text-[12px] text-white leading-relaxed">{renderFormattedTextPreview(q.text)}</div>
+                                            {q.textUrdu && <div className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{renderFormattedTextPreview(q.textUrdu)}</div>}
+                                          </div>
+                                          
+                                          {q.options && q.options.length > 0 && (
+                                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-800 pt-3">
+                                              {q.options && (
+                                                <div className="space-y-1.5">
+                                                  {q.options.map((opt, oIdx) => (
+                                                    <div key={oIdx} className={`text-[12px] text-gray-400 flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500' : ''}`}>
+                                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
+                                                      <div className="truncate">{renderFormattedTextPreview(opt)}</div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {q.optionsUrdu && q.optionsUrdu.length > 0 && (
+                                                <div className="space-y-0.5" dir="rtl">
+                                                  {q.optionsUrdu.map((opt, oIdx) => (
+                                                    <div key={oIdx} className={`text-[12px] text-gray-100 opacity-80 font-urdu flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'text-gold-500 opacity-100 font-bold' : ''}`}>
+                                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
+                                                      <div>{renderFormattedTextPreview(opt)}</div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                       </div>
+                                     );
+                                   })}
                                 </div>
                              </div>
 
@@ -734,4 +849,16 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       </main>
     </div>
   );
+};
+
+const getTypeColor = (type: string) => {
+  switch(type.toUpperCase()) {
+      case 'MCQ': return 'bg-blue-900/50 text-blue-300 border-blue-500/30';
+      case 'SHORT': return 'bg-green-900/50 text-green-300 border-green-500/30';
+      case 'LONG': return 'bg-purple-900/50 text-purple-300 border-purple-500/30';
+      case 'NUMERICAL': return 'bg-orange-900/50 text-orange-300 border-orange-500/30';
+      case 'ESSAY': return 'bg-rose-900/50 text-rose-300 border-rose-500/30';
+      case 'TRANSLATION': return 'bg-indigo-900/50 text-indigo-300 border-indigo-500/30';
+      default: return 'bg-gray-800 text-gray-400 border-gray-600';
+  }
 };

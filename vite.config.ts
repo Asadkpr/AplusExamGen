@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // This allows process.env to be accessible in the browser without crashing
-    'process.env': {}
+    // Allows process.env.API_KEY to be accessed without crashing the browser
+    'process.env': 'process' in globalThis ? process.env : { API_KEY: undefined }
   }
 });

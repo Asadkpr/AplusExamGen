@@ -24,6 +24,34 @@ const isUrduStyleSubject = (subject: string) => {
   return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per');
 };
 
+// Internal utility to render formatted text in management UI
+const renderFormattedText = (text: string) => {
+  if (!text) return null;
+  const isUrdu = /[\u0600-\u06FF]/.test(text);
+  const normalized = text
+    .replace(/<\/?b>/gi, '@@')
+    .replace(/\*\*([^*]+)\*\*/g, '@@$1@@')
+    .replace(/\*([^*]+)\*/g, '@@$1@@')
+    .replace(/:([^:]+):/g, '##$1##')
+    .replace(/@@/g, '**')
+    .replace(/##/g, '++');
+
+  const parts = normalized.split(/(\*\*.*?\*\*|\+\+.*?\+\+)/g);
+  return (
+    <span className={isUrdu ? 'font-urdu text-right block text-lg' : ''} dir={isUrdu ? 'rtl' : 'ltr'}>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="text-gold-500 font-bold">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('++') && part.endsWith('++')) {
+          return <u key={i} className="underline decoration-gold-500/40">{part.slice(2, -2)}</u>;
+        }
+        return part;
+      })}
+    </span>
+  );
+};
+
 export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) => {
   const [step, setStep] = useState(1);
   const [activeTab, setActiveTab] = useState<Tab>('QUESTIONS');
@@ -282,12 +310,12 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
         <main className="flex-grow p-4 sm:p-8 max-w-7xl mx-auto w-full pb-24">
             {step === 1 && (
                 <div className="animate-fadeIn">
-                    <h2 className="text-2xl font-bold text-white text-center mb-8">Select Class</h2>
+                    <h2 className="text-2xl font-bold text-theme-text-main text-center mb-8">Select Class</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                         {CLASSES.map(cls => (
                             <div key={cls} onClick={() => { setSelectedClass(cls); setStep(2); }} className="bg-gray-800 border border-gray-700 hover:border-gold-500 rounded-xl p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg">
                                 <div className="text-gold-500"><BookOpen size={40} /></div>
-                                <span className="font-bold text-white text-lg">{cls}</span>
+                                <span className="font-bold text-theme-text-main text-lg">{cls}</span>
                             </div>
                         ))}
                     </div>
@@ -296,7 +324,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
 
             {step === 2 && (
                 <div className="animate-fadeIn">
-                    <h2 className="text-2xl font-bold text-white text-center mb-2">Select Subject</h2>
+                    <h2 className="text-2xl font-bold text-theme-text-main text-center mb-2">Select Subject</h2>
                     <p className="text-center text-gold-500 mb-8 font-semibold">{selectedClass}</p>
                     {isLoading ? (
                         <div className="text-center py-12"><RefreshCw className="animate-spin mx-auto text-gold-500" size={32} /></div>
@@ -307,7 +335,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                 return (
                                     <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`bg-gray-800 border rounded-xl p-6 flex flex-col items-center gap-3 cursor-pointer transition-all hover:-translate-y-1 ${count > 0 ? 'border-gold-500/50 hover:border-gold-500 shadow-md' : 'border-gray-700 hover:border-gray-500 opacity-80'}`}>
                                         <div className={count > 0 ? "text-gold-500" : "text-gray-500"}><Layers size={32} /></div>
-                                        <span className="font-bold text-white text-center">{subj}</span>
+                                        <span className="font-bold text-theme-text-main text-center">{subj}</span>
                                         <span className={`text-xs px-2 py-1 rounded font-bold ${count > 0 ? 'bg-green-900/50 text-green-400 border border-green-500/30' : 'bg-gray-900 text-gray-500 border border-gray-700'}`}>{count > 0 ? `${count} Chapters` : 'Empty'}</span>
                                     </div>
                                 );
@@ -321,16 +349,16 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                 <div className="animate-fadeIn h-full flex flex-col">
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                         <div>
-                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-theme-text-main flex items-center gap-2">
                                 <span className="text-gold-500">{selectedSubject}</span>
                                 <span className="text-gray-500 text-lg">/</span>
-                                <span className="text-gray-300">{selectedClass}</span>
+                                <span className="text-gray-500">{selectedClass}</span>
                             </h2>
-                            <p className="text-sm text-gray-400 mt-1">{filteredQuestions.length} Questions found</p>
+                            <p className="text-sm text-theme-text-muted mt-1">{filteredQuestions.length} Questions found</p>
                         </div>
                         {activeTab === 'QUESTIONS' && (
                           <div className="relative w-full md:w-96">
-                              <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-800 border border-gray-700 text-white pl-10 pr-4 py-2 rounded-lg focus:border-gold-500 focus:outline-none" />
+                              <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-800 border border-gray-700 text-theme-text-main pl-10 pr-4 py-2 rounded-lg focus:border-gold-500 focus:outline-none" />
                               <Search className="absolute left-3 top-2.5 text-gray-500" size={18} />
                           </div>
                         )}
@@ -340,13 +368,13 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                       <div className="flex bg-gray-800 p-1 rounded-xl mb-6 w-full max-w-md mx-auto border border-gray-700 shadow-inner">
                         <button 
                           onClick={() => setActiveTab('QUESTIONS')}
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'QUESTIONS' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-gray-500 hover:text-white'}`}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'QUESTIONS' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-theme-text-muted hover:text-theme-text-main'}`}
                         >
                           <Database size={14} /> Questions
                         </button>
                         <button 
                           onClick={() => setActiveTab('VISIBILITY')}
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'VISIBILITY' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-gray-500 hover:text-white'}`}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'VISIBILITY' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-theme-text-muted hover:text-theme-text-main'}`}
                         >
                           <Eye size={14} /> Visibility & Deletion
                         </button>
@@ -363,7 +391,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                               <div className="flex items-center gap-4 px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg sticky top-16 z-30 backdrop-blur-md">
                                 <button 
                                   onClick={toggleSelectAll}
-                                  className="flex items-center gap-2 text-sm text-gray-300 hover:text-gold-500 transition-colors"
+                                  className="flex items-center gap-2 text-sm text-theme-text-muted hover:text-gold-500 transition-colors"
                                 >
                                   {selectedQuestionIds.length === filteredQuestions.length && filteredQuestions.length > 0 
                                     ? <CheckSquare className="text-gold-500" size={20} /> 
@@ -405,21 +433,21 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                             <div className="flex items-center justify-between mb-2">
                                                 <div className="flex items-center gap-2">
                                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getTypeColor(q.type)}`}>{q.type}</span>
-                                                  {q.subtopic && <span className={`text-[10px] text-gray-400 bg-gray-900 px-2 py-0.5 rounded border border-gray-700 ${isUrduPaper ? 'font-urdu' : ''}`}>{q.subtopic}</span>}
+                                                  {q.subtopic && <span className={`text-[10px] text-theme-text-muted bg-gray-900 px-2 py-0.5 rounded border border-gray-700 ${isUrduPaper ? 'font-urdu' : ''}`}>{q.subtopic}</span>}
                                                 </div>
-                                                <span className="text-[10px] font-black text-gray-500">Marks: {q.marks}</span>
+                                                <span className="text-[10px] font-black text-theme-text-sub">Marks: {q.marks}</span>
                                             </div>
                                             
-                                            <p className="text-white font-medium text-[12px] leading-relaxed">{q.text}</p>
-                                            {q.textUrdu && <p className="text-[12px] text-right text-gray-100 mt-3 font-urdu leading-loose" dir="rtl">{q.textUrdu}</p>}
+                                            <p className="text-theme-text-main font-medium text-[12px] leading-relaxed whitespace-pre-wrap">{renderFormattedText(q.text)}</p>
+                                            {q.textUrdu && <p className="text-[12px] text-right text-theme-text-muted mt-3 font-urdu leading-loose whitespace-pre-wrap" dir="rtl">{renderFormattedText(q.textUrdu)}</p>}
 
                                             {q.type === 'MCQ' && (
                                               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                                                  {q.options && (
                                                    <div className="space-y-1.5">
                                                       {q.options.map((opt, oIdx) => (
-                                                        <div key={oIdx} className={`px-2 py-1 rounded text-[12px] flex items-center gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-gray-400 border border-gray-700/50'}`}>
-                                                           <span className="font-black opacity-50">{String.fromCharCode(65 + oIdx)}.</span> {opt}
+                                                        <div key={oIdx} className={`px-2 py-1 rounded text-[12px] flex items-center gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-theme-text-muted border-gray-700/50'}`}>
+                                                           <span className="font-black opacity-50">{String.fromCharCode(65 + oIdx)}.</span> {renderFormattedText(opt)}
                                                         </div>
                                                       ))}
                                                    </div>
@@ -427,8 +455,8 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                  {q.optionsUrdu && (
                                                    <div className="space-y-1">
                                                       {q.optionsUrdu.map((opt, oIdx) => (
-                                                        <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-gray-100 opacity-60 border border-gray-700/50'}`} dir="rtl">
-                                                           <span className="font-black opacity-30 text-xs">({String.fromCharCode(97 + oIdx)})</span> {opt}
+                                                        <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-theme-text-muted opacity-60 border border-gray-700/50'}`} dir="rtl">
+                                                           <span className="font-black opacity-30 text-xs">({String.fromCharCode(97 + oIdx)})</span> {renderFormattedText(opt)}
                                                         </div>
                                                       ))}
                                                    </div>
@@ -458,8 +486,8 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                              <div className="bg-red-900/10 border border-red-500/30 p-4 rounded-xl flex items-center gap-4 text-sm mb-6 shadow-lg">
                                 <AlertTriangle className="text-red-500 shrink-0" size={28} />
                                 <div className="space-y-1">
-                                  <p className="text-white font-bold uppercase tracking-tighter">Admin Control: Visibility & Deletion</p>
-                                  <p className="text-gray-300 text-xs">
+                                  <p className="text-theme-text-main font-bold uppercase tracking-tighter">Admin Control: Visibility & Deletion</p>
+                                  <p className="text-theme-text-muted text-xs">
                                     <strong>Visibility:</strong> Eye icons toggle item presence on the generation screen.<br/>
                                     <strong>Permanent Delete:</strong> Trash icons WIPE items and their associated questions from the database forever.
                                   </p>
@@ -477,14 +505,14 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                             {ch.name.match(/\d+/) || 'CH'}
                                           </div>
                                           <div>
-                                            <h3 className={`font-bold transition-colors ${isHidden ? 'text-red-400' : 'text-white'} ${isUrduPaper ? 'font-urdu text-lg' : ''}`}>{ch.name}</h3>
-                                            <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">{ch.subtopics.length} Topics total</span>
+                                            <h3 className={`font-bold transition-colors ${isHidden ? 'text-red-400' : 'text-theme-text-main'} ${isUrduPaper ? 'font-urdu text-lg' : ''}`}>{ch.name}</h3>
+                                            <span className="text-[10px] text-theme-text-sub uppercase font-black tracking-widest">{ch.subtopics.length} Topics total</span>
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <button 
                                             onClick={() => handleToggleVisibility(ch.id, 'chapter', isHidden)}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest text-[9px] transition-all border ${isHidden ? 'bg-red-500 text-white border-red-400' : 'bg-gray-900 text-gray-400 hover:text-white border-gray-700'}`}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold uppercase tracking-widest text-[9px] transition-all border ${isHidden ? 'bg-red-500 text-white border-red-400' : 'bg-gray-900 text-theme-text-muted hover:text-theme-text-main border-gray-700'}`}
                                             title={isHidden ? "Click to show chapter" : "Click to hide chapter"}
                                           >
                                             {isHidden ? <><EyeOff size={14} /> Hidden</> : <><Eye size={14} /> Visible</>}
@@ -506,7 +534,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                           const stHidden = visibility.hiddenSubtopicNames.includes(st.name);
                                           return (
                                             <div key={st.id} className="flex items-center justify-between group/st py-2 px-4 rounded-xl hover:bg-gray-800/50 transition-all border border-transparent hover:border-gray-700">
-                                              <span className={`text-[12px] font-medium transition-colors ${stHidden || isHidden ? 'text-gray-500' : 'text-gray-300'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>
+                                              <span className={`text-[12px] font-medium transition-colors ${stHidden || isHidden ? 'text-gray-500' : 'text-theme-text-main'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>
                                                 {st.name} {stHidden && <span className="text-[8px] text-red-500 font-black uppercase ml-2">(Hidden)</span>}
                                               </span>
                                               <div className="flex items-center gap-2 opacity-0 group-hover/st:opacity-100 transition-opacity">
@@ -550,7 +578,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
                     <div className="bg-gray-800 rounded-xl shadow-2xl border border-gold-500 max-w-4xl w-full p-6 animate-scaleIn max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-2">
-                            <h3 className="text-xl font-bold text-white">Edit Question</h3>
+                            <h3 className="text-xl font-bold text-theme-text-main">Edit Question</h3>
                             <button onClick={() => setEditingQuestion(null)} className="text-gray-400 hover:text-white"><X size={24} /></button>
                         </div>
                         
@@ -558,21 +586,21 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-xs text-gold-500 font-bold">Type</label>
-                                    <select value={editForm.type} onChange={(e) => setEditForm({...editForm, type: e.target.value as QuestionType})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-sm focus:border-gold-500 outline-none">
+                                    <select value={editForm.type} onChange={(e) => setEditForm({...editForm, type: e.target.value as QuestionType})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-theme-text-main text-sm focus:border-gold-500 outline-none">
                                         {['MCQ', 'SHORT', 'LONG', 'NUMERICAL', 'ESSAY', 'TRANSLATION'].map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
-                                <Input label="Subtopic" value={editForm.subtopic || ''} onChange={e => setEditForm({...editForm, subtopic: e.target.value})} className={isUrduPaper ? 'font-urdu' : ''} />
+                                <Input label="Subtopic" value={editForm.subtopic || ''} onChange={e => setEditForm({...editForm, subtopic: e.target.value})} className={isUrduStyleSubject(selectedSubject) ? 'font-urdu' : ''} />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <label className="text-xs text-gold-500 font-bold">English Text</label>
-                                    <textarea rows={3} value={editForm.text} onChange={e => setEditForm({...editForm, text: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-[12px] focus:border-gold-500 outline-none" />
+                                    <textarea rows={3} value={editForm.text} onChange={e => setEditForm({...editForm, text: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-theme-text-main text-[12px] focus:border-gold-500 outline-none" />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs text-gold-500 font-bold">Urdu Text (Nastaliq)</label>
-                                    <textarea rows={3} dir="rtl" value={editForm.textUrdu || ''} onChange={e => setEditForm({...editForm, textUrdu: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-[12px] focus:border-gold-500 outline-none font-urdu" />
+                                    <textarea rows={3} dir="rtl" value={editForm.textUrdu || ''} onChange={e => setEditForm({...editForm, textUrdu: e.target.value})} className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-theme-text-main text-[12px] focus:border-gold-500 outline-none font-urdu" />
                                 </div>
                             </div>
 
@@ -587,7 +615,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                         const newOpts = [...(editForm.options || ['', '', '', ''])];
                                                         newOpts[i] = e.target.value;
                                                         setEditForm({...editForm, options: newOpts});
-                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-[12px] text-white" placeholder={`Option ${String.fromCharCode(65+i)}`} />
+                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-[12px] text-theme-text-main" placeholder={`Option ${String.fromCharCode(65+i)}`} />
                                                 ))}
                                             </div>
                                         </div>
@@ -599,7 +627,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                         const newOpts = [...(editForm.optionsUrdu || ['', '', '', ''])];
                                                         newOpts[i] = e.target.value;
                                                         setEditForm({...editForm, optionsUrdu: newOpts});
-                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-[12px] text-white font-urdu" placeholder={`آپشن ${String.fromCharCode(65+i)}`} />
+                                                    }} className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-[12px] text-theme-text-main font-urdu" placeholder={`آپشن ${String.fromCharCode(65+i)}`} />
                                                 ))}
                                             </div>
                                         </div>
@@ -626,7 +654,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
               <div className="bg-gold-500 text-black w-8 h-8 rounded-full flex items-center justify-center font-black shadow-lg">
                 {selectedQuestionIds.length}
               </div>
-              <span className="text-white font-bold uppercase tracking-widest text-xs">Items Selected</span>
+              <span className="text-theme-text-main font-bold uppercase tracking-widest text-xs">Items Selected</span>
             </div>
             <div className="flex items-center gap-4">
               <button 
@@ -637,7 +665,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
               </button>
               <button 
                 onClick={() => setSelectedQuestionIds([])}
-                className="flex items-center gap-2 text-gray-400 font-bold uppercase tracking-widest text-[10px] transition-colors"
+                className="flex items-center gap-2 text-theme-text-muted font-bold uppercase tracking-widest text-[10px] transition-colors"
               >
                 <X size={16} /> Clear Selection
               </button>

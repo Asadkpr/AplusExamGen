@@ -8,7 +8,7 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 
-// Fixed: Changed from firebase/firestore/lite to firebase/firestore to resolve missing export errors
+// Fix: Consolidated modular imports from firebase/firestore
 import { 
   doc, 
   getDoc, 
@@ -17,7 +17,8 @@ import {
   collection, 
   getDocs, 
   query, 
-  where 
+  where,
+  deleteDoc
 } from 'firebase/firestore';
 
 import { User } from '../types';
@@ -35,9 +36,6 @@ export const executeAsAdmin = async <T>(operation: () => Promise<T>): Promise<T>
   const wasInternal = isInternalAuthOperation;
   isInternalAuthOperation = true;
   
-  // Store current user to restore later if needed (though we rely on UI state usually)
-  const currentUser = auth.currentUser;
-
   try {
     // 1. Try Login as Admin
     try {
@@ -45,17 +43,13 @@ export const executeAsAdmin = async <T>(operation: () => Promise<T>): Promise<T>
     } catch (loginErr: any) {
       // 2. If Admin Not Found, Create It (Auto-Provisioning)
       if (loginErr.code === 'auth/user-not-found' || loginErr.code === 'auth/invalid-credential' || loginErr.code === 'auth/invalid-email' || loginErr.code === 'auth/wrong-password') {
-         // Note: If wrong-password, we can't create. We try to create only if user not found.
          if (loginErr.code !== 'auth/wrong-password') {
              try {
                await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASS_MAPPING);
              } catch (createErr: any) {
-               console.warn("Could not auto-provision admin. Fallback might fail.", createErr);
-               throw loginErr; // Throw original error if creation fails
+               throw loginErr; 
              }
          } else {
-             // If wrong password, we are stuck. We can't act as admin.
-             console.error("Admin credentials mismatch. Cannot execute privileged operation.");
              throw loginErr;
          }
       } else {
@@ -73,11 +67,46 @@ export const executeAsAdmin = async <T>(operation: () => Promise<T>): Promise<T>
   } finally {
     // 4. Logout Admin
     await signOut(auth).catch(() => {}); 
-    
-    // Note: We do not auto-restore the previous user session here because we don't have their password.
-    // The App UI handles this by checking LocalStorage via subscribeToAuth and keeping the user 'logged in' visually.
-    
     isInternalAuthOperation = wasInternal;
+  }
+};
+
+export const deleteUserPermanently = async (userId: string): Promise<boolean> => {
+  const operation = async () => {
+    await deleteDoc(doc(db, "users", userId));
+    return true;
+  };
+
+  try {
+    return await executeAsAdmin(operation);
+  } catch (e) {
+    return false;
+  }
+};
+
+export const toggleUserBlock = async (userId: string, isBlocked: boolean): Promise<boolean> => {
+  const operation = async () => {
+    await updateDoc(doc(db, "users", userId), { isBlocked });
+    return true;
+  };
+
+  try {
+    return await executeAsAdmin(operation);
+  } catch (e) {
+    return false;
+  }
+};
+
+export const adminResetPassword = async (userId: string, newPasswordHash: string): Promise<boolean> => {
+  const operation = async () => {
+    await updateDoc(doc(db, "users", userId), { passwordHash: newPasswordHash });
+    return true;
+  };
+
+  try {
+    return await executeAsAdmin(operation);
+  } catch (e) {
+    return false;
   }
 };
 
@@ -211,6 +240,11 @@ export const loginUser = async (identifier: string, password: string): Promise<{
       }
     }
 
+    if (userProfile?.isBlocked) {
+      await signOut(auth);
+      return { success: false, message: "Your account has been blocked. Contact Admin." };
+    }
+
     const finalUser = userProfile || { 
       id: firebaseUser.uid, 
       name: firebaseUser.displayName || 'User', 
@@ -266,6 +300,9 @@ export const loginUser = async (identifier: string, password: string): Promise<{
        }
 
        if (dbUser) {
+         if (dbUser.isBlocked) {
+           return { success: false, message: "Your account has been blocked. Contact Admin." };
+         }
          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(dbUser));
          return { success: true, user: dbUser, message: "Login successful (Database Auth)" };
        }
@@ -324,10 +361,6 @@ export const updateUser = async (updatedUser: User): Promise<void> => {
     if (error.code === 'permission-denied') {
         try {
            await executeAsAdmin(performUpdate);
-           // NOTE: We cannot re-authenticate here because we don't have the user's password.
-           // The user will be technically logged out of Firebase but will remain "logged in" 
-           // via Local Storage (LOCAL_STORAGE_SESSION_KEY) which is handled by subscribeToAuth.
-           // This is an acceptable tradeoff to ensure Data Persistence.
         } catch (adminErr) {
            console.error("Final update failed. Data only saved locally.", adminErr);
         }
@@ -437,28 +470,19 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const u = docSnap.data() as User;
-          
-          // Optimization: If local storage has institute profile but DB doesn't (rare sync issue),
-          // prefer local storage to avoid blocking the user.
-          const localStored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-          if (localStored) {
-             const localUser = JSON.parse(localStored);
-             if (localUser.id === u.id && localUser.instituteProfile && !u.instituteProfile) {
-                console.warn("Using local profile due to missing DB profile data");
-                callback(localUser);
-                return;
-             }
+          if (u.isBlocked) {
+            await logoutUser();
+            callback(null);
+            return;
           }
           
           localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(u));
           callback(u);
         } else {
-           // Fallback for missing docs: Check local storage FIRST before assuming empty profile
            const storedLocal = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
            if (storedLocal) {
              const u = JSON.parse(storedLocal);
-             if (u.id === firebaseUser.uid && u.instituteProfile) {
-                // Trust local storage if it has profile data
+             if (u.id === firebaseUser.uid) {
                 callback(u);
                 return;
              }
@@ -475,19 +499,6 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
            callback(fallbackUser);
         }
       } catch (e) {
-        // Fallback: If Read Fails (Permission), check local storage again instead of logging out
-        const storedLocal = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-        if (storedLocal) {
-          try {
-             const u = JSON.parse(storedLocal);
-             if (u.id === firebaseUser.uid) {
-               callback(u);
-               return;
-             }
-          } catch(err) {}
-        }
-        
-        // Only return basic user if we absolutely have nothing else
         callback({
           id: firebaseUser.uid, 
           name: 'User', 
@@ -498,14 +509,11 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
         });
       }
     } else {
-      // Firebase says Logged Out.
-      // However, if we just did an admin op (updateUser), we might be technically logged out but logically logged in.
-      // Check manual session.
       const manualSession = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
       if (manualSession) {
         try {
           const u = JSON.parse(manualSession);
-          callback(u); // Keep user logged in via Local Storage
+          callback(u); 
         } catch(e) {
           callback(null);
         }

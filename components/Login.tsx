@@ -44,7 +44,6 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
     setIsLoading(true);
     setError('');
 
-    // Removed artificial delay for speed
     const result = await loginUser(identifier, password);
     setIsLoading(false);
 
@@ -76,17 +75,15 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
     setError('');
     setSuccessMsg('');
 
-    // Removed artificial delay for speed
     const result = await resetUserPassword(resetIdentifier, securityAnswer, newPassword);
     
     setIsLoading(false);
 
     if (result.success) {
       setSuccessMsg(result.message);
-      // Auto switch back to login after short delay
       setTimeout(() => {
         setSuccessMsg('');
-        setIdentifier(resetIdentifier); // Pre-fill login
+        setIdentifier(resetIdentifier);
         setPassword('');
         setView('LOGIN');
       }, 2000);
@@ -95,20 +92,14 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
     }
   };
 
-  // --- RENDERERS ---
-
   const renderLoginForm = () => (
     <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md animate-fadeIn">
-      <div className="bg-gray-800 py-8 px-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-gray-700 sm:rounded-xl sm:px-10">
+      <div className="bg-gray-800 py-8 px-4 shadow-xl border border-gray-700 sm:rounded-xl sm:px-10">
         <form className="space-y-6" onSubmit={handleLoginSubmit}>
           
           {error && (
             <div className="bg-red-900/20 border-l-4 border-red-500 p-4 animate-scaleIn">
-              <div className="flex">
-                <div className="ml-3">
-                  <p className="text-sm text-red-400">{error}</p>
-                </div>
-              </div>
+              <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
           
@@ -147,9 +138,9 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-black focus:ring-gold-500 border-gray-600 rounded bg-gray-700 accent-gold-500 cursor-pointer"
+                  className="h-4 w-4 text-gold-500 focus:ring-gold-500 border-gray-600 rounded bg-gray-700 accent-gold-500 cursor-pointer"
                 />
-                <label htmlFor="remember_me" className="ml-2 block text-sm text-gray-400 font-medium cursor-pointer select-none">
+                <label htmlFor="remember_me" className="ml-2 block text-sm text-theme-text-muted font-medium cursor-pointer select-none">
                   Remember me
                 </label>
               </div>
@@ -174,7 +165,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
               <div className="w-full border-t border-gray-700"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-800 text-gray-500 font-medium">
+              <span className="px-2 bg-gray-800 text-theme-text-muted font-medium">
                 Don't have an account?
               </span>
             </div>
@@ -192,10 +183,10 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
 
   const renderForgotForm = () => (
     <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md animate-fadeIn">
-      <div className="bg-gray-800 py-8 px-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-gray-700 sm:rounded-xl sm:px-10">
+      <div className="bg-gray-800 py-8 px-4 shadow-xl border border-gray-700 sm:rounded-xl sm:px-10">
         <div className="mb-6 text-center">
-           <h3 className="text-xl font-bold text-white mb-2">Reset Password</h3>
-           <p className="text-sm text-gray-500">Answer the security question to reset your password.</p>
+           <h3 className="text-xl font-bold text-theme-text-main mb-2">Reset Password</h3>
+           <p className="text-sm text-theme-text-muted">Answer the security question to reset your password.</p>
         </div>
 
         <form className="space-y-4" onSubmit={handleResetSubmit}>
@@ -232,7 +223,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
               onChange={(e) => setSecurityAnswer(e.target.value)}
               icon={<Building2 size={18} />}
             />
-            <p className="text-[10px] text-gray-500 -mt-3 mb-3">Enter the exact name used in your profile setup.</p>
+            <p className="text-[10px] text-theme-text-muted -mt-3 mb-3">Enter the exact name used in your profile setup.</p>
           </div>
 
           <div className="border-t border-gray-700 pt-4 mt-2">
@@ -260,7 +251,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
           <button 
              type="button" 
              onClick={() => { setError(''); setSuccessMsg(''); setView('LOGIN'); }}
-             className="w-full flex items-center justify-center gap-2 mt-4 text-gray-500 hover:text-white font-bold transition-colors uppercase tracking-widest text-[10px]"
+             className="w-full flex items-center justify-center gap-2 mt-4 text-theme-text-muted hover:text-theme-text-main font-bold transition-colors uppercase tracking-widest text-[10px]"
           >
              <ArrowLeft size={16} /> Back to Login
           </button>
@@ -270,20 +261,20 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
   );
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-900 selection:bg-gold-500 selection:text-black">
+    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-900 text-theme-text-main transition-colors duration-300">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="flex justify-center mb-4">
-          <div className="p-3 bg-gray-800 rounded-full border-2 border-gold-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+          <div className="p-3 bg-gray-800 rounded-full border-2 border-gold-500 shadow-lg">
             {view === 'LOGIN' ? <Lock className="w-8 h-8 text-gold-500" /> : <HelpCircle className="w-8 h-8 text-gold-500" />}
           </div>
         </div>
         <h2 className="text-3xl font-extrabold text-gold-500 tracking-wider uppercase">{APP_NAME}</h2>
-        <p className="mt-2 text-sm text-gray-400 font-bold tracking-tight">{APP_TAGLINE}</p>
+        <p className="mt-2 text-sm text-theme-text-muted font-bold tracking-tight">{APP_TAGLINE}</p>
       </div>
 
       {view === 'LOGIN' ? renderLoginForm() : renderForgotForm()}
 
-      <footer className="mt-8 text-center text-xs text-gray-500 pb-4">
+      <footer className="mt-8 text-center text-xs text-theme-text-muted pb-4">
         <p>{COPYRIGHT_TEXT}</p>
       </footer>
     </div>
