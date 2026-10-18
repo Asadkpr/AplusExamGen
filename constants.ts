@@ -1,5 +1,17 @@
 import { Chapter, QuestionType, PaperPattern, Question } from './types';
 
+// Vibrant Colors for Cards (Classes & Subjects)
+export const CARD_COLORS = [
+  { from: 'from-blue-500/20', to: 'to-indigo-500/20', border: 'border-blue-500/30', hoverBorder: 'hover:border-blue-500', icon: 'text-blue-500', groupHoverIcon: 'group-hover:text-blue-400', shadow: 'hover:shadow-[0_8px_30px_rgba(59,130,246,0.2)]' },
+  { from: 'from-emerald-500/20', to: 'to-teal-500/20', border: 'border-emerald-500/30', hoverBorder: 'hover:border-emerald-500', icon: 'text-emerald-500', groupHoverIcon: 'group-hover:text-emerald-400', shadow: 'hover:shadow-[0_8px_30px_rgba(16,185,129,0.2)]' },
+  { from: 'from-purple-500/20', to: 'to-fuchsia-500/20', border: 'border-purple-500/30', hoverBorder: 'hover:border-purple-500', icon: 'text-purple-500', groupHoverIcon: 'group-hover:text-purple-400', shadow: 'hover:shadow-[0_8px_30px_rgba(168,85,247,0.2)]' },
+  { from: 'from-orange-500/20', to: 'to-red-500/20', border: 'border-orange-500/30', hoverBorder: 'hover:border-orange-500', icon: 'text-orange-500', groupHoverIcon: 'group-hover:text-orange-400', shadow: 'hover:shadow-[0_8px_30px_rgba(249,115,22,0.2)]' },
+  { from: 'from-cyan-500/20', to: 'to-blue-500/20', border: 'border-cyan-500/30', hoverBorder: 'hover:border-cyan-500', icon: 'text-cyan-500', groupHoverIcon: 'group-hover:text-cyan-400', shadow: 'hover:shadow-[0_8px_30px_rgba(6,182,212,0.2)]' },
+  { from: 'from-pink-500/20', to: 'to-rose-500/20', border: 'border-pink-500/30', hoverBorder: 'hover:border-pink-500', icon: 'text-pink-500', groupHoverIcon: 'group-hover:text-pink-400', shadow: 'hover:shadow-[0_8px_30px_rgba(236,72,153,0.2)]' },
+  { from: 'from-yellow-500/20', to: 'to-orange-500/20', border: 'border-yellow-500/30', hoverBorder: 'hover:border-yellow-500', icon: 'text-yellow-500', groupHoverIcon: 'group-hover:text-yellow-400', shadow: 'hover:shadow-[0_8px_30px_rgba(234,179,8,0.2)]' },
+  { from: 'from-green-500/20', to: 'to-emerald-500/20', border: 'border-green-500/30', hoverBorder: 'hover:border-green-500', icon: 'text-green-500', groupHoverIcon: 'group-hover:text-green-400', shadow: 'hover:shadow-[0_8px_30px_rgba(34,197,94,0.2)]' }
+];
+
 export const APP_NAME = "APLUS ExamGen";
 export const APP_TAGLINE = "Smart Paper Generation for Smart Teachers";
 export const COPYRIGHT_TEXT = "© 2026 APLUS ExamGen";
@@ -29,14 +41,26 @@ export const CLASSES = [
   "9th Class",
   "10th Class",
   "11th Class",
-  "12th Class"
+  "12th Class",
+  "8th Class",
+  "7th Class",
+  "6th Class",
+  "5th Class",
+  "4th Class",
+  "3rd Class"
 ];
 
 export const SUBJECTS_BY_CLASS: Record<string, string[]> = {
-  "9th Class": ["Physics", "Chemistry", "Biology", "Mathematics", "English", "Urdu", "Islamiyat", "Pak Studies", "Computer Science"],
-  "10th Class": ["Physics", "Chemistry", "Biology", "Mathematics", "English", "Urdu", "Islamiyat", "Pak Studies", "Computer Science"],
-  "11th Class": ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "English", "Urdu", "Islamiyat Elective"],
-  "12th Class": ["Physics", "Chemistry", "Biology", "Mathematics", "Computer Science", "English", "Urdu", "Pak Studies"]
+  "9th Class": [],
+  "10th Class": [],
+  "11th Class": [],
+  "12th Class": [],
+  "8th Class": [],
+  "7th Class": [],
+  "6th Class": [],
+  "5th Class": [],
+  "4th Class": [],
+  "3rd Class": []
 };
 
 // Mock Paper Patterns
@@ -98,83 +122,8 @@ export const PAPER_PATTERNS: PaperPattern[] = [
 
 // Helper to generate mock chapters and subtopics
 export const getChaptersForSubject = (subject: string, classLevel: string): Chapter[] => {
-  // Define Question Types available per subject type
-  let subjectTypes: QuestionType[] = ['MCQ', 'SHORT', 'LONG'];
-  
-  if (subject === "Mathematics" || subject === "Physics") {
-    subjectTypes.push('NUMERICAL');
-  }
-  
-  if (subject === "English" || subject === "Urdu") {
-    subjectTypes = ['MCQ', 'SHORT', 'ESSAY', 'TRANSLATION'];
-  }
-
-  // Generate Unique Prefix to avoid ID collision between subjects
-  // e.g. "9th Class" "Physics" -> "9th-phys"
-  const cleanClass = classLevel.toLowerCase().replace(/\s+/g, '-');
-  const cleanSubject = subject.toLowerCase().replace(/\s+/g, '-').substring(0, 4);
-  const idPrefix = `${cleanClass}-${cleanSubject}`;
-
-  // Specific Mock Data for Chemistry 9th
-  if (subject === "Chemistry" && classLevel === "9th Class") {
-    return [
-      {
-        id: `${idPrefix}-c1`, name: "Fundamentals of Chemistry",
-        availableQuestionTypes: ['MCQ', 'SHORT', 'LONG', 'NUMERICAL'], 
-        subtopics: [
-          { id: `${idPrefix}-c1-s1`, name: "Branches of Chemistry" },
-          { id: `${idPrefix}-c1-s2`, name: "Basic Definitions" },
-          { id: `${idPrefix}-c1-s3`, name: "Atomic Number and Mass Number" },
-          { id: `${idPrefix}-c1-s4`, name: "Relative Atomic Mass" },
-          { id: `${idPrefix}-c1-s5`, name: "Empirical and Molecular Formula" },
-          { id: `${idPrefix}-c1-s6`, name: "Avogadro's Number" }
-        ]
-      },
-      {
-        id: `${idPrefix}-c2`, name: "Structure of Atoms",
-        availableQuestionTypes: ['MCQ', 'SHORT', 'LONG'],
-        subtopics: [
-          { id: `${idPrefix}-c2-s1`, name: "Rutherford's Atomic Model" },
-          { id: `${idPrefix}-c2-s2`, name: "Bohr's Atomic Model" },
-          { id: `${idPrefix}-c2-s3`, name: "Electronic Configuration" },
-          { id: `${idPrefix}-c2-s4`, name: "Isotopes and their Uses" }
-        ]
-      },
-      {
-        id: `${idPrefix}-c3`, name: "Periodic Table & Periodicity",
-        availableQuestionTypes: ['MCQ', 'SHORT', 'LONG'],
-        subtopics: [
-          { id: `${idPrefix}-c3-s1`, name: "History of Periodic Table" },
-          { id: `${idPrefix}-c3-s2`, name: "Modern Periodic Table" },
-          { id: `${idPrefix}-c3-s3`, name: "Periodicity of Properties" },
-          { id: `${idPrefix}-c3-s4`, name: "Electron Affinity" }
-        ]
-      },
-      {
-        id: `${idPrefix}-c4`, name: "Structure of Molecules",
-        availableQuestionTypes: ['MCQ', 'SHORT', 'LONG'],
-        subtopics: [
-          { id: `${idPrefix}-c4-s1`, name: "Why do atoms form chemical bonds?" },
-          { id: `${idPrefix}-c4-s2`, name: "Types of Bonds" },
-          { id: `${idPrefix}-c4-s3`, name: "Intermolecular Forces" },
-          { id: `${idPrefix}-c4-s4`, name: "Nature of Bonding" }
-        ]
-      }
-    ];
-  }
-
-  // Generic data for other subjects with UNIQUE IDs
-  return Array.from({ length: 8 }, (_, i) => ({
-    id: `${idPrefix}-ch${i+1}`,
-    name: `Chapter ${i+1}: ${subject} Concepts`,
-    availableQuestionTypes: subjectTypes,
-    subtopics: [
-      { id: `${idPrefix}-ch${i+1}-s1`, name: `Introduction to Chapter ${i+1}` },
-      { id: `${idPrefix}-ch${i+1}-s2`, name: `Core Concepts` },
-      { id: `${idPrefix}-ch${i+1}-s3`, name: `Advanced Analysis` },
-      { id: `${idPrefix}-ch${i+1}-s4`, name: `Practical Applications` }
-    ]
-  }));
+  // Returning empty array as user requested no default subjects/content
+  return [];
 };
 
 // --- Mock Question Generator ---

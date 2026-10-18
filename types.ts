@@ -77,6 +77,7 @@ export interface PaperPatternSectionPart {
   id: string;
   label: string; // e.g. "(a)", "(b)"
   marks: number;
+  marksPerQuestion?: number; // New: Marks for each question in this part
   type?: QuestionType; // e.g., 'LONG', 'NUMERICAL', 'SHORT'
   specificChapters?: string[]; // Mandatory chapter numbers for this part
   questionCount?: number; // Specific count for this part (important for English MCQs)
@@ -132,6 +133,7 @@ export interface SavedPaper {
   lineSpacing?: number; // Spacing between questions (0-10 scale)
   timeAllowed?: string; // New: stored from pattern
   paperCode?: string; // Automatic 4-digit code
+  pageBreakAfterMCQ?: boolean; // Separate MCQs onto page 1, subjective on page 2
 }
 
 export type ViewState = 

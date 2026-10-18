@@ -1,8 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-// Fix: Ensure getFirestore is imported from firebase/firestore
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -20,6 +19,19 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize and Export Services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+let dbInstance;
+try {
+  dbInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (e) {
+  dbInstance = getFirestore(app);
+}
+
+export const db = dbInstance;
 
 export default app;
+

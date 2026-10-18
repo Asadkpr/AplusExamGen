@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from './Button';
 import { Input } from './Input'; 
-import { CLASSES } from '../constants';
+import { CLASSES, SUBJECTS_BY_CLASS, CARD_COLORS } from '../constants';
 import { getSubjects } from '../services/subjectService';
 import { getChapters } from '../services/chapterService';
 import { getPatterns } from '../services/patternService';
@@ -9,13 +9,15 @@ import { getQuestionsForChapters } from '../services/questionService';
 import { Chapter, QuestionType, Question, PaperPatternSection, User, PaperPattern, Subtopic, SavedPaper, PaperPatternSectionPart } from '../types';
 import { savePaper, updatePaper } from '../services/paperService';
 import { PrintablePaper } from './PrintablePaper';
+import { CustomPatternModal } from './CustomPatternModal';
+import { sortSectionsByStandardSequence } from './PaperPatterns';
 import { 
   ArrowLeft, CheckSquare, Square, ChevronRight, ChevronDown, CheckCircle, 
   Printer, RefreshCw, AlertCircle, Save, GraduationCap, 
   FileText, Check, Plus, Trash2, Download, Wand2, Fingerprint,
-  Eraser, FileType, FileDown, Key, Database, Home, Type as TypeIcon, Layout,
+  Eraser, FileType, FileDown, Key, Database, Home, Type as TypeIcon, Layout, Layers,
   Shuffle, Repeat, MoreVertical, X, AlignJustify, Settings, Lock, ListFilter,
-  Tag, AlertTriangle, BookOpen, Search, MousePointer2
+  Tag, AlertTriangle, BookOpen, Search, MousePointer2, Scissors, Sliders, Sparkles, Clock
 } from 'lucide-react';
 
 
@@ -29,8 +31,8 @@ interface GeneratePaperProps {
 const STEPS_INFO = [
   { num: 1, label: "Class" },
   { num: 2, label: "Subject" },
-  { num: 3, label: "Pattern" },
-  { num: 4, label: "Chapters" },
+  { num: 3, label: "Chapters" },
+  { num: 4, label: "Pattern" },
   { num: 5, label: "Questions" },
   { num: 6, label: "Medium" },
   { num: 7, label: "Preview" },
@@ -39,12 +41,12 @@ const STEPS_INFO = [
 const isUrdu = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
 const isUrduStyleSubject = (subject: string) => {
-  const s = subject.toLowerCase();
+  const s = (subject || '').toLowerCase();
   return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per');
 };
 
 const isEnglishSubject = (subject: string) => {
-  return subject.toLowerCase().includes('english');
+  return (subject || '').toLowerCase().includes('english');
 };
 
 // Internal utility to render formatted text in selection UI
@@ -61,13 +63,13 @@ const renderFormattedPreview = (text: string) => {
 
   const parts = normalized.split(/(\*\*.*?\*\*|\+\+.*?\+\+)/g);
   return (
-    <span className={isUrdu ? 'font-urdu text-right block' : ''} dir={isUrdu ? 'rtl' : 'ltr'}>
+    <span className={`${isUrdu ? 'font-urdu text-right block' : ''} whitespace-pre-wrap`} dir={isUrdu ? 'rtl' : 'ltr'}>
       {parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-gold-500 font-bold">{part.slice(2, -2)}</strong>;
+          return <strong key={i} className="text-gold-500 font-bold [.light-theme_&]:text-gold-700">{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith('++') && part.endsWith('++')) {
-          return <u key={i} className="underline decoration-gold-500/40">{part.slice(2, -2)}</u>;
+          return <u key={i} className="underline decoration-gold-500/40 [.light-theme_&]:decoration-gold-500/60">{part.slice(2, -2)}</u>;
         }
         return part;
       })}
@@ -80,42 +82,42 @@ const getSectionTagStyles = (type: string) => {
   
   // 🔹 URDU & ISLAMIYAT TYPES (GOLD)
   if (isUrdu(type) || upper.includes('تشریح') || upper.includes('ترجمہ') || upper.includes('خلاصہ')) {
-    return 'bg-gold-500/20 text-gold-400 border-gold-500/40 ring-gold-500/10 shadow-[0_0_10px_rgba(245,158,11,0.1)]';
+    return 'bg-gold-500/20 text-gold-400 border-gold-500/40 ring-gold-500/10 shadow-[0_0_10px_rgba(245,158,11,0.1)] [.light-theme_&]:bg-gold-100 [.light-theme_&]:text-gold-700 [.light-theme_&]:border-gold-200';
   }
   
   // 🔹 OBJECTIVE / GRAMMAR (BLUE)
   if (upper === 'MCQ' || ['VERB', 'SPELLING', 'MEANING', 'GRAMMAR', 'SYNONYM'].some(t => upper.includes(t))) {
-    return 'bg-blue-500/20 text-blue-300 border-blue-500/40 ring-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.1)]';
+    return 'bg-blue-500/20 text-blue-300 border-blue-500/40 ring-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.1)] [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
   }
   
   // 🔹 CONCEPTUAL / SHORT (EMERALD)
   if (upper.includes('SHORT')) {
-    return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.1)]';
+    return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.1)] [.light-theme_&]:bg-emerald-100 [.light-theme_&]:text-emerald-700 [.light-theme_&]:border-emerald-200';
   }
   
   // 🔹 THEORY / LONG (PURPLE)
   if (upper.includes('LONG') || upper.includes('THEORY')) {
-    return 'bg-purple-500/20 text-purple-300 border-purple-500/40 ring-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.1)]';
+    return 'bg-purple-500/20 text-purple-300 border-purple-500/40 ring-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.1)] [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
   }
   
   // 🔹 APPLIED / MATH (ORANGE)
   if (upper.includes('NUMERICAL') || upper.includes('PROBLEM') || upper.includes('CALC')) {
-    return 'bg-orange-500/20 text-orange-300 border-orange-500/40 ring-orange-500/10 shadow-[0_0_10px_rgba(249,115,22,0.1)]';
+    return 'bg-orange-500/20 text-orange-300 border-orange-500/40 ring-orange-500/10 shadow-[0_0_10px_rgba(249,115,22,0.1)] [.light-theme_&]:bg-orange-100 [.light-theme_&]:text-orange-700 [.light-theme_&]:border-orange-200';
   }
   
   // 🔹 CREATIVE WRITING (ROSE)
   if (['ESSAY', 'LETTER', 'STORY', 'DIALOGUE', 'APPLICATION'].some(t => upper.includes(t))) {
-    return 'bg-rose-500/20 text-rose-300 border-rose-500/40 ring-rose-500/10 shadow-[0_0_10px_rgba(244,63,94,0.1)]';
+    return 'bg-rose-500/20 text-rose-300 border-rose-500/40 ring-rose-500/10 shadow-[0_0_10px_rgba(244,63,94,0.1)] [.light-theme_&]:bg-rose-100 [.light-theme_&]:text-rose-700 [.light-theme_&]:border-rose-200';
   }
   
   // 🔹 COMPREHENSION / ANALYSIS (CYAN)
   if (['TRANSLATE', 'SUMMARY', 'PARAPHRASE', 'PASSAGE', 'VOICE', 'COMPREHENSION'].some(t => upper.includes(t))) {
-    return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 ring-cyan-500/10 shadow-[0_0_10px_rgba(6,182,212,0.1)]';
+    return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 ring-cyan-500/10 shadow-[0_0_10px_rgba(6,182,212,0.1)] [.light-theme_&]:bg-cyan-100 [.light-theme_&]:text-cyan-700 [.light-theme_&]:border-cyan-200';
   }
   
   // 🔹 VOCABULARY / OTHER (AMBER)
   if (['IDIOMS', 'SENTENCES', 'ALTERNATE', 'PAIR', 'PUNCTUATION'].some(t => upper.includes(t))) {
-    return 'bg-amber-500/20 text-amber-300 border-amber-500/40 ring-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.1)]';
+    return 'bg-amber-500/20 text-amber-300 border-amber-500/40 ring-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.1)] [.light-theme_&]:bg-amber-100 [.light-theme_&]:text-amber-700 [.light-theme_&]:border-amber-200';
   }
 
   return 'bg-gray-500/10 text-gray-400 border-gray-500/30 ring-gray-500/5';
@@ -134,6 +136,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedChapters, setSelectedChapters] = useState<string[]>([]);
   const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
+  const [isSavingPaper, setIsSavingPaper] = useState(false);
   
   const [availablePatterns, setAvailablePatterns] = useState<PaperPattern[]>([]);
   const [selectedPatternId, setSelectedPatternId] = useState<string>('');
@@ -147,7 +150,14 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [fontSize, setFontSize] = useState(13);
   const [lineSpacing, setLineSpacing] = useState(2); // 0-10 scale
-  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [headerStyle, setHeaderStyle] = useState<'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8'>('default');
+  const [pageBreakAfterMCQ, setPageBreakAfterMCQ] = useState(false);
+  
+  // 🔹 Custom Pattern Modal State
+  const [showCustomPatternModal, setShowCustomPatternModal] = useState(false);
+  
+  // 🔹 Improved State for instant subject loading
+  const [subjectsMap, setSubjectsMap] = useState<Record<string, string[]>>(SUBJECTS_BY_CLASS || {});
   const [availableChapters, setAvailableChapters] = useState<Chapter[]>([]);
   const [questionPool, setQuestionPool] = useState<Question[]>([]);
   
@@ -156,8 +166,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [selectedTopicFilter, setSelectedTopicFilter] = useState<string>('All');
   
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [isLoadingChapters, setIsLoadingChapters] = useState(false);
   const [isLoadingPatterns, setIsLoadingPatterns] = useState(false);
   const [isSmartSkipping, setIsSmartSkipping] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const [mandatoryChapterIds, setMandatoryChapterIds] = useState<string[]>([]);
 
@@ -173,6 +185,21 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const isUrduPaper = isUrduStyleSubject(selectedSubject);
   const isEnglish = isEnglishSubject(selectedSubject);
 
+  // 🔹 Pre-fetch all subjects on mount for instant loading
+  useEffect(() => {
+    const preFetchSubjects = async () => {
+      try {
+        const allSubjects = await getSubjects(true);
+        setSubjectsMap(allSubjects);
+        // Eagerly fetch patterns to cache them for faster Step 3 loading
+        await getPatterns(true);
+      } finally {
+        setIsInitialLoad(false);
+      }
+    };
+    preFetchSubjects();
+  }, []);
+
   useEffect(() => {
     if (initialPaper) {
       const paper = initialPaper;
@@ -183,10 +210,11 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setEffectiveSections(paper.sections);
       setOriginalSections(paper.sections); 
       setSelectedMedium(paper.medium || 'English');
-      setFontSize(Math.min(paper.fontSize || 13, 13));
+      setFontSize(Math.max(8, Math.min(paper.fontSize || 13, 20)));
       setLineSpacing(paper.lineSpacing ?? 2);
       setPaperTime(paper.timeAllowed || '2:00 Hours');
       setPaperCode(paper.paperCode || '');
+      setPageBreakAfterMCQ(Boolean(paper.pageBreakAfterMCQ));
       
       const selections: Record<string, string[]> = {};
       paper.questions.forEach(q => {
@@ -215,7 +243,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setSelectedPatternId(initialPattern.id);
       setPaperTime(initialPattern.timeAllowed || '2:00 Hours');
       setIsSmartSkipping(true);
-      setStep(4);
+      setStep(3);
     } else {
       setStep(1);
     }
@@ -256,34 +284,46 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   }, [questionPool, activeTabId, step, sectionSelections, swappingSlot, selectedTopicFilter]);
 
   useEffect(() => {
-    if (selectedClass) {
-        const loadSubjects = async () => {
-            const allSubjectsMap = await getSubjects();
-            setAvailableSubjects(allSubjectsMap[selectedClass] || []);
-        };
-        loadSubjects();
-    }
-  }, [selectedClass]);
-
-  useEffect(() => {
     if (selectedSubject && selectedClass) {
       const loadAsyncData = async () => {
+        setIsLoadingChapters(true);
         setIsLoadingPatterns(true);
-        const [chapters, allPatterns] = await Promise.all([
-          getChapters(selectedSubject, selectedClass, !isAdmin),
-          getPatterns()
-        ]);
         
-        setAvailableChapters(chapters);
-        const filtered = allPatterns.filter(p => !p.subject || p.subject.toLowerCase() === selectedSubject.toLowerCase());
-        setAvailablePatterns(filtered);
-        setIsLoadingPatterns(false);
+        try {
+          const chapters = await getChapters(selectedSubject, selectedClass, !isAdmin);
+          setAvailableChapters(chapters);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsLoadingChapters(false);
+        }
+
+        try {
+          const allPatterns = await getPatterns();
+          const filtered = allPatterns.filter(p => {
+            const patternSubject = p.subject?.trim().toLowerCase() || "";
+            const targetSubject = selectedSubject?.trim().toLowerCase() || "";
+            const subjectMatches = !patternSubject || patternSubject === targetSubject;
+
+            const patternClass = p.classLevel?.trim().toLowerCase() || "";
+            const targetClass = selectedClass?.trim().toLowerCase() || "";
+            const classMatches = !patternClass || patternClass === targetClass;
+
+            return subjectMatches && classMatches;
+          });
+          
+          setAvailablePatterns(filtered);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsLoadingPatterns(false);
+        }
 
         if (isSmartSkipping) {
-          setStep(4);
+          setStep(3);
           setIsSmartSkipping(false);
         }
-      }
+      };
       loadAsyncData();
     }
   }, [selectedSubject, selectedClass, isAdmin, isSmartSkipping]);
@@ -301,6 +341,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setAvailablePatterns([]);
       setMandatoryChapterIds([]);
     }
+    getSubjects(true).then(allSubjects => setSubjectsMap(allSubjects)).catch(() => {});
     setStep(2);
   };
 
@@ -348,14 +389,38 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       .join(', ');
   };
 
+  const normalizeTypeKey = (t: string) => {
+    const upper = (t || '').toUpperCase().trim();
+    if (!upper) return '';
+    if (['MCQ', 'MCQS', 'MULTIPLE CHOICE', 'OBJECTIVE', 'معروضی', 'کثیر'].some(k => upper.includes(k.toUpperCase()))) return 'MCQ';
+    if (['SHORT', 'مختصر'].some(k => upper.includes(k.toUpperCase()))) return 'SHORT';
+    if (['LONG', 'THEORY', 'تفصیلی', 'انشائیہ'].some(k => upper.includes(k.toUpperCase()))) return 'LONG';
+    if (['NUMERICAL', 'PROBLEM', 'حسابی', 'عددی'].some(k => upper.includes(k.toUpperCase()))) return 'NUMERICAL';
+    if (['TRANSLAT', 'ترجمہ'].some(k => upper.includes(k.toUpperCase()))) return 'TRANSLATION';
+    if (['SUMMAR', 'خلاصہ', 'مرکزی خیال'].some(k => upper.includes(k.toUpperCase()))) return 'SUMMARY';
+    if (['ESSAY', 'مضمون'].some(k => upper.includes(k.toUpperCase()))) return 'ESSAY';
+    if (['LETTER', 'خط'].some(k => upper.includes(k.toUpperCase()))) return 'LETTER';
+    if (['APPLICATION', 'درخواست'].some(k => upper.includes(k.toUpperCase()))) return 'APPLICATION';
+    if (['STORY', 'کہانی'].some(k => upper.includes(k.toUpperCase()))) return 'STORY';
+    if (['DIALOGUE', 'مکالمہ'].some(k => upper.includes(k.toUpperCase()))) return 'DIALOGUE';
+    if (['تشریح'].some(k => upper.includes(k.toUpperCase()))) return 'تشریح';
+    if (['IDIOM', 'محاورات'].some(k => upper.includes(k.toUpperCase()))) return 'IDIOMS';
+    if (['PAIR', 'الفاظ معنی'].some(k => upper.includes(k.toUpperCase()))) return 'PAIR';
+    return upper;
+  };
+
   const matchesType = (questionType: string, patternType: string) => {
-    const qT = (questionType || "").toUpperCase();
-    const pT = (patternType || "").toUpperCase();
+    const qT = (questionType || "").toUpperCase().trim();
+    const pT = (patternType || "").toUpperCase().trim();
     if (qT === pT) return true;
+
+    const normQ = normalizeTypeKey(qT);
+    const normP = normalizeTypeKey(pT);
+    if (normQ && normP && normQ === normP) return true;
+
     if (isEnglish) {
-       if (pT === 'MCQ' && ['VERB', 'SPELLING', 'MEANING', 'GRAMMAR'].includes(qT)) return true;
-       // Ensure 'Dialogue' matches effectively even if casing varies
-       if (pT === 'DIALOGUE' && qT === 'DIALOGUE') return true;
+       if (normP === 'MCQ' && ['VERB', 'SPELLING', 'MEANING', 'GRAMMAR'].includes(qT)) return true;
+       if (normP === 'DIALOGUE' && qT === 'DIALOGUE') return true;
        if (pT.includes(qT) || qT.includes(pT)) return true;
     }
     return false;
@@ -364,6 +429,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const triggerAutoSelect = () => {
     const sectionsToUse = originalSections.length > 0 ? originalSections : effectiveSections;
     const newSelections: Record<string, string[]> = {};
+    const usedQuestionIds = new Set<string>();
     
     sectionsToUse.forEach(section => {
       const selectionForThisSection: string[] = [];
@@ -384,12 +450,21 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                return ch && isChapterMandatory(ch.name, part.specificChapters!);
              });
            }
-           const available = partPool.filter(q => matchesType(q.type, part.type || section.type) && !selectionForThisSection.includes(q.id));
+           const available = partPool.filter(q => 
+             matchesType(q.type, part.type || section.type) && 
+             !selectionForThisSection.includes(q.id) &&
+             !usedQuestionIds.has(q.id)
+           );
+           const fallbackPool = available.length >= (part.questionCount || 0)
+             ? available
+             : partPool.filter(q => matchesType(q.type, part.type || section.type) && !selectionForThisSection.includes(q.id));
+
            for(let k=0; k < (part.questionCount || 0); k++) {
-              const random = available[Math.floor(Math.random() * available.length)];
+              const random = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
               if (random) {
                 selectionForThisSection.push(random.id);
-                available.splice(available.indexOf(random), 1);
+                usedQuestionIds.add(random.id);
+                fallbackPool.splice(fallbackPool.indexOf(random), 1);
               }
            }
         });
@@ -405,14 +480,30 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                    return ch && isChapterMandatory(ch.name, part.specificChapters!);
                  });
               }
-              const available = partPool.filter(q => matchesType(q.type, targetType) && !selectionForThisSection.includes(q.id));
-              const random = available[Math.floor(Math.random() * available.length)];
-              if (random) selectionForThisSection.push(random.id);
+              const available = partPool.filter(q => 
+                matchesType(q.type, targetType) && 
+                !selectionForThisSection.includes(q.id) &&
+                !usedQuestionIds.has(q.id)
+              );
+              const pickPool = available.length > 0 ? available : partPool.filter(q => matchesType(q.type, targetType) && !selectionForThisSection.includes(q.id));
+              const random = pickPool[Math.floor(Math.random() * pickPool.length)];
+              if (random) {
+                selectionForThisSection.push(random.id);
+                usedQuestionIds.add(random.id);
+              }
             });
           } else {
-            const available = sectionPool.filter(q => matchesType(q.type, section.type) && !selectionForThisSection.includes(q.id));
-            const random = available[Math.floor(Math.random() * available.length)];
-            if (random) selectionForThisSection.push(random.id);
+            const available = sectionPool.filter(q => 
+              matchesType(q.type, section.type) && 
+              !selectionForThisSection.includes(q.id) &&
+              !usedQuestionIds.has(q.id)
+            );
+            const pickPool = available.length > 0 ? available : sectionPool.filter(q => matchesType(q.type, section.type) && !selectionForThisSection.includes(q.id));
+            const random = pickPool[Math.floor(Math.random() * pickPool.length)];
+            if (random) {
+              selectionForThisSection.push(random.id);
+              usedQuestionIds.add(random.id);
+            }
           }
         }
       }
@@ -426,7 +517,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     setSectionSelections(prev => ({ ...prev, [activeTabId]: [] }));
   };
 
-  const initializeQuestionSelection = async (forceBypassCache: boolean = false) => {
+  const initializeQuestionSelection = async (forceBypassCache: boolean = false, overrideSections?: PaperPatternSection[]) => {
     setIsLoadingQuestions(true);
     let pool = await getQuestionsForChapters(selectedSubject, availableChapters, selectedChapters, forceBypassCache);
     if (selectedSubtopics.length > 0) {
@@ -434,12 +525,14 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     }
     setQuestionPool(pool);
     
-    const sectionsToUse = originalSections.length > 0 ? originalSections : effectiveSections;
+    const sectionsToUse = overrideSections || (originalSections.length > 0 ? originalSections : effectiveSections);
     if (sectionsToUse.length > 0) {
       setActiveTabId(sectionsToUse[0].id);
       
-      if (autoSelectQuestions && Object.keys(sectionSelections).length === 0) {
-        const newSelections: Record<string, string[]> = {};
+      const newSelections: Record<string, string[]> = {};
+      const usedQuestionIds = new Set<string>();
+
+      if (autoSelectQuestions) {
         sectionsToUse.forEach(section => {
           const selectionForThisSection: string[] = [];
           const isMCQ = section.type.toUpperCase() === 'MCQ';
@@ -459,12 +552,21 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                    return ch && isChapterMandatory(ch.name, part.specificChapters!);
                  });
                }
-               const available = partPool.filter(q => matchesType(q.type, part.type || section.type) && !selectionForThisSection.includes(q.id));
+               const available = partPool.filter(q => 
+                 matchesType(q.type, part.type || section.type) && 
+                 !selectionForThisSection.includes(q.id) &&
+                 !usedQuestionIds.has(q.id)
+               );
+               const fallbackPool = available.length >= (part.questionCount || 0)
+                 ? available
+                 : partPool.filter(q => matchesType(q.type, part.type || section.type) && !selectionForThisSection.includes(q.id));
+
                for(let k=0; k < (part.questionCount || 0); k++) {
-                  const random = available[Math.floor(Math.random() * available.length)];
+                  const random = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
                   if (random) {
                     selectionForThisSection.push(random.id);
-                    available.splice(available.indexOf(random), 1);
+                    usedQuestionIds.add(random.id);
+                    fallbackPool.splice(fallbackPool.indexOf(random), 1);
                   }
                }
              });
@@ -480,24 +582,38 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        return ch && isChapterMandatory(ch.name, part.specificChapters!);
                      });
                   }
-                  const available = partPool.filter(q => matchesType(q.type, targetType) && !selectionForThisSection.includes(q.id));
-                  const random = available[Math.floor(Math.random() * available.length)];
-                  if (random) selectionForThisSection.push(random.id);
+                  const available = partPool.filter(q => 
+                    matchesType(q.type, targetType) && 
+                    !selectionForThisSection.includes(q.id) &&
+                    !usedQuestionIds.has(q.id)
+                  );
+                  const pickPool = available.length > 0 ? available : partPool.filter(q => matchesType(q.type, targetType) && !selectionForThisSection.includes(q.id));
+                  const random = pickPool[Math.floor(Math.random() * pickPool.length)];
+                  if (random) {
+                    selectionForThisSection.push(random.id);
+                    usedQuestionIds.add(random.id);
+                  }
                 });
               } else {
-                const available = sectionPool.filter(q => matchesType(q.type, section.type) && !selectionForThisSection.includes(q.id));
-                const random = available[Math.floor(Math.random() * available.length)];
-                if (random) selectionForThisSection.push(random.id);
+                const available = sectionPool.filter(q => 
+                  matchesType(q.type, section.type) && 
+                  !selectionForThisSection.includes(q.id) &&
+                  !usedQuestionIds.has(q.id)
+                );
+                const pickPool = available.length > 0 ? available : sectionPool.filter(q => matchesType(q.type, section.type) && !selectionForThisSection.includes(q.id));
+                const random = pickPool[Math.floor(Math.random() * pickPool.length)];
+                if (random) {
+                  selectionForThisSection.push(random.id);
+                  usedQuestionIds.add(random.id);
+                }
               }
             }
           }
           newSelections[section.id] = selectionForThisSection;
         });
         setSectionSelections(newSelections);
-      } else if (Object.keys(sectionSelections).length === 0) {
-        const initialSelections: Record<string, string[]> = {};
-        sectionsToUse.forEach(s => initialSelections[s.id] = []);
-        setSectionSelections(initialSelections);
+      } else {
+        sectionsToUse.forEach(s => newSelections[s.id] = []);
       }
     }
     setIsLoadingQuestions(false);
@@ -508,8 +624,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const handleNext = async () => {
     if (step === 1 && selectedClass) setStep(2);
     else if (step === 2 && selectedSubject) setStep(3);
-    else if (step === 3 && selectedPatternId) setStep(4);
-    else if (step === 4 && selectedChapters.length > 0) { 
+    else if (step === 3 && selectedChapters.length > 0) setStep(4);
+    else if (step === 4 && selectedPatternId) { 
         await initializeQuestionSelection(false); 
         setStep(5); 
     }
@@ -518,7 +634,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       const updatedSections = baseSections.map(sec => {
         const isMCQ = sec.type.toUpperCase() === 'MCQ';
         if (isMCQ && sec.subParts && sec.subParts.length > 0) {
-           return sec; 
+            return sec; 
         }
         const partsPerQuestion = (sec.subParts && sec.subParts.length > 0) ? sec.subParts.length : 1;
         const totalIds = (sectionSelections[sec.id] || []).length;
@@ -529,7 +645,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           attemptCount: Math.min(completeQuestions, sec.attemptCount) 
         } : null;
       }).filter((s): s is PaperPatternSection => s !== null);
-      setEffectiveSections(updatedSections);
+      const sortedUpdated = sortSectionsByStandardSequence(updatedSections, isEnglish);
+      setEffectiveSections(sortedUpdated);
       setStep(6);
     }
     else if (step === 6) {
@@ -541,12 +658,15 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     }
   };
 
-  const handlePatternSelect = (p: PaperPattern) => {
+  const handlePatternSelect = async (p: PaperPattern) => {
+    const sortedSections = sortSectionsByStandardSequence(p.sections, isEnglish);
     setSelectedPatternId(p.id);
-    setOriginalSections(p.sections);
-    setEffectiveSections(p.sections);
+    setOriginalSections(sortedSections);
+    setEffectiveSections(sortedSections);
     setPaperTime(p.timeAllowed || '2:00 Hours');
-    setTimeout(() => setStep(4), 150);
+    setSectionSelections({});
+    await initializeQuestionSelection(false, sortedSections);
+    setTimeout(() => setStep(5), 150);
   };
 
   const toggleChapter = (chapterId: string, chapterSubtopics: Subtopic[]) => {
@@ -563,38 +683,76 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     }
   };
 
+  const selectAllChapters = () => {
+    const selectableChapters = availableChapters.filter(ch => ch.subtopics.length > 0);
+    const allIds = selectableChapters.map(ch => ch.id);
+    setSelectedChapters(allIds);
+    const allSubtopicIds = selectableChapters.flatMap(ch => ch.subtopics.map(s => s.id));
+    setSelectedSubtopics(allSubtopicIds);
+  };
+
+  const deselectAllChapters = () => {
+    setSelectedChapters(mandatoryChapterIds);
+    const mandatorySubtopicIds = availableChapters
+      .filter(ch => mandatoryChapterIds.includes(ch.id))
+      .flatMap(ch => ch.subtopics.map(s => s.id));
+    setSelectedSubtopics(mandatorySubtopicIds);
+  };
+
+  const selectAllSubtopics = (chapterId: string) => {
+    const chapter = availableChapters.find(ch => ch.id === chapterId);
+    if (!chapter) return;
+    const subtopicIds = chapter.subtopics.map(s => s.id);
+    setSelectedSubtopics(prev => [...new Set([...prev, ...subtopicIds])]);
+  };
+
+  const deselectAllSubtopics = (chapterId: string) => {
+    const chapter = availableChapters.find(ch => ch.id === chapterId);
+    if (!chapter) return;
+    const subtopicIds = chapter.subtopics.map(s => s.id);
+    setSelectedSubtopics(prev => prev.filter(id => !subtopicIds.includes(id)));
+  };
+
   const toggleSubtopic = (subtopicId: string, parentChapterId: string) => {
     setSelectedSubtopics(prev => prev.includes(subtopicId) ? prev.filter(id => id !== subtopicId) : [...prev, subtopicId]);
   };
 
   const handleSaveOrUpdate = async () => {
-    const paperData = {
-      title: `${selectedClass} - ${selectedSubject}`,
-      classLevel: selectedClass,
-      subject: selectedSubject,
-      totalMarks: effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0),
-      sections: effectiveSections,
-      questions: getSelectedQuestions(),
-      instituteProfile: user.instituteProfile,
-      userId: user.id,
-      createdBy: user.name,
-      selectedChapterIds: selectedChapters,
-      selectedSubtopicIds: selectedSubtopics,
-      formattedChapters: getChaptersDisplay(),
-      medium: selectedMedium,
-      fontSize: fontSize,
-      lineSpacing: lineSpacing,
-      timeAllowed: paperTime,
-      paperCode: paperCode
-    };
-    if (initialPaper?.id) {
-       const result = await updatePaper(initialPaper.id, paperData);
-       if (result.success) alert("Updated Successfully!");
-       else alert(result.message);
-    } else {
-       const result = await savePaper(paperData);
-       if (result.success) alert("Saved Successfully!");
-       else alert(result.message);
+    if (isSavingPaper) return;
+    setIsSavingPaper(true);
+    try {
+      const paperData = {
+        title: `${selectedClass} - ${selectedSubject}`,
+        classLevel: selectedClass,
+        subject: selectedSubject,
+        totalMarks: effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0),
+        sections: effectiveSections,
+        questions: getSelectedQuestions(),
+        instituteProfile: user.instituteProfile,
+        userId: user.id,
+        createdBy: user.name,
+        selectedChapterIds: selectedChapters,
+        selectedSubtopicIds: selectedSubtopics,
+        formattedChapters: getChaptersDisplay(),
+        medium: selectedMedium,
+        fontSize: fontSize,
+        lineSpacing: lineSpacing,
+        timeAllowed: paperTime,
+        paperCode: paperCode,
+        pageBreakAfterMCQ: pageBreakAfterMCQ
+      };
+      if (initialPaper?.id) {
+         const result = await updatePaper(initialPaper.id, paperData);
+         alert(result.message || (result.success ? "Updated Successfully!" : "Update Failed"));
+      } else {
+         const result = await savePaper(paperData);
+         alert(result.message || (result.success ? "Saved Successfully!" : "Save Failed"));
+      }
+    } catch (e: any) {
+      console.error("Save paper error:", e);
+      alert("Error saving paper: " + (e?.message || "Unknown error"));
+    } finally {
+      setIsSavingPaper(false);
     }
   };
 
@@ -750,7 +908,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                 <div>
                   <p className="text-[11px] text-theme-text-main line-clamp-2 leading-tight font-medium whitespace-pre-wrap">{renderFormattedPreview(question.text)}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[8px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border border-gold-500/20">{question.type}</span>
+                    <span className="text-[8px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border border-gold-500/20 [.light-theme_&]:bg-gold-100 [.light-theme_&]:text-gold-700 [.light-theme_&]:border-gold-200">{question.type}</span>
                     {question.subtopic && <span className="text-[8px] text-theme-text-sub font-bold italic truncate">/ {question.subtopic}</span>}
                   </div>
                 </div>
@@ -768,46 +926,129 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     );
   };
 
+  // 🔹 Derive subjects instantly from map
+  const classSubjects = subjectsMap[selectedClass] || [];
+
   return (
     <div className="min-h-screen bg-surface-900 flex flex-col relative print:bg-white font-sans transition-colors duration-300 tex2jax_process">
-      {/* 🔹 STEP BAR */}
-      <header className="bg-surface-800 border-b border-surface-700 sticky top-0 z-[100] print:hidden min-h-[90px] flex flex-col justify-center px-4 sm:px-6 shadow-2xl">
-          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
-              <div className="flex items-center gap-1 min-w-[60px] sm:min-w-[120px]">
-                <button onClick={() => step > 1 ? setStep(step - 1) : onBack()} className="text-theme-text-muted hover:text-gold-500 p-2 transition-colors flex items-center gap-1 group">
-                  <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Back</span>
+      <header className="bg-surface-800 border-b border-surface-700 sticky top-0 z-[100] print:hidden min-h-[60px] sm:min-h-[90px] py-1.5 sm:py-0 flex flex-col justify-center px-2 sm:px-6 shadow-2xl">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-1.5 sm:gap-4">
+              <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                <button onClick={() => step > 1 ? setStep(step - 1) : onBack()} className="text-theme-text-muted hover:text-gold-500 p-1 sm:p-2 transition-colors flex items-center gap-0.5 sm:gap-1 group">
+                  <ArrowLeft size={16} className="sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform" />
+                  <span className="text-[9px] sm:text-xs font-black uppercase tracking-widest hidden sm:inline">Back</span>
                 </button>
                 <button onClick={onBack} title="Dashboard" className="hidden md:block text-theme-text-muted hover:text-gold-500 p-2 hover:bg-surface-700 rounded-lg transition-all"><Home size={18} /></button>
               </div>
 
               <div className="flex-grow flex items-center justify-center">
                 {step === 7 ? (
-                  <div className="flex flex-wrap items-center justify-center gap-3 w-full animate-fadeIn">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3 w-full animate-fadeIn">
                     <h2 className="hidden xl:block text-xl font-black text-theme-text-main uppercase tracking-tighter mr-4">Paper Preview</h2>
-                    <div className="flex items-center gap-2">
-                       <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner">
-                          <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Font:</span>
-                          <select value={fontSize} onChange={(e) => setFontSize(parseInt(e.target.value))} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer min-w-[65px]">
-                            {[8, 9, 10, 11, 12, 13].map(size => (<option key={size} value={size}>{size}px</option>))}
-                          </select>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                       {/* Font Size Stepper (-) / (+) */}
+                       <div className="bg-surface-900/50 border border-surface-700 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner">
+                          <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Font:</span>
+                          <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
+                             <button
+                               type="button"
+                               onClick={() => setFontSize(prev => Math.max(8, prev - 1))}
+                               disabled={fontSize <= 8}
+                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                               title="Decrease Font Size (-)"
+                             >
+                               -
+                             </button>
+                             <span className="px-1 sm:px-2 text-[9px] sm:text-[11px] font-black text-theme-text-main min-w-[24px] sm:min-w-[34px] text-center select-none">
+                               {fontSize}px
+                             </span>
+                             <button
+                               type="button"
+                               onClick={() => setFontSize(prev => Math.min(20, prev + 1))}
+                               disabled={fontSize >= 20}
+                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                               title="Increase Font Size (+)"
+                             >
+                               +
+                             </button>
+                          </div>
                        </div>
-                       <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner">
-                          <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Spacing:</span>
-                          <select value={lineSpacing} onChange={(e) => setLineSpacing(parseInt(e.target.value))} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer min-w-[65px]">
-                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => (<option key={val} value={val}>{val}</option>))}
+
+                       {/* Line Spacing Stepper (-) / (+) */}
+                       <div className="bg-surface-900/50 border border-surface-700 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner">
+                          <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Space:</span>
+                          <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
+                             <button
+                               type="button"
+                               onClick={() => setLineSpacing(prev => Math.max(-10, prev - 1))}
+                               disabled={lineSpacing <= -10}
+                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                               title="Decrease Line Spacing (-)"
+                             >
+                               -
+                             </button>
+                             <span className="px-1 sm:px-2 text-[9px] sm:text-[11px] font-black text-theme-text-main min-w-[18px] sm:min-w-[28px] text-center select-none">
+                               {lineSpacing}
+                             </span>
+                             <button
+                               type="button"
+                               onClick={() => setLineSpacing(prev => Math.min(10, prev + 1))}
+                               disabled={lineSpacing >= 10}
+                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                               title="Increase Line Spacing (+)"
+                             >
+                               +
+                             </button>
+                          </div>
+                       </div>
+
+                       {/* Header Style */}
+                       <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner hidden md:flex">
+                          <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Header:</span>
+                          <select value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value as any)} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer">
+                            <option value="default">Default</option>
+                            <option value="sba">SBA</option>
+                            <option value="layout3">Layout 3</option>
+                            <option value="layout4">Layout 4</option>
+                            <option value="layout5">Layout 5</option>
+                            <option value="layout6">Layout 6</option>
+                            <option value="layout7">Layout 7</option>
+                            <option value="layout8">Layout 8</option>
                           </select>
                        </div>
                     </div>
-                    <Button onClick={() => setShowAnswerKey(!showAnswerKey)} variant={showAnswerKey ? 'primary' : 'secondary'} className="!w-auto text-[10px] py-1.5 px-3 flex items-center h-9 font-black"><Key size={14} className="mr-1.5 text-gold-500" /> {showAnswerKey ? 'Hide Key' : 'Show Key'}</Button>
+                    {/* Page Break Toggle Button */}
+                    <Button 
+                      onClick={() => setPageBreakAfterMCQ(!pageBreakAfterMCQ)} 
+                      variant={pageBreakAfterMCQ ? 'primary' : 'secondary'} 
+                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black whitespace-nowrap"
+                      title="Page Break: Print MCQs on Page 1, Short & Long questions on Page 2"
+                    >
+                      <Scissors size={11} className={`mr-1 sm:mr-1.5 sm:w-3.5 sm:h-3.5 ${pageBreakAfterMCQ ? 'text-black' : 'text-gold-500'}`} /> 
+                      <span>{pageBreakAfterMCQ ? 'Break: ON' : 'Page Break'}</span>
+                    </Button>
+                    <Button 
+                      onClick={() => setShowAnswerKey(!showAnswerKey)} 
+                      variant={showAnswerKey ? 'primary' : 'secondary'} 
+                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black whitespace-nowrap"
+                    >
+                      <Key size={11} className="mr-1 sm:mr-1.5 text-gold-500 sm:w-3.5 sm:h-3.5" /> 
+                      <span>{showAnswerKey ? 'Hide Key' : 'Key'}</span>
+                    </Button>
                     <div className="relative group">
-                      <Button variant="primary" className="!w-auto text-[10px] py-1.5 px-5 flex items-center h-9 font-black shadow-lg"><Settings size={14} className="mr-2" /> Paper Actions <ChevronDown size={12} className="ml-2 opacity-50" /></Button>
+                      <Button 
+                        variant="primary" 
+                        className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2.5 sm:!px-5 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap"
+                      >
+                        <Settings size={11} className="mr-1 sm:mr-2 sm:w-3.5 sm:h-3.5" /> 
+                        <span>Actions</span> 
+                        <ChevronDown size={9} className="ml-0.5 sm:ml-2 opacity-50 sm:w-3 sm:h-3" />
+                      </Button>
                       <div className="absolute right-0 top-full pt-2 w-48 hidden group-hover:block z-[110] animate-fadeIn">
                         <div className="bg-surface-800 border border-surface-700 rounded-xl shadow-2xl overflow-hidden">
-                          <button onClick={handleSaveOrUpdate} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-surface-700 font-black uppercase"><Save size={16} className="text-gold-500 group-hover:text-black" /> {initialPaper ? 'Update Paper' : 'Save Paper'}</button>
+                          <button onClick={handleSaveOrUpdate} disabled={isSavingPaper} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-surface-700 font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"><Save size={16} className="text-gold-500 group-hover:text-black" /> {isSavingPaper ? 'Saving...' : (initialPaper ? 'Update Paper' : 'Save Paper')}</button>
                           <button onClick={() => window.print()} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-surface-700 font-black uppercase"><FileDown size={16} className="text-gold-500 group-hover:text-black" /> PDF Download</button>
                           <button onClick={handlePrint} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase"><Printer size={16} className="text-gold-500 group-hover:text-black" /> Print Paper</button>
-                          <button onClick={handleDownloadWord} className="w-full text-left px-4 py-2.5 text-[10px] text-theme-text-muted hover:bg-surface-700 flex items-center gap-3 transition-colors font-bold border-t border-surface-700/50 italic"><FileType size={14} /> Export to Word</button>
                         </div>
                       </div>
                     </div>
@@ -835,7 +1076,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
 
               <div className="min-w-[40px] sm:min-w-[120px] flex justify-end">
                  { (step >= 3 && step <= 5) && (
-                   <Button onClick={handleNext} disabled={(step === 3 && !selectedPatternId) || (step === 4 && selectedChapters.length === 0) || (step === 5 && totalSelectedCount === 0)} className="!w-auto py-1.5 px-3 sm:px-5 flex items-center text-[10px] sm:text-xs h-8 sm:h-9">
+                   <Button onClick={handleNext} disabled={(step === 3 && selectedChapters.length === 0) || (step === 4 && !selectedPatternId) || (step === 5 && totalSelectedCount === 0)} className="!w-auto py-1.5 px-3 sm:px-5 flex items-center text-[10px] sm:text-xs h-8 sm:h-9">
                      <span className="hidden sm:inline mr-1">Next</span> <ChevronRight size={14} />
                    </Button>
                  )}
@@ -850,63 +1091,143 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
 
       <main className={`flex-grow ${step <= 2 ? 'max-w-6xl' : 'max-w-4xl'} mx-auto w-full px-4 py-8 sm:py-12 print:p-0`}>
           {step === 1 && (
-            <div className="animate-fadeIn grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto justify-items-center">
-              {CLASSES.map(cls => (
-                <div key={cls} onClick={() => handleClassSelect(cls)} className={`cursor-pointer rounded-xl border-2 p-5 flex flex-col items-center justify-center gap-3 transition-all hover:scale-105 w-full aspect-square md:aspect-[4/3] ${selectedClass === cls ? 'bg-surface-800 border-gold-500 shadow-xl' : 'bg-surface-800/50 border-surface-700 hover:border-gold-500'}`}>
-                  <div className="text-gold-500">{getClassIcon(cls)}</div>
-                  <span className="font-bold text-theme-text-main text-sm md:text-base whitespace-nowrap">{cls}</span>
+            <div className="animate-fadeIn grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 max-w-5xl mx-auto justify-items-center">
+              {CLASSES.map((cls, idx) => {
+                const color = CARD_COLORS[idx % CARD_COLORS.length];
+                return (
+                <div key={cls} onClick={() => handleClassSelect(cls)} className={`group relative cursor-pointer rounded-2xl border-2 p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 w-full aspect-square md:aspect-[4/3] overflow-hidden bg-surface-800/80 backdrop-blur-sm ${selectedClass === cls ? `border-transparent shadow-xl scale-105` : `${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}`}>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} transition-opacity duration-500 ${selectedClass === cls ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                  <div className={`relative z-10 transition-all duration-300 ${selectedClass === cls ? `scale-110 ${color.icon}` : `text-theme-text-muted ${color.groupHoverIcon} group-hover:scale-110`}`}>{getClassIcon(cls)}</div>
+                  <span className={`relative z-10 font-black text-sm md:text-lg whitespace-nowrap transition-all duration-300 ${selectedClass === cls ? 'text-theme-text-main tracking-wide' : 'text-theme-text-sub group-hover:text-theme-text-main group-hover:tracking-wide'}`}>{cls}</span>
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
           {step === 2 && (
-            <div className="animate-fadeIn grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4 justify-items-center">
-              {availableSubjects.map(subj => (
-                <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center text-center transition-all hover:scale-105 w-full h-28 sm:h-32 ${selectedSubject === subj ? 'bg-surface-800 border-gold-500 shadow-xl' : 'bg-surface-800/50 border-surface-700 hover:border-gold-500'}`}>
-                  <span className="font-bold text-theme-text-main text-base md:text-lg leading-tight">{subj}</span>
+            <div className="animate-fadeIn flex flex-col">
+              {isInitialLoad && classSubjects.length === 0 ? (
+                <div className="py-20 text-center flex flex-col items-center gap-4">
+                  <RefreshCw size={48} className="animate-spin text-gold-500 opacity-50" />
+                  <p className="text-theme-text-muted font-bold uppercase tracking-widest text-xs">Instantly Loading Subjects...</p>
                 </div>
-              ))}
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 justify-items-center max-w-6xl mx-auto">
+                  {classSubjects.map((subj, idx) => {
+                    const color = CARD_COLORS[idx % CARD_COLORS.length];
+                    return (
+                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`group relative cursor-pointer rounded-2xl border-2 p-5 flex flex-col items-center justify-center text-center transition-all duration-300 w-full h-32 sm:h-36 overflow-hidden bg-surface-800/80 backdrop-blur-sm ${selectedSubject === subj ? `border-transparent shadow-xl scale-105` : `${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}`}>
+                      <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} transition-opacity duration-500 ${selectedSubject === subj ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                      <div className={`relative z-10 transition-colors duration-300 mb-2 ${selectedSubject === subj ? color.icon : `text-theme-text-muted ${color.groupHoverIcon}`}`}>
+                         <Layers size={28} className={`transition-transform duration-300 ${selectedSubject === subj ? 'scale-110' : 'group-hover:scale-110'}`} />
+                      </div>
+                      <span className={`relative z-10 font-bold text-base md:text-lg leading-tight transition-all duration-300 ${selectedSubject === subj ? 'text-theme-text-main tracking-wide' : 'text-theme-text-sub group-hover:text-theme-text-main group-hover:tracking-wide'}`}>{subj}</span>
+                    </div>
+                  )})}
+                  {classSubjects.length === 0 && (
+                    <div className="col-span-full py-20 text-center opacity-50">
+                      <AlertTriangle size={48} className="mx-auto mb-4" />
+                      <p className="font-bold uppercase tracking-widest text-xs">No subjects found for {selectedClass}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {step === 3 && (
-            <div className="animate-fadeIn grid grid-cols-1 md:grid-cols-2 gap-6">
-              {isLoadingPatterns ? (
-                <div className="col-span-full py-20 text-center flex flex-col items-center gap-4">
+            <div className="animate-fadeIn space-y-6">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-theme-text-main">Select Chapters</h2>
+                <p className="text-theme-text-muted text-sm mt-1">Choose chapters for the paper content.</p>
+              </div>
+
+              {isLoadingChapters ? (
+                <div className="py-20 text-center flex flex-col items-center gap-4">
                   <RefreshCw size={48} className="animate-spin text-gold-500 opacity-50" />
-                  <p className="text-theme-text-muted font-bold uppercase tracking-widest text-xs">Loading Layouts...</p>
+                  <p className="text-theme-text-muted font-bold uppercase tracking-widest text-xs">Loading Chapters...</p>
+                </div>
+              ) : availableChapters.length === 0 ? (
+                <div className="bg-surface-800 border-2 border-dashed border-surface-700 rounded-2xl p-12 text-center animate-fadeIn max-w-2xl mx-auto">
+                   <div className="bg-red-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                      <AlertTriangle size={32} className="text-red-500" />
+                   </div>
+                   <h3 className="text-xl font-bold text-theme-text-main uppercase tracking-tighter mb-2">No Chapters Available</h3>
+                   <p className="text-theme-text-muted text-sm leading-relaxed mb-8">
+                     Currently, there are no chapters found for <span className="text-gold-500 font-bold">{selectedSubject}</span> in <span className="text-gold-500 font-bold">{selectedClass}</span>.
+                   </p>
+                   <Button onClick={() => setStep(2)} variant="secondary" className="!w-auto px-8">
+                      <ArrowLeft size={16} className="mr-2" /> Change Subject
+                   </Button>
                 </div>
               ) : (
-                availablePatterns.map(pattern => (
-                  <div key={pattern.id} onClick={() => handlePatternSelect(pattern)} className={`relative bg-surface-800 border-2 rounded-xl p-6 hover:border-gold-500 flex flex-col h-full transition-all group cursor-pointer ${selectedPatternId === pattern.id ? 'border-gold-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-surface-700'}`}>
-                    {selectedPatternId === pattern.id && (<div className="absolute -top-2 -right-2 bg-gold-500 text-black rounded-full p-1 shadow-lg z-10 animate-scaleIn"><CheckCircle size={20} /></div>)}
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-bold text-theme-text-main text-lg leading-tight group-hover:text-gold-500 transition-colors">{pattern.name}</h3>
-                      {pattern.classLevel && <span className="text-[9px] bg-surface-900 text-theme-text-muted px-1.5 py-0.5 rounded border border-surface-700 font-bold uppercase">{pattern.classLevel}</span>}
-                    </div>
-                    <div className="mb-6 flex-grow">
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {pattern.sections.map((s, i) => (
-                          <span key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight shadow-inner transition-all hover:brightness-110 ring-1 ${getSectionTagStyles(s.type)} ${isUrdu(s.type) ? 'font-urdu py-0.5' : ''}`}>
-                            <span className="uppercase opacity-90">{s.type}</span>
-                            <span className="w-px h-2.5 bg-current opacity-20"></span>
-                            <span className="brightness-125 font-black">{s.attemptCount}/{s.questionCount}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-surface-700/50 pt-4 mt-auto">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] text-theme-text-muted uppercase font-black tracking-widest">Total Weight</span>
-                        <span className="text-lg font-black text-gold-500 leading-none">{pattern.totalMarks} Marks</span>
-                      </div>
-                      <div className="bg-gold-500/10 p-2 rounded-lg text-gold-500 group-hover:bg-gold-500 group-hover:text-black transition-all">
-                        <ChevronRight size={18} className={selectedPatternId === pattern.id ? 'translate-x-1' : ''} />
-                      </div>
-                    </div>
+                <>
+                  <div className="flex justify-center gap-4 mb-2">
+                    <button 
+                      onClick={selectAllChapters} 
+                      className="text-[10px] font-black uppercase tracking-widest text-gold-500 hover:text-gold-400 transition-colors flex items-center gap-1.5 bg-gold-500/5 px-3 py-1.5 rounded-lg border border-gold-500/20"
+                    >
+                      <CheckSquare size={14} /> Select All Chapters
+                    </button>
+                    <button 
+                      onClick={deselectAllChapters} 
+                      className="text-[10px] font-black uppercase tracking-widest text-theme-text-muted hover:text-red-400 transition-colors flex items-center gap-1.5 bg-surface-800 px-3 py-1.5 rounded-lg border border-surface-700"
+                    >
+                      <Square size={14} /> Deselect All
+                    </button>
                   </div>
-                ))
+                  {mandatoryChapterIds.length > 0 && (
+                    <div className="bg-gold-500/10 border border-gold-500/30 rounded-xl p-3 flex items-center gap-3 max-w-2xl mx-auto mb-4 animate-fadeIn">
+                       <Lock className="text-gold-500 shrink-0" size={18} />
+                       <p className="text-[10px] text-gold-200 uppercase font-black tracking-widest leading-relaxed">Some chapters are <span className="text-gold-500">Locked</span> because they are mandatory for the selected board pattern.</p>
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {availableChapters.map(chapter => {
+                      const hasContent = chapter.subtopics.length > 0;
+                      const isChecked = selectedChapters.includes(chapter.id);
+                      const isMandatory = mandatoryChapterIds.includes(chapter.id);
+                      return (
+                        <div key={chapter.id} className="group">
+                          <div onClick={() => hasContent && toggleChapter(chapter.id, chapter.subtopics)} className={`p-4 rounded-xl border transition-all flex items-center justify-between ${hasContent ? isChecked ? isMandatory ? 'border-gold-500/50 bg-surface-800/80 cursor-default opacity-90' : 'border-gold-500 bg-surface-800 shadow-[0_0_10px_rgba(245,158,11,0.1)] cursor-pointer' : 'border-surface-700 bg-surface-800/50 cursor-pointer hover:border-surface-500' : 'border-surface-900 bg-surface-900/30 opacity-50 cursor-not-allowed grayscale'}`}>
+                            <div className="flex items-center gap-4">
+                              {hasContent ? (isChecked ? (isMandatory ? <Lock size={20} className="text-gold-500" /> : <CheckSquare className="text-gold-500" />) : <Square className="text-theme-text-muted" />) : <AlertCircle size={20} className="text-theme-text-muted" />}
+                              <div>
+                                <span className={`font-bold block ${hasContent ? 'text-theme-text-main' : 'text-theme-text-muted'} ${isUrduPaper ? 'font-urdu text-lg' : ''}`}>{chapter.name}{isMandatory && <span className="ml-3 text-[8px] bg-gold-500 text-black px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">Required</span>}</span>
+                                {!hasContent && <span className="text-[10px] text-red-500/70 font-bold uppercase tracking-widest">No Content Found</span>}
+                              </div>
+                            </div>
+                            {hasContent && (<span className={`text-[10px] font-bold px-2 py-0.5 rounded ${isChecked ? 'bg-gold-500 text-black' : 'bg-surface-700 text-theme-text-muted'}`}>{chapter.subtopics.length} Topics</span>)}
+                          </div>
+                          {isChecked && chapter.subtopics.length > 0 && (
+                            <div className="mt-2 ml-10 p-4 bg-surface-900/50 border-l-2 border-gold-500/30 rounded-r-xl grid grid-cols-1 sm:grid-cols-2 gap-2 animate-fadeIn">
+                              <div className="col-span-full flex items-center gap-4 mb-2 pb-2 border-b border-surface-700/50">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); selectAllSubtopics(chapter.id); }} 
+                                  className="text-[9px] font-bold uppercase text-gold-500/80 hover:text-gold-500 transition-colors flex items-center gap-1"
+                                >
+                                  <CheckCircle size={10} /> Select All Topics
+                                </button>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); deselectAllSubtopics(chapter.id); }} 
+                                  className="text-[9px] font-bold uppercase text-theme-text-muted hover:text-red-400 transition-colors flex items-center gap-1"
+                                >
+                                  <X size={10} /> Deselect All
+                                </button>
+                              </div>
+                              {chapter.subtopics.map(sub => (
+                                <div key={sub.id} onClick={() => toggleSubtopic(sub.id, chapter.id)} className="flex items-center gap-2 cursor-pointer group/sub">
+                                  {selectedSubtopics.includes(sub.id) ? <CheckCircle size={16} className="text-gold-500" /> : <div className="w-4 h-4 rounded-full border border-surface-600 group-hover/sub:border-gold-500/50 transition-colors" />}
+                                  <span className={`text-xs ${selectedSubtopics.includes(sub.id) ? 'text-theme-text-main font-medium' : 'text-theme-text-muted'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>{sub.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -914,46 +1235,139 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           {step === 4 && (
             <div className="animate-fadeIn space-y-6">
               <div className="text-center">
-                <h2 className="text-2xl font-bold text-theme-text-main">Select Chapters</h2>
-                <p className="text-theme-text-muted text-sm mt-1">Choose chapters for the paper content.</p>
+                <h2 className="text-2xl font-bold text-theme-text-main">Select Paper Pattern</h2>
+                <p className="text-theme-text-muted text-sm mt-1">Choose a predefined pattern or create your own custom pattern.</p>
               </div>
-              {mandatoryChapterIds.length > 0 && (
-                <div className="bg-gold-500/10 border border-gold-500/30 rounded-xl p-3 flex items-center gap-3 max-w-2xl mx-auto mb-4 animate-fadeIn">
-                   <Lock className="text-gold-500 shrink-0" size={18} />
-                   <p className="text-[10px] text-gold-200 uppercase font-black tracking-widest leading-relaxed">Some chapters are <span className="text-gold-500">Locked</span> because they are mandatory for the selected board pattern.</p>
+
+              {isLoadingPatterns ? (
+                <div className="py-20 text-center flex flex-col items-center gap-4">
+                  <RefreshCw size={48} className="animate-spin text-gold-500 opacity-50" />
+                  <p className="text-theme-text-muted font-bold uppercase tracking-widest text-xs">Loading Layouts...</p>
                 </div>
-              )}
-              <div className="space-y-3">
-                {availableChapters.map(chapter => {
-                  const hasContent = chapter.subtopics.length > 0;
-                  const isChecked = selectedChapters.includes(chapter.id);
-                  const isMandatory = mandatoryChapterIds.includes(chapter.id);
-                  return (
-                    <div key={chapter.id} className="group">
-                      <div onClick={() => hasContent && toggleChapter(chapter.id, chapter.subtopics)} className={`p-4 rounded-xl border transition-all flex items-center justify-between ${hasContent ? isChecked ? isMandatory ? 'border-gold-500/50 bg-surface-800/80 cursor-default opacity-90' : 'border-gold-500 bg-surface-800 shadow-[0_0_10px_rgba(245,158,11,0.1)] cursor-pointer' : 'border-surface-700 bg-surface-800/50 cursor-pointer hover:border-surface-500' : 'border-surface-900 bg-surface-900/30 opacity-50 cursor-not-allowed grayscale'}`}>
-                        <div className="flex items-center gap-4">
-                          {hasContent ? (isChecked ? (isMandatory ? <Lock size={20} className="text-gold-500" /> : <CheckSquare className="text-gold-500" />) : <Square className="text-theme-text-muted" />) : <AlertCircle size={20} className="text-theme-text-muted" />}
-                          <div>
-                            <span className={`font-bold block ${hasContent ? 'text-theme-text-main' : 'text-theme-text-muted'} ${isUrduPaper ? 'font-urdu text-lg' : ''}`}>{chapter.name}{isMandatory && <span className="ml-3 text-[8px] bg-gold-500 text-black px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">Required</span>}</span>
-                            {!hasContent && <span className="text-[10px] text-red-500/70 font-bold uppercase tracking-widest">No Content Found</span>}
-                          </div>
-                        </div>
-                        {hasContent && (<span className={`text-[10px] font-bold px-2 py-0.5 rounded ${isChecked ? 'bg-gold-500 text-black' : 'bg-surface-700 text-theme-text-muted'}`}>{chapter.subtopics.length} Topics</span>)}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* 1. CUSTOM PATTERN CARD (ALWAYS FIRST) */}
+                  <div 
+                    onClick={() => setShowCustomPatternModal(true)} 
+                    className={`relative bg-surface-800 border-2 rounded-xl p-6 hover:border-gold-500 flex flex-col h-full transition-all group cursor-pointer ${
+                      selectedPatternId.startsWith('custom-') 
+                        ? 'border-gold-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]' 
+                        : 'border-dashed border-gold-500/60 hover:border-gold-500'
+                    }`}
+                  >
+                    {selectedPatternId.startsWith('custom-') && (
+                      <div className="absolute -top-2 -right-2 bg-gold-500 text-black rounded-full p-1 shadow-lg z-10 animate-scaleIn">
+                        <CheckCircle size={20} />
                       </div>
-                      {isChecked && chapter.subtopics.length > 0 && (
-                        <div className="mt-2 ml-10 p-4 bg-surface-900/50 border-l-2 border-gold-500/30 rounded-r-xl grid grid-cols-1 sm:grid-cols-2 gap-2 animate-fadeIn">
-                          {chapter.subtopics.map(sub => (
-                            <div key={sub.id} onClick={() => toggleSubtopic(sub.id, chapter.id)} className="flex items-center gap-2 cursor-pointer group/sub">
-                              {selectedSubtopics.includes(sub.id) ? <CheckCircle size={16} className="text-gold-500" /> : <div className="w-4 h-4 rounded-full border border-surface-600 group-hover/sub:border-gold-500/50 transition-colors" />}
-                              <span className={`text-xs ${selectedSubtopics.includes(sub.id) ? 'text-theme-text-main font-medium' : 'text-theme-text-muted'} ${isUrduPaper ? 'font-urdu text-base' : ''}`}>{sub.name}</span>
-                            </div>
+                    )}
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-center text-gold-500 group-hover:bg-gold-500 group-hover:text-black transition-all">
+                          <Sliders size={20} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-theme-text-main text-lg leading-tight group-hover:text-gold-500 transition-colors">
+                              Custom Paper Pattern
+                            </h3>
+                            <span className="text-[9px] bg-gold-500 text-black px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">
+                              Custom
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-theme-text-muted font-bold block mt-0.5">
+                            Create custom layout (MCQs, Short & Long)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mb-6 flex-grow">
+                      <p className="text-xs text-theme-text-muted leading-relaxed mb-3">
+                        Configure MCQs, Short questions, and Long questions as needed.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-blue-500/20 text-blue-300 border-blue-500/40">
+                          MCQs
+                        </span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
+                          Short Questions
+                        </span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-purple-500/20 text-purple-300 border-purple-500/40">
+                          Long Questions
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-surface-700/50 pt-4 mt-auto">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-theme-text-muted uppercase font-black tracking-widest">Type</span>
+                        <span className="text-sm font-black text-gold-500">
+                          {selectedPatternId.startsWith('custom-') ? 'Custom Configured' : 'One-Time Pattern'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-gold-500/10 px-3 py-1.5 rounded-lg text-gold-500 group-hover:bg-gold-500 group-hover:text-black font-black text-xs transition-all">
+                        <span>{selectedPatternId.startsWith('custom-') ? 'Edit Pattern' : 'Create Pattern'}</span>
+                        <ChevronRight size={16} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. PREDEFINED PATTERNS */}
+                  {availablePatterns.map(pattern => (
+                    <div key={pattern.id} onClick={() => handlePatternSelect(pattern)} className={`relative bg-surface-800 border-2 rounded-xl p-6 hover:border-gold-500 flex flex-col h-full transition-all group cursor-pointer ${selectedPatternId === pattern.id ? 'border-gold-500 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'border-surface-700'}`}>
+                      {selectedPatternId === pattern.id && (<div className="absolute -top-2 -right-2 bg-gold-500 text-black rounded-full p-1 shadow-lg z-10 animate-scaleIn"><CheckCircle size={20} /></div>)}
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="font-bold text-theme-text-main text-lg leading-tight group-hover:text-gold-500 transition-colors">{pattern.name}</h3>
+                        {pattern.classLevel && <span className="text-[9px] bg-surface-900 text-theme-text-muted px-1.5 py-0.5 rounded border border-surface-700 font-bold uppercase">{pattern.classLevel}</span>}
+                      </div>
+                      <div className="mb-6 flex-grow">
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {pattern.sections.map((s, i) => (
+                            <span key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight shadow-inner transition-all hover:brightness-110 ring-1 ${getSectionTagStyles(s.type)} ${isUrdu(s.type) ? 'font-urdu py-0.5' : ''}`}>
+                              <span className="uppercase opacity-90">{s.type}</span>
+                              <span className="w-px h-2.5 bg-current opacity-20"></span>
+                              <span className="brightness-125 font-black">{s.attemptCount}/{s.questionCount}</span>
+                            </span>
                           ))}
                         </div>
-                      )}
+                      </div>
+                      <div className="flex items-center justify-between border-t border-surface-700/50 pt-4 mt-auto">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-theme-text-muted uppercase font-black tracking-widest">Total Weight</span>
+                          <span className="text-lg font-black text-gold-500 leading-none">{pattern.totalMarks} Marks</span>
+                        </div>
+                        <div className="bg-gold-500/10 p-2 rounded-lg text-gold-500 group-hover:bg-gold-500 group-hover:text-black transition-all">
+                          <ChevronRight size={18} className={selectedPatternId === pattern.id ? 'translate-x-1' : ''} />
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+
+                  {availablePatterns.length === 0 && (
+                    <div className="bg-surface-800/60 border border-surface-700 rounded-xl p-6 flex flex-col justify-center items-center text-center">
+                      <Sparkles size={32} className="text-gold-500/40 mb-2" />
+                      <p className="text-xs text-theme-text-muted font-bold">
+                        No predefined patterns found for {selectedSubject}.
+                      </p>
+                      <p className="text-[11px] text-theme-text-muted/70 mt-1">
+                        Click the Custom Pattern card to generate your paper!
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 3. CUSTOM PATTERN BUILDER MODAL */}
+              {showCustomPatternModal && (
+                <CustomPatternModal
+                  isOpen={showCustomPatternModal}
+                  onClose={() => setShowCustomPatternModal(false)}
+                  onApplyPattern={handlePatternSelect}
+                  classLevel={selectedClass}
+                  subject={selectedSubject}
+                  availableChapters={availableChapters}
+                  user={user}
+                  initialPattern={selectedPatternId ? availablePatterns.find(p => p.id === selectedPatternId) : null}
+                />
+              )}
             </div>
           )}
 
@@ -967,7 +1381,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                const isMCQ = s.type.toUpperCase() === 'MCQ';
                                const partsMultiplier = (!isMCQ && s.subParts && s.subParts.length > 0) ? s.subParts.length : 1;
                                return (
-                                <button key={s.id} onClick={() => { setActiveTabId(s.id); setSelectedTopicFilter('All'); }} className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-2 border-2 ${activeTabId === s.id ? 'bg-gold-500 text-black border-gold-500 shadow-md scale-105' : 'bg-surface-800 text-theme-text-muted border-surface-700 hover:border-gold-500'}`}>
+                                <button key={s.id} onClick={() => { setActiveTabId(s.id); setSelectedTopicFilter('All'); }} className={`px-5 py-2.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-pre-wrap flex items-center gap-2 border-2 ${activeTabId === s.id ? 'bg-gold-500 text-black border-gold-500 shadow-md scale-105' : 'bg-surface-800 text-theme-text-muted border-surface-700 hover:border-gold-500'}`}>
                                   {s.title}
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${activeTabId === s.id ? 'bg-black/20 text-black' : 'bg-surface-900 text-gold-500'}`}>
                                     { isMCQ ? (sectionSelections[s.id] || []).length : Math.floor((sectionSelections[s.id] || []).length / partsMultiplier) }/{s.questionCount}
@@ -1066,15 +1480,36 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                               </div>
                             ) : (
                                 <div className="space-y-3">
-                                  {questionPool.filter(q => {
+                                  {(() => {
+                                    const filteredQuestions = questionPool.filter(q => {
                                       const typeMatch = activeSection && matchesType(q.type, activeSection.type);
                                       if (!typeMatch) return false;
+                                      if (activeSection?.specificChapters && activeSection.specificChapters.length > 0) {
+                                        const ch = availableChapters.find(c => c.id === q.chapterId);
+                                        if (ch && !isChapterMandatory(ch.name, activeSection.specificChapters)) return false;
+                                      }
                                       if (selectedTopicFilter !== 'All') {
                                         const topic = q.subtopic || 'General';
                                         if (topic !== selectedTopicFilter) return false;
                                       }
                                       return true;
-                                    }).map(q => {
+                                    });
+
+                                    if (filteredQuestions.length === 0) {
+                                      return (
+                                        <div className="p-12 text-center text-theme-text-muted flex flex-col items-center">
+                                          <AlertTriangle size={36} className="text-gold-500/40 mb-3" />
+                                          <p className="font-bold text-sm text-theme-text-main">
+                                            No questions found matching "{activeSection?.title || activeSection?.type}".
+                                          </p>
+                                          <p className="text-xs text-theme-text-muted mt-1">
+                                            Make sure chapters and questions are uploaded for this subject ({selectedSubject}).
+                                          </p>
+                                        </div>
+                                      );
+                                    }
+
+                                    return filteredQuestions.map(q => {
                                       const isSelected = activeTabId ? (sectionSelections[activeTabId] || []).includes(q.id) : false;
                                       const isMCQ = q.type === 'MCQ' || matchesType(q.type, 'MCQ');
                                       return (
@@ -1103,7 +1538,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                             {isMCQ && renderMCQOptionsSelection(q)}
                                         </div>
                                       );
-                                  })}
+                                    });
+                                  })()}
                                 </div>
                             )
                         )}
@@ -1176,14 +1612,15 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
 
           {step === 7 && (
             <div className="animate-fadeIn space-y-4 h-full flex flex-col relative">
-               <div className="bg-surface-800 p-4 sm:p-8 rounded-xl overflow-auto border border-surface-700 flex-grow print:p-0 print:bg-white print:border-none">
+               <div className="bg-surface-800 p-1 sm:p-8 rounded-xl overflow-x-auto border border-surface-700 flex-grow print:p-0 print:bg-white print:border-none">
                   <div className="mx-auto shadow-2xl print:shadow-none w-full max-w-[210mm] transition-all relative group/paper" style={{ minHeight: '297mm', color: '#000000', backgroundColor: '#ffffff' }}>
                      <PrintablePaper 
                        instituteProfile={user.instituteProfile} classLevel={selectedClass} subject={selectedSubject} 
                        totalMarks={effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0)} 
                        sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={1} medium={selectedMedium} showAnswerKey={showAnswerKey}
                        baseFontSize={fontSize} lineSpacing={lineSpacing} timeAllowed={paperTime} paperCode={paperCode}
-                       chaptersDisplay={getChaptersDisplay()}
+                       chaptersDisplay={getChaptersDisplay()} headerStyle={headerStyle}
+                       pageBreakAfterMCQ={pageBreakAfterMCQ}
                      />
                   </div>
                </div>

@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, PaperPattern, PaperPatternSection, PaperPatternSectionPart } from '../types';
+import { User, PaperPattern, PaperPatternSection, PaperPatternSectionPart, Chapter } from '../types';
 import { getPatterns, savePattern, deletePattern } from '../services/patternService';
 import { getSubjects } from '../services/subjectService';
+import { getChapters } from '../services/chapterService';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Select } from './Select';
-import { CLASSES } from '../constants';
+import { CLASSES, CARD_COLORS } from '../constants';
 import { 
   ArrowLeft, Plus, Trash2, Edit, Save, X, Layout, RefreshCw,
   Layers, CheckSquare, Square, Check, Search, Info, Globe, AlertTriangle,
   BookOpen, ChevronDown, ChevronUp, Type as TypeIcon, ListTree, Clock, ListFilter,
-  Split, Eye, EyeOff, Hash
+  Split, Eye, EyeOff, Hash, GraduationCap
 } from 'lucide-react';
 
 interface PaperPatternsProps {
@@ -20,77 +21,77 @@ interface PaperPatternsProps {
 }
 
 // Standardized list with user-friendly casing
-const PREDEFINED_TYPES = [
+export const PREDEFINED_TYPES = [
   'MCQ', 'Short', 'Long', 'Numerical', 'Letter', 'Application', 'Story', 'Dialogue', 'Punctuation', 
   'Pair of words', 'Translate passage In urdu', 'Translate passage to English', 'Essay',
   'تشریح اشعار', 'سیاق و سباق کے حوالے سے تشریح', 'سبق کا خلاصہ', 'نظم کا مرکزی خیال',
   'مکالمہ', 'درخواست', 'تلخیص نگاری', 'الفاظ معنی', 'آیات کا ترجمہ', 'احادیث کی تشریح'
 ];
 
-const ENGLISH_SPECIFIC_TYPES = [
+export const ENGLISH_SPECIFIC_TYPES = [
   'MCQ', 'Short', 'Long', 'Translate', 'Summary', 'Idioms', 'Essay', 'Passage', 'Sentences', 'Alternate', 'Voice', 'Paraphrase', 'Letter', 'Story', 'Dialogue'
 ];
 
-const ENGLISH_MCQ_SUBTYPES = ['Verb', 'Spelling', 'Meaning', 'Grammar'];
+export const ENGLISH_MCQ_SUBTYPES = ['Verb', 'Spelling', 'Meaning', 'Grammar'];
 
-const ENGLISH_SUBTYPE_INSTRUCTIONS: Record<string, string> = {
+export const ENGLISH_SUBTYPE_INSTRUCTIONS: Record<string, string> = {
   'Verb': 'Choose the correct form of verb and fill up the bubbles.',
   'Spelling': 'Choose the word with correct spellings and fill up the bubbles.',
   'Meaning': 'Choose the correct meanings of the underlined words and fill up the bubbles.',
   'Grammar': 'Choose the correct option according to grammar and fill up the bubbles.'
 };
 
-const SECTION_HEADINGS = ['None', 'SECTION – I', 'SECTION – II', 'OBJECTIVE PART', 'SUBJECTIVE PART'];
+export const SECTION_HEADINGS = ['None', 'SECTION – I', 'SECTION – II', 'OBJECTIVE PART', 'SUBJECTIVE PART'];
 
-const isUrdu = (text: string) => /[\u0600-\u06FF]/.test(text || '');
+export const isUrdu = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
-const getSectionTagStyles = (type: string) => {
+export const getSectionTagStyles = (type: string) => {
   const upper = type.toUpperCase();
   
   // 🔹 URDU & ISLAMIYAT TYPES (GOLD)
   if (isUrdu(type) || upper.includes('تشریح') || upper.includes('ترجمہ') || upper.includes('خلاصہ')) {
-    return 'bg-gold-500/20 text-gold-500 border-gold-500/40 ring-gold-500/10';
+    return 'bg-gold-500/20 text-gold-500 border-gold-500/40 ring-gold-500/10 [.light-theme_&]:bg-gold-100 [.light-theme_&]:text-gold-700 [.light-theme_&]:border-gold-200';
   }
   
   // 🔹 OBJECTIVE / GRAMMAR (BLUE)
   if (upper === 'MCQ' || ['VERB', 'SPELLING', 'MEANING', 'GRAMMAR', 'SYNONYM'].some(t => upper.includes(t))) {
-    return 'bg-blue-500/20 text-blue-600 border-blue-500/40 ring-blue-500/10';
+    return 'bg-blue-500/20 text-blue-600 border-blue-500/40 ring-blue-500/10 [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
   }
   
   // 🔹 CONCEPTUAL / SHORT (EMERALD)
   if (upper.includes('SHORT')) {
-    return 'bg-emerald-500/20 text-emerald-600 border-emerald-500/40 ring-emerald-500/10';
+    return 'bg-emerald-500/20 text-emerald-600 border-emerald-500/40 ring-emerald-500/10 [.light-theme_&]:bg-emerald-100 [.light-theme_&]:text-emerald-700 [.light-theme_&]:border-emerald-200';
   }
   
   // 🔹 THEORY / LONG (PURPLE)
   if (upper.includes('LONG') || upper.includes('THEORY')) {
-    return 'bg-purple-500/20 text-purple-600 border-purple-500/40 ring-purple-500/10';
+    return 'bg-purple-500/20 text-purple-600 border-purple-500/40 ring-purple-500/10 [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
   }
   
   // 🔹 APPLIED / MATH (ORANGE)
   if (upper.includes('NUMERICAL') || upper.includes('PROBLEM') || upper.includes('CALC')) {
-    return 'bg-orange-500/20 text-orange-600 border-orange-500/40 ring-orange-500/10';
+    return 'bg-orange-500/20 text-orange-600 border-orange-500/40 ring-orange-500/10 [.light-theme_&]:bg-orange-100 [.light-theme_&]:text-orange-700 [.light-theme_&]:border-orange-200';
   }
   
   // 🔹 CREATIVE WRITING (ROSE)
   if (['ESSAY', 'LETTER', 'STORY', 'DIALOGUE', 'APPLICATION'].some(t => upper.includes(t))) {
-    return 'bg-rose-500/20 text-rose-600 border-rose-500/40 ring-rose-500/10';
+    return 'bg-rose-500/20 text-rose-600 border-rose-500/40 ring-rose-500/10 [.light-theme_&]:bg-rose-100 [.light-theme_&]:text-rose-700 [.light-theme_&]:border-rose-200';
   }
   
   // 🔹 COMPREHENSION / ANALYSIS (CYAN)
   if (['TRANSLATE', 'SUMMARY', 'PARAPHRASE', 'PASSAGE', 'VOICE', 'COMPREHENSION'].some(t => upper.includes(t))) {
-    return 'bg-cyan-500/20 text-cyan-600 border-cyan-500/40 ring-cyan-500/10';
+    return 'bg-cyan-500/20 text-cyan-600 border-cyan-500/40 ring-cyan-500/10 [.light-theme_&]:bg-cyan-100 [.light-theme_&]:text-cyan-700 [.light-theme_&]:border-cyan-200';
   }
   
   // 🔹 VOCABULARY / OTHER (AMBER)
   if (['IDIOMS', 'SENTENCES', 'ALTERNATE', 'PAIR', 'PUNCTUATION'].some(t => upper.includes(t))) {
-    return 'bg-amber-500/20 text-amber-600 border-amber-500/40 ring-amber-500/10';
+    return 'bg-amber-500/20 text-amber-600 border-amber-500/40 ring-amber-500/10 [.light-theme_&]:bg-amber-100 [.light-theme_&]:text-amber-700 [.light-theme_&]:border-amber-200';
   }
 
   return 'bg-gray-500/10 text-theme-text-muted border-gray-500/30';
 };
 
-const getAutoTitle = (type: string, count: number, marks: number, index: number, isEnglish?: boolean): string | null => {
+export const getAutoTitle = (type: string, count: number, marks: number, index: number, isEnglish?: boolean): string | null => {
   const isUrduType = isUrdu(type);
   let baseTitle = '';
   const upperType = type.toUpperCase();
@@ -136,7 +137,104 @@ const getAutoTitle = (type: string, count: number, marks: number, index: number,
   }
 };
 
-const TYPE_TITLE_MAPPING: Record<string, string[]> = {
+export const getAutoUrduTitle = (type: string, count: number, marks: number, index: number): string | null => {
+  const upperType = type.toUpperCase();
+  let baseTitle = '';
+
+  if (upperType === 'MCQ') {
+    baseTitle = "درست جواب کے گرد دائرہ لگائیں۔";
+  } else if (upperType === 'SHORT') {
+    baseTitle = `کوئی سے ${count} مختصر سوالات کے جوابات دیں۔`;
+  } else if (upperType === 'LONG') {
+    baseTitle = `کوئی سے ${count} تفصیلی سوالات کے جوابات دیں۔`;
+  } else if (upperType === 'NUMERICAL') {
+    baseTitle = "دیے گئے حسابی سوالات حل کریں۔";
+  } else {
+    const key = Object.keys(TYPE_URDU_TITLE_MAPPING).find(k => k.toUpperCase() === upperType);
+    const suggestions = key ? TYPE_URDU_TITLE_MAPPING[key] : [];
+    baseTitle = suggestions[0] || (isUrdu(type) ? type : '');
+  }
+
+  if (!baseTitle) return '';
+
+  const cleanBase = baseTitle
+    .replace(/^سوال نمبر \d+\. /, '')
+    .replace(/^سوال نمبر \. \d+/, '')
+    .trim();
+
+  return `سوال نمبر ${index + 1}۔ ${cleanBase}`;
+};
+
+export const getSectionSortRank = (type: string): number => {
+  const upper = (type || '').toUpperCase().trim();
+  if (!upper) return 99;
+  
+  // 1. MCQs / Objective always first
+  if (['MCQ', 'MCQS', 'MULTIPLE CHOICE', 'OBJECTIVE', 'معروضی', 'کثیر'].some(k => upper.includes(k.toUpperCase()))) {
+    return 1;
+  }
+  // 2. Short Questions / مختصر always second
+  if (['SHORT', 'مختصر', 'سوالات کے مختصر جوابات'].some(k => upper.includes(k.toUpperCase()))) {
+    return 2;
+  }
+  // 3. Long Questions / Detailed / تفصیلی / انشائیہ always third
+  if (['LONG', 'THEORY', 'تفصیلی', 'انشائیہ'].some(k => upper.includes(k.toUpperCase()))) {
+    return 3;
+  }
+  // 4. Numerical / Problem / حسابی
+  if (['NUMERICAL', 'PROBLEM', 'حسابی', 'عددی'].some(k => upper.includes(k.toUpperCase()))) {
+    return 4;
+  }
+  // 5. Language specific components (Translation, Summary, Comprehension, etc.)
+  if (['TRANSLAT', 'ترجمہ', 'SUMMAR', 'خلاصہ', 'COMPREHENSION', 'تفہیم'].some(k => upper.includes(k.toUpperCase()))) {
+    return 5;
+  }
+  if (['ESSAY', 'مضمون', 'LETTER', 'خط', 'APPLICATION', 'درخواست', 'STORY', 'کہانی', 'DIALOGUE', 'مکالمہ'].some(k => upper.includes(k.toUpperCase()))) {
+    return 6;
+  }
+  if (['تشریح', 'PAIR', 'IDIOM', 'الفاظ'].some(k => upper.includes(k.toUpperCase()))) {
+    return 7;
+  }
+  return 8;
+};
+
+export const sortSectionsByStandardSequence = (
+  sections: PaperPatternSection[], 
+  isEnglishSubject?: boolean
+): PaperPatternSection[] => {
+  const indexed = sections.map((s, originalIndex) => ({ s, originalIndex }));
+  indexed.sort((a, b) => {
+    const rankA = getSectionSortRank(a.s.type);
+    const rankB = getSectionSortRank(b.s.type);
+    if (rankA !== rankB) return rankA - rankB;
+    return a.originalIndex - b.originalIndex;
+  });
+
+  return indexed.map((item, newIdx) => {
+    const sec = item.s;
+    let nextTitle = sec.title || '';
+    let nextTitleUrdu = sec.titleUrdu || '';
+
+    // Only update title with question index if the section originally has a title
+    if (sec.title && sec.title.trim()) {
+      const autoTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject);
+      if (autoTitle) nextTitle = autoTitle;
+    }
+
+    if (sec.titleUrdu && sec.titleUrdu.trim()) {
+      const autoUrduTitle = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx);
+      if (autoUrduTitle) nextTitleUrdu = autoUrduTitle;
+    }
+
+    return {
+      ...sec,
+      title: nextTitle,
+      titleUrdu: nextTitleUrdu
+    };
+  });
+};
+
+export const TYPE_TITLE_MAPPING: Record<string, string[]> = {
   'MCQ': ['Attempt all. Circle the correct answer', 'Choose the correct option', 'Circle the Correct Answer', 'Objective Part'],
   'Short': ['Write short answers to any (?) questions.', 'Section I: Short Answers', 'Answer any (?) questions.'],
   'Long': ['Detailed Answers', 'Attempt any (?) questions.', 'Section II: Descriptive'],
@@ -170,14 +268,114 @@ const TYPE_TITLE_MAPPING: Record<string, string[]> = {
   'احادیث کی تشریح': ['حدیث کی تشریح کریں', 'حدیث مبارکہ کا مفہوم', 'تشریح حدیث'],
 };
 
-const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+export const TYPE_URDU_TITLE_MAPPING: Record<string, string[]> = {
+  'MCQ': ['درست جواب کے گرد دائرہ لگائیں۔', 'کثیر الانتخابی سوالات'],
+  'Short': ['کوئی سے مختصر سوالات کے جوابات دیں۔', 'مختصر سوالات'],
+  'Long': ['تفصیلی سوالات کے جوابات دیں۔', 'انشائیہ حصہ'],
+  'Numerical': ['حسابی سوالات حل کریں۔', 'عددی مسائل'],
+  'Translate': ['اردو میں ترجمہ کریں۔', 'ترجمہ'],
+  'Summary': ['نظم کا خلاصہ لکھیں۔', 'خلاصہ'],
+  'Paraphrase': ['اشعار کی تشریح کریں۔', 'تشریح'],
+  'Idioms': ['محاورات کو جملوں میں استعمال کریں۔', 'محاورات'],
+  'Essay': ['مضمون لکھیں۔', 'مضمون نویسی'],
+  'Passage': ['عبارت پڑھ کر سوالات کے جوابات دیں۔', 'تفہیم عبارت'],
+  'Sentences': ['جملے بنائیں۔', 'جملہ سازی'],
+  'Letter': ['خط لکھیں۔', 'خطوط نویسی'],
+  'Application': ['درخواست لکھیں۔', 'درخواست نویسی'],
+  'Story': ['کہانی لکھیں۔', 'کہانی نویسی'],
+  'Dialogue': ['مکالمہ لکھیں۔', 'مکالمہ نگاری'],
+  'تشریح اشعار': ['اشعار کی تشریح کریں'],
+  'سیاق و سباق کے حوالے سے تشریح': ['سیاق و سباق کے ساتھ تشریح'],
+  'سبق کا خلاصہ': ['سبق کا خلاصہ لکھیں'],
+  'نظم کا مرکزی خیال': ['نظم کا مرکزی خیال لکھیں'],
+  'مکالمہ': ['مکالمہ تحریر کریں'],
+  'درخواست': ['درخواست برائے رخصت'],
+  'تلخیص نگاری': ['عبارت کی تلخیص کریں'],
+  'الفاظ معنی': ['الفاظ کے معنی لکھیں'],
+  'آیات کا ترجمہ': ['آیات کا با محاورہ ترجمہ کریں'],
+  'احادیث کی تشریح': ['حدیث کی تشریح کریں'],
+};
+
+export const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+export const ChapterSelector: React.FC<{
+  selectedChapters: string[];
+  availableChapters: Chapter[];
+  onChange: (chapters: string[]) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  id: string;
+}> = ({ selectedChapters, availableChapters, onChange, isOpen, onToggle, id }) => {
+  const getChapterNumber = (name: string) => {
+    const match = name.match(/\d+/);
+    return match ? match[0] : name;
+  };
+
+  const toggleChapter = (chapterName: string) => {
+    const chapterNumber = getChapterNumber(chapterName);
+    const isSelected = selectedChapters.includes(chapterNumber);
+    if (isSelected) {
+      onChange(selectedChapters.filter(n => n !== chapterNumber));
+    } else {
+      onChange([...selectedChapters, chapterNumber]);
+    }
+  };
+
+  const selectedDisplay = [...selectedChapters]
+    .sort((a, b) => {
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    })
+    .join(', ');
+
+  return (
+    <div className="relative chapter-dropdown-container">
+      <div 
+        onClick={onToggle}
+        className={`w-full bg-gray-800 text-theme-text-main text-[10px] p-2 rounded-lg border cursor-pointer flex justify-between items-center min-h-[32px] ${isOpen ? 'border-gold-500' : 'border-gray-700'}`}
+      >
+        <span className="truncate max-w-[100px]">
+          {selectedDisplay || <span className="text-gray-500 italic">Select Chapters...</span>}
+        </span>
+        <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+      {isOpen && (
+        <div className="absolute top-full left-0 z-[110] mt-1 bg-gray-800 border border-gold-500/50 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar p-2 animate-scaleIn min-w-full md:min-w-[300px]">
+          {availableChapters.length === 0 ? (
+            <div className="text-[10px] text-gray-500 p-2 italic">No chapters found</div>
+          ) : (
+            availableChapters.map(ch => {
+              const chapterNumber = getChapterNumber(ch.name);
+              const isSelected = selectedChapters.includes(chapterNumber);
+              return (
+                <div 
+                  key={ch.id} 
+                  onClick={() => toggleChapter(ch.name)}
+                  className={`flex items-start gap-2 p-2 rounded cursor-pointer hover:bg-gray-750 transition-colors ${isSelected ? 'text-gold-500' : 'text-theme-text-muted'}`}
+                >
+                  <div className="shrink-0 mt-0.5">
+                    {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                  </div>
+                  <span className="text-[10px] font-bold leading-tight">{ch.name}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUsePattern }) => {
-  const [view, setView] = useState<'SUBJECTS' | 'LIST' | 'CREATE'>('SUBJECTS');
+  const [view, setView] = useState<'CLASSES' | 'SUBJECTS' | 'LIST' | 'CREATE'>('CLASSES');
+  const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [patterns, setPatterns] = useState<PaperPattern[]>([]);
-  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [subjectsMap, setSubjectsMap] = useState<Record<string, string[]>>({});
+  const [availableChapters, setAvailableChapters] = useState<Chapter[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -196,21 +394,34 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
 
   const [customTitleModes, setCustomTitleModes] = useState<Record<string, boolean>>({});
   const [expandedSectionParts, setExpandedSectionParts] = useState<Record<string, boolean>>({});
+  const [visiblePatternCount, setVisiblePatternCount] = useState(20);
+  const [openChapterDropdownId, setOpenChapterDropdownId] = useState<string | null>(null);
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, id: string, field: 'title' | 'titleUrdu') => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = e.currentTarget.selectionStart;
+      const end = e.currentTarget.selectionEnd;
+      const value = e.currentTarget.value;
+      const newValue = value.substring(0, start) + "\n" + value.substring(end);
+      handleUpdateSection(id, field, newValue);
+      
+      const target = e.currentTarget;
+      setTimeout(() => {
+        target.selectionStart = target.selectionEnd = start + 1;
+      }, 0);
+    }
+  };
 
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const allPatterns = await getPatterns();
+      const allPatterns = await getPatterns(true);
       setPatterns(allPatterns);
-      const sMap = await getSubjects();
+      const sMap = await getSubjects(true);
       setSubjectsMap(sMap);
-      
-      let allSubjects = Array.from(new Set(Object.values(sMap).flat()));
-      const patternSubjects = allPatterns.map(p => p.subject).filter(s => s) as string[];
-      allSubjects = [...new Set([...allSubjects, ...patternSubjects])];
-      setAvailableSubjects(Array.from(new Set(allSubjects)).sort());
     } catch (e) {
       console.error("Error loading patterns", e);
     } finally {
@@ -223,31 +434,43 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
   }, []);
 
   useEffect(() => {
+    if (view === 'CREATE' && formData.classLevel && (editingPattern?.subject || selectedSubject)) {
+      const fetchChapters = async () => {
+        const chapters = await getChapters(editingPattern?.subject || selectedSubject, formData.classLevel, false);
+        setAvailableChapters(chapters);
+      };
+      fetchChapters();
+    }
+  }, [view, formData.classLevel, selectedSubject, editingPattern?.subject]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsSubjectDropdownOpen(false);
+      }
+      // Close chapter dropdowns if clicked outside
+      if (!(event.target as HTMLElement).closest('.chapter-dropdown-container')) {
+        setOpenChapterDropdownId(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleClassClick = (cls: string) => {
+    setSelectedClass(cls);
+    setView('SUBJECTS');
+  };
+
   const handleSubjectClick = (subject: string) => {
     setSelectedSubject(subject);
     setSearchTerm('');
+    setVisiblePatternCount(20);
     setView('LIST');
   };
 
   const handleCreateNew = () => {
-    let initialClass = '';
-    for(const cls of CLASSES) {
-      if(subjectsMap[cls]?.includes(selectedSubject)) {
-        initialClass = cls;
-        break;
-      }
-    }
-
-    setFormData({ name: '', description: '', classLevel: initialClass, selectedSubjects: [], timeAllowed: '2:00 Hours' });
+    setFormData({ name: '', description: '', classLevel: selectedClass, selectedSubjects: [], timeAllowed: '2:00 Hours' });
     setSections([]);
     setEditingPattern(null);
     setCustomTitleModes({});
@@ -261,7 +484,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     setFormData({ 
       name: pattern.name, 
       description: '', 
-      classLevel: pattern.classLevel || '',
+      classLevel: pattern.classLevel || selectedClass,
       selectedSubjects: [],
       timeAllowed: pattern.timeAllowed || '2:00 Hours'
     });
@@ -295,11 +518,12 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     const currentSubject = (editingPattern?.subject || selectedSubject).toLowerCase();
     const isEnglishSubject = currentSubject === 'english';
     const autoTitle = getAutoTitle(type, 10, 1, index, isEnglishSubject);
+    const autoUrduTitle = getAutoUrduTitle(type, 10, 1, index);
     const newSection: PaperPatternSection = {
       id: sectionId, 
       type: type, 
       title: autoTitle || `Q${index + 1}. Attempt all.`, 
-      titleUrdu: '',
+      titleUrdu: autoUrduTitle || `سوال نمبر ${index + 1}۔ تمام سوالات کے جوابات دیں۔`,
       titleFontSize: 10,
       hideSectionMarks: false,
       hideSubPartMarks: false,
@@ -358,9 +582,15 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
              const updatedType = field === 'type' ? value : nextSection.type;
              const updatedCount = field === 'attemptCount' ? value : nextSection.attemptCount;
              const updatedMarks = field === 'marksPerQuestion' ? value : nextSection.marksPerQuestion;
+             
              const autoTitle = getAutoTitle(updatedType, updatedCount, updatedMarks, idx, isEnglishSubject);
              if (autoTitle) {
                nextSection.title = autoTitle;
+             }
+
+             const autoUrduTitle = getAutoUrduTitle(updatedType, updatedCount, updatedMarks, idx);
+             if (autoUrduTitle) {
+               nextSection.titleUrdu = autoUrduTitle;
              }
            }
         }
@@ -577,33 +807,64 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     }
   };
 
-  const renderSubjectGrid = () => (
+  const renderClassGrid = () => (
     <div className="animate-fadeIn">
       <div className="flex justify-between items-center mb-8">
-         <h2 className="text-2xl font-bold text-theme-text-main uppercase tracking-widest">Select Subject</h2>
+         <h2 className="text-2xl font-bold text-theme-text-main uppercase tracking-widest">Select Class</h2>
          <button onClick={loadData} className="flex items-center gap-2 text-sm text-gold-500 hover:text-theme-text-main transition-colors" disabled={isLoading}>
            <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} /> Refresh List
          </button>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {availableSubjects.map(subject => {
-          const patternCount = patterns.filter(p => p.subject?.toLowerCase() === subject.toLowerCase() || (!p.subject && p.classLevel)).length;
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+        {CLASSES.map((cls, idx) => {
+          const color = CARD_COLORS[idx % CARD_COLORS.length];
           return (
-            <div key={subject} onClick={() => handleSubjectClick(subject)} className="bg-gray-800 border border-gray-700 rounded-xl p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:border-gold-500 hover:-translate-y-1 hover:shadow-lg">
-              <h3 className="text-theme-text-main font-bold text-lg text-center leading-tight">{subject}</h3>
-              <div className="text-[10px] px-2 py-0.5 rounded font-bold bg-gold-500/10 text-gold-500 border border-gold-500/20 uppercase">{patternCount} Patterns</div>
+          <div key={cls} onClick={() => handleClassClick(cls)} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+            <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+            <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
+                <GraduationCap size={40} />
             </div>
-          );
-        })}
+            <h3 className="relative z-10 font-black text-theme-text-main text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</h3>
+          </div>
+        )})}
       </div>
     </div>
   );
 
+  const renderSubjectGrid = () => {
+    const classSubjects = subjectsMap[selectedClass] || [];
+    return (
+      <div className="animate-fadeIn">
+        <div className="flex justify-between items-center mb-8">
+           <h2 className="text-2xl font-bold text-theme-text-main uppercase tracking-widest">
+             Subjects for <span className="text-gold-500">{selectedClass}</span>
+           </h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          {classSubjects.map((subject, idx) => {
+            const patternCount = patterns.filter(p => (p.subject?.toLowerCase() === subject.toLowerCase() && p.classLevel === selectedClass) || (!p.subject && p.classLevel === selectedClass)).length;
+            const color = CARD_COLORS[idx % CARD_COLORS.length];
+            return (
+              <div key={subject} onClick={() => handleSubjectClick(subject)} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 overflow-hidden w-full h-36 ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+                <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300`}>
+                    <Layers size={28} className="transition-transform duration-300 group-hover:scale-110" />
+                </div>
+                <h3 className="relative z-10 font-bold text-theme-text-sub group-hover:text-theme-text-main text-base md:text-lg leading-tight transition-all duration-300 group-hover:tracking-wide">{subject}</h3>
+                <div className={`relative z-10 mt-1 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-widest transition-colors bg-surface-900 text-theme-text-muted border ${color.border} group-hover:bg-white/10 ${color.groupHoverIcon} group-hover:${color.border.replace('border-', 'border-')}`}>{patternCount} Patterns</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderPatternList = () => {
     const subjectPatterns = patterns.filter(p => 
       ((!p.subject) || p.subject.toLowerCase() === selectedSubject.toLowerCase()) &&
-      (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       (p.classLevel && p.classLevel.toLowerCase().includes(searchTerm.toLowerCase())))
+      p.classLevel === selectedClass &&
+      (p.name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return (
@@ -611,7 +872,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
             <div>
                <h2 className="text-2xl font-bold text-theme-text-main flex items-center gap-2 uppercase tracking-tighter">
-                 <span className="text-gold-500">{selectedSubject}</span> Patterns
+                 <span className="text-gold-500">{selectedSubject}</span> Patterns ({selectedClass})
                </h2>
                <p className="text-xs text-theme-text-muted mt-1 uppercase tracking-widest font-semibold">{subjectPatterns.length} Available Layouts</p>
             </div>
@@ -641,44 +902,53 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                <p className="text-lg font-bold">No patterns found matching your search.</p>
             </div>
          ) : (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {subjectPatterns.map(pattern => (
-                 <div key={pattern.id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gold-500 flex flex-col h-full transition-all group">
-                    <div className="flex justify-between items-start mb-2">
-                       <h3 className="font-bold text-theme-text-main text-lg leading-tight group-hover:text-gold-500 transition-colors">{pattern.name}</h3>
-                       {pattern.classLevel && <span className="text-[9px] bg-gray-950 text-gold-500 border border-gold-500/20 px-1.5 py-0.5 rounded font-black uppercase">{pattern.classLevel}</span>}
-                    </div>
-                    
-                    <div className="mb-6 flex-grow">
-                       <div className="flex flex-wrap gap-2 mt-3">
-                          {pattern.sections.map((s, i) => (
-                             <div key={i} className="flex flex-col gap-1">
-                               <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight shadow-inner transition-all hover:brightness-110 ring-1 ${getSectionTagStyles(s.type)} ${isUrdu(s.type) ? 'font-urdu py-0.5' : ''}`}>
-                                 <span className="uppercase opacity-90">{s.type}</span>
-                                 <span className="w-px h-2.5 bg-current opacity-20"></span>
-                                 <span className="brightness-125 font-black">{s.attemptCount}/{s.questionCount}</span>
-                               </span>
-                             </div>
-                          ))}
-                       </div>
-                    </div>
+           <div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {subjectPatterns.slice(0, visiblePatternCount).map(pattern => (
+                     <div key={pattern.id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gold-500 flex flex-col h-full transition-all group">
+                        <div className="flex justify-between items-start mb-2">
+                           <h3 className="font-bold text-theme-text-main text-lg leading-tight group-hover:text-gold-500 transition-colors">{pattern.name}</h3>
+                           {pattern.classLevel && <span className="text-[9px] bg-gray-950 text-gold-500 border border-gold-500/20 px-1.5 py-0.5 rounded font-black uppercase">{pattern.classLevel}</span>}
+                        </div>
+                        
+                        <div className="mb-6 flex-grow">
+                           <div className="flex flex-wrap gap-2 mt-3">
+                              {pattern.sections.map((s, i) => (
+                                 <div key={i} className="flex flex-col gap-1">
+                                   <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight shadow-inner transition-all hover:brightness-110 ring-1 ${getSectionTagStyles(s.type)} ${isUrdu(s.type) ? 'font-urdu py-0.5' : ''}`}>
+                                     <span className="uppercase opacity-90">{s.type}</span>
+                                     <span className="w-px h-2.5 bg-current opacity-20"></span>
+                                     <span className="brightness-125 font-black">{s.attemptCount}/{s.questionCount}</span>
+                                   </span>
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
 
-                    <div className="flex items-center justify-between border-t border-gray-700/50 pt-4 mt-auto">
-                       <div className="flex flex-col">
-                          <span className="text-[9px] text-theme-text-muted uppercase font-black tracking-widest">Total Weight</span>
-                          <span className="text-lg font-black text-gold-500 leading-none">{pattern.totalMarks} Marks</span>
-                       </div>
-                       <Button onClick={() => onUsePattern && onUsePattern({ ...pattern, subject: pattern.subject || selectedSubject })} className="!w-auto text-[10px] py-1.5 px-4 font-black">Use Layout</Button>
-                    </div>
+                        <div className="flex items-center justify-between border-t border-gray-700/50 pt-4 mt-auto">
+                           <div className="flex flex-col">
+                              <span className="text-[9px] text-theme-text-muted uppercase font-black tracking-widest">Total Weight</span>
+                              <span className="text-lg font-black text-gold-500 leading-none">{pattern.totalMarks} Marks</span>
+                           </div>
+                           <Button onClick={() => onUsePattern && onUsePattern({ ...pattern, subject: pattern.subject || selectedSubject })} className="!w-auto text-[10px] py-1.5 px-4 font-black">Use Layout</Button>
+                        </div>
 
-                    {isAdmin && (
-                      <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-700/30">
-                        <button onClick={() => handleEditPattern(pattern)} className="p-1.5 text-gold-500 hover:bg-gold-500/10 rounded transition-colors"><Edit size={14} /></button>
-                        <button onClick={() => handleDeletePattern(pattern.id)} className="p-1.5 text-red-400 hover:bg-red-900/20 rounded transition-colors"><Trash2 size={14} /></button>
-                      </div>
-                    )}
-                 </div>
-               ))}
+                        {isAdmin && (
+                          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-700/30">
+                            <button onClick={() => handleEditPattern(pattern)} className="p-1.5 text-gold-500 hover:bg-gold-500/10 rounded transition-colors"><Edit size={14} /></button>
+                            <button onClick={() => handleDeletePattern(pattern.id)} className="p-1.5 text-red-400 hover:bg-red-900/20 rounded transition-colors"><Trash2 size={14} /></button>
+                          </div>
+                        )}
+                     </div>
+                   ))}
+               </div>
+               {visiblePatternCount < subjectPatterns.length && (
+                  <div className="flex justify-center mt-8">
+                     <Button onClick={() => setVisiblePatternCount(prev => prev + 20)} variant="outline" className="w-full md:w-64 font-bold tracking-widest text-[12px] uppercase h-12">
+                        Load More
+                     </Button>
+                  </div>
+               )}
            </div>
          )}
       </div>
@@ -892,11 +1162,13 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                              {/* English Title Input */}
                              <div className="flex gap-1">
                                 {isCustomTitleMode ? (
-                                   <input 
+                                   <textarea 
                                      value={s.title} 
                                      onChange={e => handleUpdateSection(s.id, 'title', e.target.value)} 
-                                     className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-md border border-gray-600 outline-none" 
+                                     onKeyDown={e => handleTitleKeyDown(e, s.id, 'title')}
+                                     className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-md border border-gray-600 outline-none resize-none overflow-hidden min-h-[32px]" 
                                      placeholder="English Heading" 
+                                     rows={1}
                                    />
                                 ) : (
                                    <select 
@@ -913,12 +1185,14 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                                 )}
                              </div>
                              {/* Urdu Title Input */}
-                             <input 
+                             <textarea 
                                 value={s.titleUrdu || ''} 
                                 onChange={e => handleUpdateSection(s.id, 'titleUrdu', e.target.value)} 
-                                className="w-full bg-gray-800 text-gold-500 text-[10px] p-1.5 rounded-md border border-gray-700 outline-none font-urdu text-right" 
+                                onKeyDown={e => handleTitleKeyDown(e, s.id, 'titleUrdu')}
+                                className="w-full bg-gray-800 text-gold-500 text-[10px] p-1.5 rounded-md border border-gray-700 outline-none font-urdu text-right resize-none overflow-hidden min-h-[32px]" 
                                 placeholder="اردو عنوان" 
                                 dir="rtl"
+                                rows={1}
                              />
                           </div>
                         </div>
@@ -973,12 +1247,13 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
 
                         {/* 🔹 MANDATORY CHAPTERS INPUT */}
                         <div className="col-span-2">
-                           <input 
-                             type="text" 
-                             value={s.specificChapters?.join(', ') || ''} 
-                             onChange={e => handleUpdateSection(s.id, 'specificChapters', e.target.value)} 
-                             className="w-full bg-gray-800 text-theme-text-main text-[10px] p-2 rounded-lg border border-gray-700 outline-none" 
-                             placeholder="e.g. 1, 2, 3" 
+                           <ChapterSelector 
+                             id={s.id}
+                             selectedChapters={s.specificChapters || []}
+                             availableChapters={availableChapters}
+                             onChange={chapters => handleUpdateSection(s.id, 'specificChapters', chapters)}
+                             isOpen={openChapterDropdownId === s.id}
+                             onToggle={() => setOpenChapterDropdownId(openChapterDropdownId === s.id ? null : s.id)}
                            />
                         </div>
 
@@ -1076,12 +1351,13 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
                                     </div>
                                     
                                     <div className="col-span-2">
-                                       <input 
-                                         type="text"
-                                         value={part.specificChapters?.join(', ') || ''} 
-                                         onChange={e => handleUpdatePart(s.id, part.id, 'specificChapters', e.target.value)}
-                                         className="w-full bg-gray-900 border border-gray-700 rounded p-1.5 text-[10px] text-theme-text-main outline-none focus:border-gold-500"
-                                         placeholder="e.g. 1, 2"
+                                       <ChapterSelector 
+                                         id={part.id}
+                                         selectedChapters={part.specificChapters || []}
+                                         availableChapters={availableChapters}
+                                         onChange={chapters => handleUpdatePart(s.id, part.id, 'specificChapters', chapters)}
+                                         isOpen={openChapterDropdownId === part.id}
+                                         onToggle={() => setOpenChapterDropdownId(openChapterDropdownId === part.id ? null : part.id)}
                                        />
                                     </div>
 
@@ -1130,16 +1406,24 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     );
   };
 
+  const handleGlobalBack = () => {
+    if (view === 'CLASSES') onBack();
+    else if (view === 'SUBJECTS') setView('CLASSES');
+    else if (view === 'LIST') setView('SUBJECTS');
+    else if (view === 'CREATE') setView('LIST');
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col font-sans transition-colors duration-300">
       <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-10 h-16 flex items-center px-6">
-        <button onClick={() => view === 'SUBJECTS' ? onBack() : setView('SUBJECTS')} className="text-theme-text-muted hover:text-gold-500 flex items-center transition-colors">
+        <button onClick={handleGlobalBack} className="text-theme-text-muted hover:text-gold-500 flex items-center transition-colors">
           <ArrowLeft size={20} className="mr-1" /> Back
         </button>
         <div className="flex-grow text-center text-lg font-bold text-theme-text-main tracking-widest uppercase">Exam Layouts</div>
         <div className="w-16"></div>
       </header>
       <main className="flex-grow p-4 sm:p-8 max-w-7xl mx-auto w-full">
+        {view === 'CLASSES' && renderClassGrid()}
         {view === 'SUBJECTS' && renderSubjectGrid()}
         {view === 'LIST' && renderPatternList()}
         {view === 'CREATE' && renderCreateForm()}

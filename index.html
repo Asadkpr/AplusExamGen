@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>APLUS ExamGen</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -152,6 +154,10 @@
           color: black !important;
         }
         .print-hidden { display: none !important; }
+        .page-break-before {
+          page-break-before: always !important;
+          break-before: page !important;
+        }
       }
 
       .custom-scrollbar::-webkit-scrollbar {
@@ -174,6 +180,26 @@
         from { opacity: 0; transform: translateY(5px); }
         to { opacity: 1; transform: translateY(0); }
       }
+
+      /* HIDE NETLIFY WIDGETS & BADGES COMPLETELY */
+      #netlify-identity-widget,
+      .netlify-identity-widget,
+      a[href*="netlify.com/v1/badges"] {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      
+      /* BULLETPROOF FIX: Hide everything appended to body by external services (like Netlify) except our React App */
+      body > *:not(#root):not(script):not(style) {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        z-index: -9999 !important;
+        position: absolute !important;
+        pointer-events: none !important;
+      }
     </style>
     <script type="importmap">
 {
@@ -194,5 +220,30 @@
   <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // Force hide Netlify injected badges dynamically
+      const removeNetlifyElements = () => {
+        document.querySelectorAll('a').forEach(a => {
+          if (a.href.includes('netlify.com') && !a.href.includes('aplusexamgen')) {
+             a.style.setProperty('display', 'none', 'important');
+             if(a.parentElement && a.parentElement.tagName === 'DIV') {
+                 a.parentElement.style.setProperty('display', 'none', 'important');
+             }
+          }
+        });
+        
+        // Target specifically by common netlify injected IDs
+        const idsToHide = ['netlify-identity-widget', 'netlify-badge'];
+        idsToHide.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.setProperty('display', 'none', 'important');
+        });
+      };
+      
+      removeNetlifyElements();
+      setInterval(removeNetlifyElements, 1000); // Check repeatedly in case it loads late
+      const observer = new MutationObserver(removeNetlifyElements);
+      observer.observe(document.body, { childList: true, subtree: true });
+    </script>
   </body>
 </html>

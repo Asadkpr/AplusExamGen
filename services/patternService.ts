@@ -7,31 +7,72 @@ import {
   setDoc, 
   deleteDoc, 
   doc,
-  getDoc
+  getDoc,
+  limit,
+  getCountFromServer
 } from 'firebase/firestore';
 import { PaperPattern } from '../types';
 //import { PAPER_PATTERNS as DEFAULT_PATTERNS } from '../constants';
-import { executeAsAdmin } from './authService';
 import { getVisibilitySettings, toggleVisibility } from './chapterService';
 
 const COLLECTION = 'patterns';
 const LOCAL_KEY = 'aplus_custom_patterns_v1';
+const CACHE_KEY = 'aplus_all_patterns_cache';
 
-// 🔹 Memory Cache for extreme speed on repeated access
+// 🔹 Memory Cache
 let cachedPatterns: PaperPattern[] | null = null;
 let lastFetchTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 25 * 1000; // 25 seconds for fast sync across devices
+
+let cachedPatternCount: number | null = null;
+let lastPatternCountFetchTime = 0;
+
+export const getCachedPatternCountSync = () => {
+  if (cachedPatternCount !== null) return cachedPatternCount;
+  const stored = localStorage.getItem('total_patterns_count');
+  if (stored) return parseInt(stored, 10);
+  return null;
+};
+
+export const getPatternCount = async (forceRefresh: boolean = false): Promise<number> => {
+  const now = Date.now();
+  if (!forceRefresh && cachedPatternCount !== null && (now - lastPatternCountFetchTime < CACHE_DURATION)) {
+    return cachedPatternCount;
+  }
+  try {
+    const coll = collection(db, COLLECTION);
+    const countPromise = getCountFromServer(coll);
+    const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+    const snapshot = await Promise.race([countPromise, timeoutPromise]) as any;
+    const count = snapshot.data().count;
+    cachedPatternCount = count;
+    lastPatternCountFetchTime = now;
+    localStorage.setItem('total_patterns_count', count.toString());
+    return count;
+  } catch (error) {
+    try {
+      const coll = collection(db, COLLECTION);
+      const docsPromise = getDocs(coll);
+      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+      const snapshot = await Promise.race([docsPromise, timeoutPromise]) as any;
+      const count = snapshot.docs.length;
+      cachedPatternCount = count;
+      localStorage.setItem('total_patterns_count', count.toString());
+      return count;
+    } catch (fallbackError) {
+      return cachedPatternCount || parseInt(localStorage.getItem('total_patterns_count') || '0', 10);
+    }
+  }
+};
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
 export const getPatterns = async (forceRefresh: boolean = false): Promise<PaperPattern[]> => {
-  // 1. Return from memory cache if valid and not forced
   const now = Date.now();
   if (!forceRefresh && cachedPatterns && (now - lastFetchTime < CACHE_DURATION)) {
     return cachedPatterns;
   }
 
-  // 2. Load visibility settings to filter hidden system patterns
   let hiddenPatternIds: string[] = [];
   try {
     const visibility = await getVisibilitySettings();
@@ -40,53 +81,64 @@ export const getPatterns = async (forceRefresh: boolean = false): Promise<PaperP
     console.warn("Could not load pattern visibility settings", e);
   }
 
-  const customPatterns: PaperPattern[] = [];
-  
-  const fetchOp = async () => {
-    const querySnapshot = await getDocs(collection(db, COLLECTION));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PaperPattern));
+  const fetchMergedPatterns = async (): Promise<PaperPattern[]> => {
+    const mergedPatterns: PaperPattern[] = [];
+    let fetchSucceeded = false;
+    try {
+      const fetchPromise = getDocs(collection(db, COLLECTION));
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error("Firebase fetch timeout")), 3500)
+      );
+      
+      const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]) as any;
+      const fetched = querySnapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id } as PaperPattern));
+      mergedPatterns.push(...fetched);
+      fetchSucceeded = true;
+    } catch (e: any) {
+      console.warn("Firebase fetch patterns failed or timed out (using local backup):", e.message);
+    }
+
+    try {
+      const stored = localStorage.getItem(LOCAL_KEY);
+      if (stored) {
+        const localPatterns: PaperPattern[] = JSON.parse(stored);
+        localPatterns.forEach(p => {
+          if (!mergedPatterns.find(cp => cp.id === p.id)) {
+            mergedPatterns.push(p);
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Local fetch patterns error", e);
+    }
+
+    const finalPatterns = mergedPatterns.filter(p => !hiddenPatternIds.includes(p.id));
+    
+    // Update local cache & memory
+    if (fetchSucceeded || finalPatterns.length > 0) {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(finalPatterns));
+      } catch (e) {}
+      cachedPatterns = finalPatterns;
+      lastFetchTime = Date.now();
+    }
+    
+    return finalPatterns;
   };
 
-  // 3. Try Firebase
+  // Try fetching fresh data first, with fallback to stored cache if fetch fails
   try {
-    const fetched = await fetchOp();
-    customPatterns.push(...fetched);
-  } catch (e: any) {
-    console.warn("Firebase fetch patterns failed", e.code);
-    if (e.code === 'permission-denied' || e.code === 'failed-precondition') {
-       try {
-         const fetched = await executeAsAdmin(fetchOp);
-         customPatterns.push(...fetched);
-       } catch (adminErr) {
-         console.error("Admin fetch patterns failed", adminErr);
-       }
-    }
+    return await fetchMergedPatterns();
+  } catch (_) {
+    try {
+      const storedCache = localStorage.getItem(CACHE_KEY);
+      if (storedCache) {
+        const parsed = JSON.parse(storedCache);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return cachedPatterns || [];
   }
-
-  // 4. Try Local Storage
-  try {
-    const stored = localStorage.getItem(LOCAL_KEY);
-    if (stored) {
-      const localPatterns: PaperPattern[] = JSON.parse(stored);
-      localPatterns.forEach(p => {
-        if (!customPatterns.find(cp => cp.id === p.id)) {
-          customPatterns.push(p);
-        }
-      });
-    }
-  } catch (e) {
-    console.error("Local fetch patterns error", e);
-  }
-
-  // 5. Filter defaults and merge
-  //const filteredDefaults = DEFAULT_PATTERNS.filter(p => !hiddenPatternIds.includes(p.id));
-  const filteredCustoms = customPatterns.filter(p => !hiddenPatternIds.includes(p.id));
-  const allPatterns = filteredCustoms;
-  // 6. Update memory cache
-  cachedPatterns = allPatterns;
-  lastFetchTime = now;
-
-  return allPatterns;
 };
 
 export const savePattern = async (pattern: PaperPattern): Promise<boolean> => {
@@ -113,18 +165,21 @@ export const savePattern = async (pattern: PaperPattern): Promise<boolean> => {
     await saveOp();
     savedCloud = true;
   } catch (error: any) {
-    if (error.code === 'permission-denied') {
-        try {
-            await executeAsAdmin(saveOp);
-            savedCloud = true;
-        } catch(adminErr) {
-            console.error("Admin save failed too", adminErr);
-        }
-    }
+    console.error("Save failed", error);
   }
 
-  // Clear memory cache so next fetch gets fresh data
+  // Clear memory and local cache so next fetch gets fresh data
   cachedPatterns = null;
+  cachedPatternCount = null;
+  lastPatternCountFetchTime = 0;
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    const prevCountStr = localStorage.getItem('total_patterns_count');
+    if (prevCountStr !== null) {
+      const prev = parseInt(prevCountStr, 10);
+      if (!isNaN(prev)) localStorage.setItem('total_patterns_count', (prev + 1).toString());
+    }
+  } catch (e) {}
 
   try {
     const stored = localStorage.getItem(LOCAL_KEY);
@@ -143,8 +198,18 @@ export const savePattern = async (pattern: PaperPattern): Promise<boolean> => {
 };
 
 export const deletePattern = async (id: string): Promise<void> => {
-  // Clear memory cache immediately
+  // Clear memory and local cache immediately
   cachedPatterns = null;
+  cachedPatternCount = null;
+  lastPatternCountFetchTime = 0;
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    const prevCountStr = localStorage.getItem('total_patterns_count');
+    if (prevCountStr !== null) {
+      const prev = parseInt(prevCountStr, 10);
+      if (!isNaN(prev)) localStorage.setItem('total_patterns_count', Math.max(0, prev - 1).toString());
+    }
+  } catch (e) {}
 
   const deleteOp = async () => {
     // 1. Check if it's a custom pattern in the DB
@@ -163,13 +228,7 @@ export const deletePattern = async (id: string): Promise<void> => {
   try {
     await deleteOp();
   } catch (e: any) {
-     if (e.code === 'permission-denied') {
-        try {
-            await executeAsAdmin(deleteOp);
-        } catch(adminErr) {
-            console.error("Admin delete failed", adminErr);
-        }
-    }
+     console.error("Delete failed", e);
   }
 
   // 3. Local Storage Sync

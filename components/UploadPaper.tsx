@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { Input } from './Input';
-import { CLASSES } from '../constants';
+import { CLASSES, SUBJECTS_BY_CLASS, CARD_COLORS } from '../constants';
 import { getSubjects, addSubject, deleteSubject, renameSubject } from '../services/subjectService';
 import { getChapters, addChapter, deleteChapter, renameChapter } from '../services/chapterService';
 import { saveUploadedChapterContent } from '../services/questionService';
@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, X, Info, 
   GraduationCap, FileText, ChevronRight, Plus, Trash2, Edit, RefreshCw, 
-  Database, ListChecks, AlertTriangle, FileDown, BookText
+  Database, ListChecks, AlertTriangle, FileDown, BookText, Layers
 } from 'lucide-react';
 import { Chapter, User, Question, Subtopic, QuestionType } from '../types';
 
@@ -63,10 +63,10 @@ const renderFormattedTextPreview = (text: string) => {
     <span className={`${isUrdu ? 'font-urdu text-right block text-lg' : ''} whitespace-pre-wrap`} dir={isUrdu ? 'rtl' : 'ltr'}>
       {parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-gold-500 font-bold">{part.slice(2, -2)}</strong>;
+          return <strong key={i} className="text-gold-500 font-bold [.light-theme_&]:text-gold-700">{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith('++') && part.endsWith('++')) {
-          return <u key={i} className="underline decoration-gold-500/50">{part.slice(2, -2)}</u>;
+          return <u key={i} className="underline decoration-gold-500/50 [.light-theme_&]:decoration-gold-500/70">{part.slice(2, -2)}</u>;
         }
         return part;
       })}
@@ -76,15 +76,15 @@ const renderFormattedTextPreview = (text: string) => {
 
 const getSubtypeColor = (type: string) => {
   const t = type.toLowerCase();
-  if (t === 'verb') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (t === 'spelling') return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
-  if (t === 'meaning' || t === 'synonym') return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-  if (t === 'grammar') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  if (t === 'essay' || t === 'story' || t === 'letter' || t === 'dialogue') return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-  if (t === 'translate' || t === 'voice') return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
-  if (t === 'passage' || t === 'summary' || t === 'paraphrase') return 'bg-teal-500/10 text-teal-400 border-teal-500/20';
-  if (t === 'idioms' || t === 'sentences') return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
-  return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+  if (t === 'verb') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 [.light-theme_&]:bg-emerald-100 [.light-theme_&]:text-emerald-700 [.light-theme_&]:border-emerald-200';
+  if (t === 'spelling') return 'bg-sky-500/10 text-sky-400 border-sky-500/20 [.light-theme_&]:bg-sky-100 [.light-theme_&]:text-sky-700 [.light-theme_&]:border-sky-200';
+  if (t === 'meaning' || t === 'synonym') return 'bg-purple-500/10 text-purple-400 border-purple-500/20 [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
+  if (t === 'grammar') return 'bg-amber-500/10 text-amber-400 border-amber-500/20 [.light-theme_&]:bg-amber-100 [.light-theme_&]:text-amber-700 [.light-theme_&]:border-amber-200';
+  if (t === 'essay' || t === 'story' || t === 'letter' || t === 'dialogue') return 'bg-rose-500/10 text-rose-400 border-rose-500/20 [.light-theme_&]:bg-rose-100 [.light-theme_&]:text-rose-700 [.light-theme_&]:border-rose-200';
+  if (t === 'translate' || t === 'voice') return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 [.light-theme_&]:bg-indigo-100 [.light-theme_&]:text-indigo-700 [.light-theme_&]:border-indigo-200';
+  if (t === 'passage' || t === 'summary' || t === 'paraphrase') return 'bg-teal-500/10 text-teal-400 border-teal-500/20 [.light-theme_&]:bg-teal-100 [.light-theme_&]:text-teal-700 [.light-theme_&]:border-teal-200';
+  if (t === 'idioms' || t === 'sentences') return 'bg-orange-500/10 text-orange-400 border-orange-500/20 [.light-theme_&]:bg-orange-100 [.light-theme_&]:text-orange-700 [.light-theme_&]:border-orange-200';
+  return 'bg-blue-500/10 text-blue-400 border-blue-500/20 [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
 };
 
 export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
@@ -119,25 +119,37 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     if (selectedClass) loadSubjects();
   }, [selectedClass]);
 
-  const loadSubjects = async () => {
+  const loadSubjects = async (cls: string = selectedClass) => {
+    if (!cls) return;
+    const staticSubjects = SUBJECTS_BY_CLASS[cls] || [];
+    setAvailableSubjects(staticSubjects);
     try {
-      const allSubjectsMap = await getSubjects();
-      setAvailableSubjects(allSubjectsMap[selectedClass] || []);
+      const allSubjectsMap = await getSubjects(true);
+      const dynamicSubjects = allSubjectsMap[cls];
+      if (dynamicSubjects && dynamicSubjects.length > 0) {
+        setAvailableSubjects(dynamicSubjects);
+      } else {
+        setAvailableSubjects(staticSubjects);
+      }
     } catch (e) {
       console.error("Failed to load subjects", e);
     }
   };
 
   useEffect(() => {
-    if (selectedClass && selectedSubject) loadChapters();
+    if (selectedClass && selectedSubject) loadChapters(selectedSubject, selectedClass);
   }, [selectedClass, selectedSubject]);
 
-  const loadChapters = async () => {
+  const loadChapters = async (subj: string = selectedSubject, cls: string = selectedClass) => {
+    if (!subj || !cls) return;
+    setIsActionLoading(true);
     try {
-      const chapters = await getChapters(selectedSubject, selectedClass);
+      const chapters = await getChapters(subj, cls, false, true);
       setAvailableChapters(chapters);
     } catch (e) {
       console.error("Failed to load chapters", e);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -149,7 +161,9 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       setSelectedChapter(null);
       resetUploadState();
       setStep(3);
-      loadChapters();
+      if (selectedSubject && selectedClass) {
+        loadChapters(selectedSubject, selectedClass);
+      }
     }
   };
 
@@ -177,10 +191,14 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     try {
       const success = await addSubject(selectedClass, newSubjectName.trim());
       if (success) { 
-        await loadSubjects(); 
+        await loadSubjects(selectedClass); 
         setAddSubjectModal(false); 
         setNewSubjectName(''); 
+      } else {
+        alert("Could not add subject. Please try again.");
       }
+    } catch (err: any) {
+      alert("Error adding subject: " + (err?.message || err));
     } finally { 
       setIsActionLoading(false); 
     }
@@ -194,7 +212,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       try {
         const success = await renameSubject(selectedClass, editingSubjectOriginalName, cleanNewName);
         if (success) {
-          await loadSubjects();
+          await loadSubjects(selectedClass);
           setEditSubjectModal(false);
           setNewSubjectName('');
           setEditingSubjectOriginalName('');
@@ -205,7 +223,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         console.error("Subject update failed", err);
       } finally { 
         setIsActionLoading(false); 
-    }
+      }
     } else {
       setEditSubjectModal(false);
     }
@@ -216,7 +234,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     setIsActionLoading(true);
     try {
       await deleteSubject(selectedClass, subj);
-      await loadSubjects();
+      await loadSubjects(selectedClass);
     } catch (e) {
       console.error("Deletion failed", e);
     } finally {
@@ -231,10 +249,14 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     try {
       const success = await addChapter(selectedSubject, selectedClass, newChapterName.trim());
       if (success) {
-        await loadChapters();
+        await loadChapters(selectedSubject, selectedClass);
         setAddChapterModal(false);
         setNewChapterName('');
+      } else {
+        alert("Failed to add chapter. Please try again.");
       }
+    } catch (err: any) {
+      alert("Error adding chapter: " + (err?.message || err));
     } finally {
       setIsActionLoading(false);
     }
@@ -247,7 +269,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       try {
         const success = await renameChapter(editingChapter.id, newChapterName.trim());
         if (success) {
-          await loadChapters();
+          await loadChapters(selectedSubject, selectedClass);
           setEditChapterModal(false);
           setNewChapterName('');
           setEditingChapter(null);
@@ -263,7 +285,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     setIsActionLoading(true);
     try {
       await deleteChapter(chId);
-      await loadChapters();
+      await loadChapters(selectedSubject, selectedClass);
     } catch (e) {
       console.error("Chapter deletion failed", e);
     } finally {
@@ -513,7 +535,9 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
         if (success) { 
           setParsedCount(finalQuestions.length); 
           setUploadSuccess(true); 
-          await loadChapters(); 
+          await loadChapters(selectedSubject, selectedClass); 
+        } else {
+          alert("Could not complete upload. Please try again.");
         }
     } catch (error: any) { 
       alert(error.message || "Error uploading data."); 
@@ -603,13 +627,18 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
       <main className="flex-grow max-w-6xl mx-auto w-full px-4 py-8">
           {step === 1 && (
-            <div className="animate-fadeIn grid grid-cols-2 md:grid-cols-4 gap-6">
-              {CLASSES.map(cls => (
-                <div key={cls} onClick={() => { setSelectedClass(cls); setStep(2); }} className="bg-gray-800 border border-gray-700 hover:border-gold-500 rounded-xl p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 group">
-                  <div className="text-gold-500 group-hover:scale-110 transition-transform"><GraduationCap size={40} /></div>
-                  <span className="font-bold text-white text-lg">{cls}</span>
+            <div className="animate-fadeIn grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              {CLASSES.map((cls, idx) => {
+                const color = CARD_COLORS[idx % CARD_COLORS.length];
+                return (
+                <div key={cls} onClick={() => { setSelectedClass(cls); loadSubjects(cls); setStep(2); }} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                  <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
+                      <GraduationCap size={40} />
+                  </div>
+                  <h3 className="relative z-10 font-black text-theme-text-main text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</h3>
                 </div>
-              ))}
+              )})}
             </div>
           )}
 
@@ -623,7 +652,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                    </Button>
                  )}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                 {isActionLoading && availableSubjects.length === 0 ? (
                   <div className="col-span-full py-12 text-center text-gray-500 flex flex-col items-center">
                      <RefreshCw className="animate-spin mb-2" />
@@ -631,14 +660,20 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                   </div>
                 ) : (
                   <>
-                    {availableSubjects.map(subj => (
+                    {availableSubjects.map((subj, idx) => {
+                      const color = CARD_COLORS[idx % CARD_COLORS.length];
+                      return (
                       <div 
                         key={subj} 
-                        className={`bg-gray-800 border border-gray-700 hover:border-gold-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all hover:-translate-y-1 min-h-[140px] relative group ${isEnglishSubject(subj) ? 'ring-2 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : ''}`}
-                        onClick={() => { setSelectedSubject(subj); setStep(3); }}
+                        className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 overflow-hidden w-full h-36 ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow} ${isEnglishSubject(subj) ? 'ring-2 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : ''}`}
+                        onClick={() => { setSelectedSubject(subj); loadChapters(subj, selectedClass); setStep(3); }}
                       >
+                        <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                        <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300`}>
+                            <Layers size={28} className="transition-transform duration-300 group-hover:scale-110" />
+                        </div>
                         {isAdmin && (
-                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                             <button 
                               onClick={(e) => { e.stopPropagation(); setEditingSubjectOriginalName(subj); setNewSubjectName(subj); setEditSubjectModal(true); }}
                               className="p-1.5 bg-gray-900/80 text-blue-400 rounded hover:bg-blue-900/40 transition-colors"
@@ -653,16 +688,16 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                             </button>
                           </div>
                         )}
-                        {isEnglishSubject(subj) && <div className="absolute -top-2 -right-2 bg-emerald-500 text-black px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-tighter shadow-lg">Specialized Parsing</div>}
-                        <span className="font-bold text-white text-lg text-center leading-tight">{subj}</span>
+                        {isEnglishSubject(subj) && <div className="absolute -top-2 -right-2 bg-emerald-500 text-black px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-tighter shadow-lg z-20">Specialized Parsing</div>}
+                        <h3 className="relative z-10 font-bold text-theme-text-sub group-hover:text-theme-text-main text-base md:text-lg leading-tight transition-all duration-300 group-hover:tracking-wide">{subj}</h3>
                       </div>
-                    ))}
+                    )})}
                     {isAdmin && (
                       <div 
                         onClick={() => setAddSubjectModal(true)}
-                        className="bg-gray-900/50 border-2 border-dashed border-gray-700 hover:border-gold-500 hover:bg-gray-800 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all min-h-[140px] group"
+                        className="group relative cursor-pointer rounded-2xl border-2 border-dashed border-surface-700 bg-surface-900/50 hover:bg-surface-800 backdrop-blur-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 hover:border-gold-500 hover:-translate-y-1 w-full h-36"
                       >
-                        <Plus size={32} className="text-gray-500 group-hover:text-gold-500 mb-2" />
+                        <Plus size={32} className="text-gray-500 group-hover:text-gold-500 mb-2 transition-transform group-hover:scale-110" />
                         <span className="text-xs font-bold text-gray-500 group-hover:text-gold-500 uppercase">Add New</span>
                       </div>
                     )}
@@ -715,6 +750,27 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                           </div>
                       </div>
                     ))}
+                    {availableChapters.length === 0 && (
+                      <div className="col-span-full py-10 px-6 text-center border-2 border-dashed border-gray-700 rounded-2xl bg-gray-800/40 flex flex-col items-center">
+                        <BookText size={40} className="text-gray-500 mb-3" />
+                        <p className="text-gray-300 font-semibold mb-1">No chapters added yet for {selectedSubject}.</p>
+                        <p className="text-gray-500 text-xs mb-4">Add your first chapter to upload questions or papers.</p>
+                        {isAdmin && (
+                          <Button onClick={() => setAddChapterModal(true)} className="!w-auto text-xs py-2 px-5">
+                            <Plus size={16} className="mr-1.5" /> Add First Chapter
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {isAdmin && availableChapters.length > 0 && (
+                      <div 
+                        onClick={() => setAddChapterModal(true)}
+                        className="group relative cursor-pointer rounded-xl border-2 border-dashed border-gray-700 bg-gray-900/50 hover:bg-gray-800 p-5 flex items-center justify-center gap-3 text-center transition-all duration-300 hover:border-gold-500 hover:-translate-y-0.5 min-h-[80px]"
+                      >
+                        <Plus size={24} className="text-gray-400 group-hover:text-gold-500 transition-transform group-hover:scale-110" />
+                        <span className="text-sm font-bold text-gray-300 group-hover:text-gold-500 uppercase tracking-wider">+ Add New Chapter</span>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -853,12 +909,12 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
 const getTypeColor = (type: string) => {
   switch(type.toUpperCase()) {
-      case 'MCQ': return 'bg-blue-900/50 text-blue-300 border-blue-500/30';
-      case 'SHORT': return 'bg-green-900/50 text-green-300 border-green-500/30';
-      case 'LONG': return 'bg-purple-900/50 text-purple-300 border-purple-500/30';
-      case 'NUMERICAL': return 'bg-orange-900/50 text-orange-300 border-orange-500/30';
-      case 'ESSAY': return 'bg-rose-900/50 text-rose-300 border-rose-500/30';
-      case 'TRANSLATION': return 'bg-indigo-900/50 text-indigo-300 border-indigo-500/30';
-      default: return 'bg-gray-800 text-gray-400 border-gray-600';
+      case 'MCQ': return 'bg-blue-900/50 text-blue-300 border-blue-500/30 [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
+      case 'SHORT': return 'bg-green-900/50 text-green-300 border-green-500/30 [.light-theme_&]:bg-green-100 [.light-theme_&]:text-green-700 [.light-theme_&]:border-green-200';
+      case 'LONG': return 'bg-purple-900/50 text-purple-300 border-purple-500/30 [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
+      case 'NUMERICAL': return 'bg-orange-900/50 text-orange-300 border-orange-500/30 [.light-theme_&]:bg-orange-100 [.light-theme_&]:text-orange-700 [.light-theme_&]:border-orange-200';
+      case 'ESSAY': return 'bg-rose-900/50 text-rose-300 border-rose-500/30 [.light-theme_&]:bg-rose-100 [.light-theme_&]:text-rose-700 [.light-theme_&]:border-rose-200';
+      case 'TRANSLATION': return 'bg-indigo-900/50 text-indigo-300 border-indigo-500/30 [.light-theme_&]:bg-indigo-100 [.light-theme_&]:text-indigo-700 [.light-theme_&]:border-indigo-200';
+      default: return 'bg-gray-800 text-gray-400 border-gray-600 [.light-theme_&]:bg-gray-100 [.light-theme_&]:text-gray-700 [.light-theme_&]:border-gray-200';
   }
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SavedPaper, User } from '../types';
 import { getSavedPapers, deletePaper } from '../services/paperService';
 import { Button } from './Button';
-import { ArrowLeft, Trash2, Eye, FileText, Calendar, Search, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, Trash2, Eye, FileText, Calendar, Search, User as UserIcon, RefreshCw } from 'lucide-react';
 
 interface SavedPapersProps {
   onBack: () => void;
@@ -14,18 +14,19 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
   const [papers, setPapers] = useState<SavedPaper[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [displayLimit, setDisplayLimit] = useState(20);
   
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
 
-  const fetchPapers = async () => {
+  const fetchPapers = async (force: boolean = true) => {
     setIsLoading(true);
-    const data = await getSavedPapers(user.id, isAdmin);
+    const data = await getSavedPapers(user.id, isAdmin, force);
     setPapers(data);
     setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchPapers();
+    fetchPapers(true);
   }, [user.id, isAdmin]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
@@ -46,15 +47,27 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
     p.classLevel.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  useEffect(() => {
+    setDisplayLimit(20);
+  }, [searchTerm]);
+
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col font-sans transition-colors duration-300">
-      <header className="bg-gray-800 shadow-sm border-b border-gray-700 sticky top-0 z-10 print:hidden h-16 flex items-center px-6">
+      <header className="bg-gray-800 shadow-sm border-b border-gray-700 sticky top-0 z-10 print:hidden h-16 flex items-center justify-between px-6">
           <button onClick={onBack} className="text-theme-text-muted hover:text-gold-500 flex items-center transition-colors">
             <ArrowLeft size={20} className="mr-1" />
             <span className="font-medium">Dashboard</span>
           </button>
-          <div className="flex-grow text-center text-xl font-bold text-theme-text-main tracking-wider uppercase">Saved Papers</div>
-          <div className="w-20"></div>
+          <div className="text-center text-xl font-bold text-theme-text-main tracking-wider uppercase">Saved Papers</div>
+          <button 
+            onClick={() => fetchPapers(true)} 
+            disabled={isLoading}
+            title="Refresh Papers"
+            className="text-theme-text-muted hover:text-gold-500 p-2 rounded-lg transition-colors flex items-center gap-1.5 text-sm"
+          >
+            <RefreshCw size={18} className={isLoading ? "animate-spin text-gold-500" : ""} />
+            <span className="hidden sm:inline">Sync</span>
+          </button>
       </header>
 
       <main className="flex-grow p-4 sm:p-8 max-w-6xl mx-auto w-full print:hidden">
@@ -86,8 +99,9 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
             {!searchTerm && <p className="text-sm mt-2">Generate your first paper to see it listed here.</p>}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPapers.map((paper) => (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPapers.slice(0, displayLimit).map((paper) => (
               <div 
                 key={paper.id} 
                 onClick={() => onOpenPaper(paper)}
@@ -126,7 +140,19 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
               </div>
             ))}
           </div>
-        )}
+          
+          {filteredPapers.length > displayLimit && (
+            <div className="mt-8 flex justify-center">
+              <button 
+                onClick={() => setDisplayLimit(prev => prev + 20)}
+                className="px-8 py-3 bg-gray-800 text-gold-500 font-bold rounded-xl hover:bg-gray-700 hover:text-gold-400 border border-gold-500/30 transition-colors uppercase tracking-widest text-sm shadow-lg shadow-black/20"
+              >
+                Load More Papers
+              </button>
+            </div>
+          )}
+        </>
+      )}
       </main>
     </div>
   );

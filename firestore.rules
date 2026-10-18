@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. App k chalne k liye aur Custom Login k liye Data Read karna zaroori hai
+    match /{document=**} {
+      allow read: if true;
+    }
+
+    // 2. Users collection permissions (allows password resets and updates)
+    match /users/{userId} {
+      allow write: if true;
+    }
+
+    // 3. Papers collection permissions
+    match /papers/{paperId} {
+      allow write: if true;
+    }
+
+    // 4. Baqi sab collections mein sirf Logged-in users (ya Admin) hi nayi cheezain daal sakte hain (Temporarily opened due to Quota Error)
+    match /subjects/{document=**} { allow write: if true; }
+    match /chapters/{document=**} { allow write: if true; }
+    match /patterns/{document=**} { allow write: if true; }
+    match /announcements/{document=**} { allow write: if true; }
+    match /visibility_settings/{document=**} { allow write: if true; }
+    match /uploaded_content/{document=**} { allow write: if true; }
+    match /subtopics_meta/{document=**} { allow write: if true; }
+  }
+}

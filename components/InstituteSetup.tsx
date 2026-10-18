@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { APP_NAME, COPYRIGHT_TEXT, INSTITUTE_TYPES, PUNJAB_CITIES } from '../constants';
-import { updateUser } from '../services/authService';
+import { updateUser, changeUserPassword } from '../services/authService';
 import { User, InstituteProfile } from '../types';
 import { Input } from './Input';
 import { Select } from './Select';
 import { Button } from './Button';
-import { Upload, Building2, AlertCircle, X, MapPin } from 'lucide-react';
+import { Upload, Building2, AlertCircle, X, MapPin, ArrowLeft, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 interface InstituteSetupProps {
   user: User;
   onSuccess: (updatedUser: User) => void;
+  onBack?: () => void;
 }
 
-export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess }) => {
+export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess, onBack }) => {
   const [formData, setFormData] = useState<Omit<InstituteProfile, 'logoUrl'>>({
     instituteName: user.instituteProfile?.instituteName || '',
     instituteType: user.instituteProfile?.instituteType || '',
@@ -28,6 +29,17 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
   const [logoPreview, setLogoPreview] = useState<string | null>(user.instituteProfile?.logoUrl || null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // Change Password state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
+  const [isPassLoading, setIsPassLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -59,19 +71,8 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
   };
 
   const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (!logoPreview) newErrors.logo = "Institute Logo is required";
-    if (!formData.instituteName.trim()) newErrors.instituteName = "Institute Name is required";
-    if (!formData.instituteType) newErrors.instituteType = "Please select an Institute Type";
-    if (!formData.address.trim()) newErrors.address = "Address is required";
-    if (!formData.city.trim()) newErrors.city = "City name is required";
-    if (!formData.contactNumber.trim()) {
-      newErrors.contactNumber = "Contact Number is required";
-    } else if (!/^03\d{9}$/.test(formData.contactNumber)) {
-      newErrors.contactNumber = "Must be 11 digits (03XXXXXXXXX)";
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors({});
+    return true; // Always return true to avoid blocking the user
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,13 +82,23 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
       return;
     }
     setIsLoading(true);
+    const instituteProfile: InstituteProfile = {
+      instituteName: (formData.instituteName || '').trim(),
+      instituteType: formData.instituteType || '',
+      address: (formData.address || '').trim(),
+      city: (formData.city || '').trim(),
+      contactNumber: (formData.contactNumber || '').trim(),
+      showLogoOnPapers: !!formData.showLogoOnPapers,
+      showContactOnPapers: !!formData.showContactOnPapers,
+      saveAsDefault: !!formData.saveAsDefault,
+      ...(logoPreview ? { logoUrl: logoPreview } : {}),
+    };
+
     const updatedUser: User = {
       ...user,
-      instituteProfile: {
-        ...formData,
-        logoUrl: logoPreview || undefined,
-      }
+      instituteProfile,
     };
+
     try {
       await updateUser(updatedUser);
       setIsLoading(false);
@@ -98,8 +109,58 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
     }
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError('');
+    setPassSuccess('');
+
+    if (!currentPass || !newPass || !confirmPass) {
+      setPassError('All password fields are required.');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setPassError('New passwords do not match.');
+      return;
+    }
+    if (newPass.length < 6) {
+      setPassError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPass === currentPass) {
+      setPassError('New password must be different from current password.');
+      return;
+    }
+
+    setIsPassLoading(true);
+    const result = await changeUserPassword(user, currentPass, newPass);
+    setIsPassLoading(false);
+
+    if (result.success) {
+      setPassSuccess(result.message);
+      setCurrentPass('');
+      setNewPass('');
+      setConfirmPass('');
+      setTimeout(() => setPassSuccess(''), 4000);
+    } else {
+      setPassError(result.message);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gray-900 text-theme-text-main transition-colors duration-300">
+      {onBack && (
+        <div className="sm:mx-auto sm:w-full sm:max-w-xl px-4 mb-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-theme-text-muted hover:text-gold-500 flex items-center gap-1.5 transition-colors font-medium text-sm py-1.5 px-3 rounded-lg hover:bg-gray-800"
+          >
+            <ArrowLeft size={18} />
+            <span>Back to Dashboard</span>
+          </button>
+        </div>
+      )}
+
       <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center px-4">
          <div className="flex justify-center mb-4">
           <div className="p-3 bg-gray-800 rounded-full border-2 border-gold-500 shadow-lg">
@@ -142,7 +203,7 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
                           <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleFileChange} />
                         </label>
                       </div>
-                      <p className="text-[10px] text-theme-text-muted uppercase tracking-widest font-bold">Required • PNG/JPG max 150KB</p>
+                      <p className="text-[10px] text-theme-text-muted uppercase tracking-widest font-bold">Optional • PNG/JPG max 150KB</p>
                     </>
                   )}
                 </div>
@@ -175,7 +236,7 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
               <p className="text-[9px] text-theme-text-muted -mt-3 mb-4 uppercase font-bold tracking-tighter">Can't find your city? Just type the name manually.</p>
             </div>
 
-            <Input label="Institute Contact Number *" name="contactNumber" type="tel" placeholder="03XXXXXXXXX" value={formData.contactNumber} onChange={handleChange} error={errors.contactNumber} maxLength={11} />
+            <Input label="Institute Contact Number *" name="contactNumber" type="tel" placeholder="03001234567 or 04231234567" value={formData.contactNumber} onChange={handleChange} error={errors.contactNumber} maxLength={15} />
 
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between py-2 border-t border-b border-gray-700">
@@ -192,8 +253,99 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess 
               </div>
             </div>
 
-            <div className="pt-4"><Button type="submit" isLoading={isLoading} className="shadow-xl">Complete Setup & Go to Dashboard</Button></div>
+            <div className="pt-4 flex flex-col sm:flex-row gap-3">
+              {onBack && (
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  onClick={onBack} 
+                  className="sm:w-1/3 order-2 sm:order-1"
+                >
+                  Back
+                </Button>
+              )}
+              <Button 
+                type="submit" 
+                isLoading={isLoading} 
+                className={`shadow-xl ${onBack ? 'sm:w-2/3 order-1 sm:order-2' : 'w-full'}`}
+              >
+                Complete Setup & Go to Dashboard
+              </Button>
+            </div>
           </form>
+
+          {/* ── Change Password Section ── */}
+          <div className="mt-8 border-t border-gray-700 pt-6">
+            <button
+              type="button"
+              onClick={() => { setShowChangePassword(v => !v); setPassError(''); setPassSuccess(''); }}
+              className="w-full flex items-center justify-between text-sm font-bold text-theme-text-muted hover:text-gold-500 transition-colors group"
+            >
+              <span className="flex items-center gap-2">
+                <Lock size={16} className="text-gold-500" />
+                Change Password
+              </span>
+              <span className={`text-xs transition-transform duration-200 ${showChangePassword ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+
+            {showChangePassword && (
+              <form onSubmit={handleChangePassword} className="mt-4 space-y-4 animate-fadeIn">
+                {passError && (
+                  <div className="bg-red-900/20 border-l-4 border-red-500 p-3 rounded">
+                    <p className="text-sm text-red-400">{passError}</p>
+                  </div>
+                )}
+                {passSuccess && (
+                  <div className="bg-green-900/20 border-l-4 border-green-500 p-3 rounded flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-400 shrink-0" />
+                    <p className="text-sm text-green-400">{passSuccess}</p>
+                  </div>
+                )}
+
+                <div className="relative">
+                  <Input
+                    label="Current Password"
+                    type={showCurrent ? 'text' : 'password'}
+                    placeholder="Enter your current password"
+                    value={currentPass}
+                    onChange={e => setCurrentPass(e.target.value)}
+                    icon={
+                      <button type="button" onClick={() => setShowCurrent(v => !v)} className="focus:outline-none">
+                        {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    }
+                  />
+                </div>
+
+                <div className="relative">
+                  <Input
+                    label="New Password"
+                    type={showNew ? 'text' : 'password'}
+                    placeholder="Min 6 characters"
+                    value={newPass}
+                    onChange={e => setNewPass(e.target.value)}
+                    icon={
+                      <button type="button" onClick={() => setShowNew(v => !v)} className="focus:outline-none">
+                        {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    }
+                  />
+                </div>
+
+                <Input
+                  label="Confirm New Password"
+                  type="password"
+                  placeholder="Re-enter new password"
+                  value={confirmPass}
+                  onChange={e => setConfirmPass(e.target.value)}
+                />
+
+                <Button type="submit" isLoading={isPassLoading}>
+                  Update Password
+                </Button>
+              </form>
+            )}
+          </div>
         </div>
         <footer className="mt-8 text-center text-xs text-theme-text-muted pb-4"><p>{COPYRIGHT_TEXT}</p></footer>
       </div>

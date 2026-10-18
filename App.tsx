@@ -15,6 +15,7 @@ import { AboutUs } from './components/AboutUs';
 import { ManageContent } from './components/ManageContent';
 import { TeachersDirectory } from './components/TeachersDirectory';
 import { NewsAnnouncements } from './components/NewsAnnouncements';
+import { WhatsAppButton } from './components/WhatsAppButton';
 import { ThemeProvider } from './context/ThemeContext';
 import { LOCAL_STORAGE_SESSION_KEY } from './constants';
 
@@ -25,14 +26,24 @@ const App: React.FC = () => {
   
   const [selectedPatternForGeneration, setSelectedPatternForGeneration] = useState<PaperPattern | undefined>(undefined);
   const [selectedPaperToOpen, setSelectedPaperToOpen] = useState<SavedPaper | undefined>(undefined);
+  const [hasSeenDemoAlert, setHasSeenDemoAlert] = useState<boolean>(() => {
+    return sessionStorage.getItem('aplus_demo_seen') === 'true';
+  });
+
+  const handleDismissDemoAlert = () => {
+    setHasSeenDemoAlert(true);
+    sessionStorage.setItem('aplus_demo_seen', 'true');
+  };
+
+  const deepFetchAttempted = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Firebase Auth Listener
     const unsubscribe = subscribeToAuth(async (user) => {
       if (user) {
-        // --- DEEP CHECK LOGIC ---
-        if (!user.instituteProfile) {
-           console.log("Profile missing, attempting deep fetch...");
+        // --- DEEP CHECK LOGIC (run once per user session to avoid quota drain) ---
+        if (!user.instituteProfile && !deepFetchAttempted.current.has(user.id)) {
+           deepFetchAttempted.current.add(user.id);
            try {
              const refreshedUser = await refreshUserProfile(user.id);
              if (refreshedUser && refreshedUser.instituteProfile) {
@@ -48,7 +59,7 @@ const App: React.FC = () => {
 
         // Smart Redirect: If user has profile, go to Dashboard. Otherwise Setup.
         if (currentView === 'LOGIN' || currentView === 'SIGNUP' || currentView === 'INSTITUTE_SETUP') {
-          if (user.instituteProfile) {
+          if (user.instituteProfile || user.email === 'admin@aplusexamgen.com' || user.email === 'admin' || user.id === 'local-admin') {
             setCurrentView('DASHBOARD');
           } else {
             setCurrentView('INSTITUTE_SETUP');
@@ -74,13 +85,26 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Synchronize browser favicon with admin/institute profile logo or /logo.png
+  useEffect(() => {
+    const faviconUrl = currentUser?.instituteProfile?.logoUrl || '/logo.png';
+    const link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+    if (link) {
+      link.href = faviconUrl;
+    }
+  }, [currentUser?.instituteProfile?.logoUrl]);
+
   const handleLogout = async () => {
     await logoutUser();
+    sessionStorage.removeItem('aplus_demo_seen');
+    setHasSeenDemoAlert(false);
     setCurrentUser(null);
     setCurrentView('LOGIN');
   };
 
   const handleAuthSuccess = async (user: User) => {
+    sessionStorage.removeItem('aplus_demo_seen');
+    setHasSeenDemoAlert(false);
     if (!user.instituteProfile) {
        try {
          const fresh = await refreshUserProfile(user.id);
@@ -92,7 +116,7 @@ const App: React.FC = () => {
     }
 
     setCurrentUser(user);
-    if (user.instituteProfile) {
+    if (user.instituteProfile || user.email === 'admin@aplusexamgen.com' || user.email === 'admin' || user.id === 'local-admin') {
       setCurrentView('DASHBOARD');
     } else {
       setCurrentView('INSTITUTE_SETUP');
@@ -101,6 +125,7 @@ const App: React.FC = () => {
 
   const handleProfileSetupSuccess = (updatedUser: User) => {
     setCurrentUser(updatedUser);
+    localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(updatedUser));
     setCurrentView('DASHBOARD');
   };
 
@@ -153,6 +178,7 @@ const App: React.FC = () => {
           <InstituteSetup 
             user={currentUser}
             onSuccess={handleProfileSetupSuccess}
+            onBack={() => setCurrentView('DASHBOARD')}
           />
         )}
         {currentView === 'DASHBOARD' && currentUser && (
@@ -160,6 +186,8 @@ const App: React.FC = () => {
             user={currentUser} 
             onLogout={handleLogout}
             onNavigate={handleDashboardNavigate}
+            showDemoAlert={!hasSeenDemoAlert}
+            onCloseDemoAlert={handleDismissDemoAlert}
           />
         )}
         {currentView === 'GENERATE_PAPER' && currentUser && (
@@ -190,11 +218,21 @@ const App: React.FC = () => {
           />
         )}
         {currentView === 'PAPER_PATTERNS' && currentUser && (
-          <PaperPatterns 
-            user={currentUser}
-            onBack={() => setCurrentView('DASHBOARD')}
-            onUsePattern={handleUsePattern}
-          />
+          (currentUser.email === 'admin' || currentUser.email === 'admin@aplusexamgen.com' || currentUser.id === 'local-admin') ? (
+            <PaperPatterns 
+              user={currentUser}
+              onBack={() => setCurrentView('DASHBOARD')}
+              onUsePattern={handleUsePattern}
+            />
+          ) : (
+            <Dashboard 
+              user={currentUser} 
+              onLogout={handleLogout}
+              onNavigate={handleDashboardNavigate}
+              showDemoAlert={!hasSeenDemoAlert}
+              onCloseDemoAlert={handleDismissDemoAlert}
+            />
+          )
         )}
         {currentView === 'TEACHERS_DIRECTORY' && currentUser && (
           <TeachersDirectory 
@@ -218,6 +256,9 @@ const App: React.FC = () => {
             onBack={() => setCurrentView('DASHBOARD')}
           />
         )}
+
+        {/* Global Floating WhatsApp Support Button */}
+        <WhatsAppButton />
       </div>
     </ThemeProvider>
   );

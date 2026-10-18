@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Announcement } from '../types';
-import { getAnnouncements, saveAnnouncement, deleteAnnouncement, updateAnnouncement } from '../services/announcementService';
+import { getAnnouncements, getCachedAnnouncementsSync, saveAnnouncement, deleteAnnouncement, updateAnnouncement } from '../services/announcementService';
 import { ArrowLeft, Bell, Plus, Trash2, Edit, Save, X, Megaphone, Info, AlertTriangle, RefreshCw, Calendar, User as UserIcon } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -12,8 +12,8 @@ interface NewsAnnouncementsProps {
 }
 
 export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBack }) => {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => getCachedAnnouncementsSync());
+  const [isLoading, setIsLoading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   
   // Modal State
@@ -28,10 +28,8 @@ export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBa
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
 
   const loadData = async () => {
-    setIsLoading(true);
-    const data = await getAnnouncements();
-    setAnnouncements(data);
-    setIsLoading(false);
+    const data = await getAnnouncements(true);
+    if (data.length > 0) setAnnouncements(data);
   };
 
   useEffect(() => {

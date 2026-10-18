@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Chapter, Question, QuestionType, Subtopic } from '../types';
-import { CLASSES } from '../constants';
+import { CLASSES, CARD_COLORS } from '../constants';
 import { getSubjects } from '../services/subjectService';
 import { getChapters, getVisibilitySettings, toggleVisibility, VisibilityState, deleteChapterPermanently } from '../services/chapterService';
 import { getQuestionsForChapters, updateChapterQuestion, deleteChapterQuestion, getAllClassUploadedContent, deleteSubtopicPermanently } from '../services/questionService';
@@ -41,10 +41,10 @@ const renderFormattedText = (text: string) => {
     <span className={isUrdu ? 'font-urdu text-right block text-lg' : ''} dir={isUrdu ? 'rtl' : 'ltr'}>
       {parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-gold-500 font-bold">{part.slice(2, -2)}</strong>;
+          return <strong key={i} className="text-gold-500 font-bold [.light-theme_&]:text-gold-700">{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith('++') && part.endsWith('++')) {
-          return <u key={i} className="underline decoration-gold-500/40">{part.slice(2, -2)}</u>;
+          return <u key={i} className="underline decoration-gold-500/40 [.light-theme_&]:decoration-gold-500/60">{part.slice(2, -2)}</u>;
         }
         return part;
       })}
@@ -69,6 +69,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [visibility, setVisibility] = useState<VisibilityState>({ hiddenChapterIds: [], hiddenSubtopicNames: [] });
+  const [visibleCount, setVisibleCount] = useState(20);
   
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [editForm, setEditForm] = useState<Partial<Question>>({});
@@ -93,16 +94,13 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   const loadSubjectsAndCounts = async () => {
     setIsLoading(true);
     try {
-      const allSubjectsMap = await getSubjects();
+      const allSubjectsMap = await getSubjects(true);
       const subjects = allSubjectsMap[selectedClass] || [];
       setAvailableSubjects(subjects);
       
-      const classContent = await getAllClassUploadedContent(selectedClass);
-      
       const counts: Record<string, number> = {};
       subjects.forEach(subj => {
-          const chaptersForSubj = classContent.filter(item => item.subject.toLowerCase().trim() === subj.toLowerCase().trim());
-          counts[subj] = chaptersForSubj.length;
+          counts[subj] = 0; // We skip counting to load instantly
       });
       
       setSubjectCounts(counts);
@@ -132,9 +130,10 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
     try {
         const chaptersList = await getChapters(subject, selectedClass, false);
         const chapterIds = chaptersList.map(c => c.id);
-        const questions = await getQuestionsForChapters(subject, chaptersList, chapterIds, true);
+        const questions = await getQuestionsForChapters(subject, chaptersList, chapterIds, false);
         setAllQuestions(questions);
         setFilteredQuestions(questions);
+        setVisibleCount(20);
     } catch (e) {
         alert("Failed to load questions.");
     } finally {
@@ -154,6 +153,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
         ));
     }
     setSelectedQuestionIds([]);
+    setVisibleCount(20);
   }, [searchTerm, allQuestions]);
 
   const toggleSelectAll = () => {
@@ -279,10 +279,10 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
 
   const getTypeColor = (type: string) => {
     switch(type) {
-        case 'MCQ': return 'bg-blue-900/50 text-blue-300 border-blue-500/30';
-        case 'SHORT': return 'bg-green-900/50 text-green-300 border-green-500/30';
-        case 'LONG': return 'bg-purple-900/50 text-purple-300 border-purple-500/30';
-        default: return 'bg-gray-800 text-gray-400 border-gray-600';
+        case 'MCQ': return 'bg-blue-900/50 text-blue-300 border-blue-500/30 [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
+        case 'SHORT': return 'bg-green-900/50 text-green-300 border-green-500/30 [.light-theme_&]:bg-green-100 [.light-theme_&]:text-green-700 [.light-theme_&]:border-green-200';
+        case 'LONG': return 'bg-purple-900/50 text-purple-300 border-purple-500/30 [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
+        default: return 'bg-gray-800 text-gray-400 border-gray-600 [.light-theme_&]:bg-gray-100 [.light-theme_&]:text-gray-700 [.light-theme_&]:border-gray-200';
     }
   };
 
@@ -310,14 +310,19 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
         <main className="flex-grow p-4 sm:p-8 max-w-7xl mx-auto w-full pb-24">
             {step === 1 && (
                 <div className="animate-fadeIn">
-                    <h2 className="text-2xl font-bold text-theme-text-main text-center mb-8">Select Class</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        {CLASSES.map(cls => (
-                            <div key={cls} onClick={() => { setSelectedClass(cls); setStep(2); }} className="bg-gray-800 border border-gray-700 hover:border-gold-500 rounded-xl p-6 flex flex-col items-center gap-4 cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg">
-                                <div className="text-gold-500"><BookOpen size={40} /></div>
-                                <span className="font-bold text-theme-text-main text-lg">{cls}</span>
+                    <h2 className="text-2xl font-bold text-theme-text-main text-center mb-8 uppercase tracking-widest">Select Class</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                        {CLASSES.map((cls, idx) => {
+                            const color = CARD_COLORS[idx % CARD_COLORS.length];
+                            return (
+                            <div key={cls} onClick={() => { setSelectedClass(cls); setStep(2); }} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+                                <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                                <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
+                                    <BookOpen size={40} />
+                                </div>
+                                <span className="relative z-10 font-black text-theme-text-main text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</span>
                             </div>
-                        ))}
+                        )})}
                     </div>
                 </div>
             )}
@@ -329,14 +334,18 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                     {isLoading ? (
                         <div className="text-center py-12"><RefreshCw className="animate-spin mx-auto text-gold-500" size={32} /></div>
                     ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            {availableSubjects.map(subj => {
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                            {availableSubjects.map((subj, idx) => {
                                 const count = subjectCounts[subj] || 0;
+                                const color = CARD_COLORS[idx % CARD_COLORS.length];
                                 return (
-                                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`bg-gray-800 border rounded-xl p-6 flex flex-col items-center gap-3 cursor-pointer transition-all hover:-translate-y-1 ${count > 0 ? 'border-gold-500/50 hover:border-gold-500 shadow-md' : 'border-gray-700 hover:border-gray-500 opacity-80'}`}>
-                                        <div className={count > 0 ? "text-gold-500" : "text-gray-500"}><Layers size={32} /></div>
-                                        <span className="font-bold text-theme-text-main text-center">{subj}</span>
-                                        <span className={`text-xs px-2 py-1 rounded font-bold ${count > 0 ? 'bg-green-900/50 text-green-400 border border-green-500/30' : 'bg-gray-900 text-gray-500 border border-gray-700'}`}>{count > 0 ? `${count} Chapters` : 'Empty'}</span>
+                                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`group relative cursor-pointer rounded-2xl border-2 p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 hover:-translate-y-1 w-full h-36 overflow-hidden ${count > 0 ? `bg-surface-800/80 ${color.border} ${color.hoverBorder} ${color.shadow}` : 'bg-surface-800/40 border-surface-700/50 hover:border-surface-600 opacity-80'}`}>
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 transition-opacity duration-500 ${count > 0 ? 'group-hover:opacity-100' : ''}`} />
+                                        <div className={`relative z-10 transition-colors duration-300 ${count > 0 ? `text-theme-text-muted ${color.groupHoverIcon}` : 'text-surface-600'}`}>
+                                            <Layers size={28} className="transition-transform duration-300 group-hover:scale-110" />
+                                        </div>
+                                        <span className={`relative z-10 font-bold text-base md:text-lg leading-tight transition-all duration-300 ${count > 0 ? 'text-theme-text-sub group-hover:text-theme-text-main group-hover:tracking-wide' : 'text-theme-text-muted'}`}>{subj}</span>
+                                        <span className={`relative z-10 mt-1 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-widest transition-colors ${count > 0 ? `bg-surface-900 text-theme-text-muted border ${color.border} group-hover:bg-white/10 ${color.groupHoverIcon} group-hover:${color.border.replace('border-','border-')}` : 'bg-surface-900 text-theme-text-muted border border-surface-700'}`}>{count > 0 ? `${count} Chapters` : 'Empty'}</span>
                                     </div>
                                 );
                             })}
@@ -414,7 +423,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                             )}
 
                             <div className="grid grid-cols-1 gap-4">
-                                {filteredQuestions.map(q => {
+                                {filteredQuestions.slice(0, visibleCount).map(q => {
                                   const isSelected = selectedQuestionIds.includes(q.id);
                                   return (
                                     <div 
@@ -472,6 +481,14 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                   );
                                 })}
                             </div>
+
+                            {visibleCount < filteredQuestions.length && (
+                              <div className="flex justify-center mt-6 mb-4">
+                                <Button onClick={() => setVisibleCount(prev => prev + 20)} variant="outline" className="w-full md:w-64 font-bold tracking-widest text-[12px] uppercase h-12">
+                                  Load More
+                                </Button>
+                              </div>
+                            )}
 
                             {filteredQuestions.length === 0 && !isLoading && (
                               <div className="text-center py-24 opacity-20">
