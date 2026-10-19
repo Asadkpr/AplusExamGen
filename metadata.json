@@ -1,0 +1,8 @@
+{
+  "name": "APLUS ExamGen_v3",
+  "description": "Smart Paper Generation for Smart Teachers - A React application for generating exams with user authentication.",
+  "requestFramePermissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
