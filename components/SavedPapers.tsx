@@ -66,7 +66,12 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
             <ArrowLeft size={20} className="mr-1" />
             <span className="font-medium">Dashboard</span>
           </button>
-          <div className="text-center text-xl font-bold text-theme-text-main tracking-wider uppercase">Saved Papers</div>
+          <div className="text-center">
+            <div className="text-xl font-bold text-theme-text-main tracking-wider uppercase">Saved Papers</div>
+            <div className="text-[10px] text-gold-400 font-bold tracking-wide">
+              {isAdmin ? "Admin View • All System Papers" : `Personal View • ${user.name}'s Papers`}
+            </div>
+          </div>
           <button 
             onClick={() => fetchPapers(true)} 
             disabled={isLoading}
@@ -74,7 +79,7 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
             className="text-theme-text-muted hover:text-gold-500 p-2 rounded-lg transition-colors flex items-center gap-1.5 text-sm"
           >
             <RefreshCw size={18} className={isLoading ? "animate-spin text-gold-500" : ""} />
-            <span className="hidden sm:inline">Sync</span>
+            <span className="hidden sm:inline">Sync DB</span>
           </button>
       </header>
 

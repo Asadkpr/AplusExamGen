@@ -198,6 +198,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      <span>{user.instituteProfile.instituteName}</span>
                   </div>
                 )}
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${
+                    isAdmin 
+                      ? 'bg-gold-500/10 text-gold-400 border-gold-500/30' 
+                      : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                  }`}>
+                    {isAdmin ? "Global Admin • All Papers" : "Teacher Account • My Papers"}
+                  </span>
+                  
+                  <button 
+                    onClick={handleManualSyncCounts}
+                    disabled={isSyncingCounts}
+                    title="Click to refresh live database counts"
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-gray-300 hover:text-gold-400 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full border border-white/10 transition-all cursor-pointer"
+                  >
+                    <RefreshCw size={11} className={isSyncingCounts ? "animate-spin text-gold-400" : "text-gray-400"} />
+                    <span>{isSyncingCounts ? "Syncing DB..." : "Live DB Sync"}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -216,7 +235,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="bg-blue-500/10 p-2 md:p-2.5 rounded-full text-blue-400 shrink-0 group-hover:scale-110 transition-transform"><FolderOpen size={16} /></div>
                 <div>
                   <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{paperCount !== null ? paperCount : 0}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Papers <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
+                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">{isAdmin ? "All Papers" : "My Papers"} <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
                 </div>
               </div>
               {isAdmin && (

@@ -284,7 +284,10 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
   const cacheKey = `${userId}-${isAdmin}`;
   const now = Date.now();
   
-  if (!forceRefresh && cachedPapers[cacheKey] && (now - (lastFetchTime[cacheKey] || 0) < CACHE_DURATION)) {
+  if (forceRefresh) {
+    delete cachedPapers[cacheKey];
+    delete lastFetchTime[cacheKey];
+  } else if (cachedPapers[cacheKey] && (now - (lastFetchTime[cacheKey] || 0) < CACHE_DURATION)) {
     return cachedPapers[cacheKey];
   }
 
@@ -305,9 +308,16 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
   const fetchOp = async () => {
     let q;
     if (isAdmin) {
-      q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"), limit(1000)); 
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => doc.data() as SavedPaper);
+      try {
+        q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"), limit(1000)); 
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => doc.data() as SavedPaper);
+      } catch (orderErr) {
+        console.warn("Ordered admin query failed, falling back to simple query", orderErr);
+        q = query(collection(db, COLLECTION), limit(1000));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => doc.data() as SavedPaper);
+      }
     } else {
       try {
         q = query(collection(db, COLLECTION), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(1000));
@@ -323,12 +333,12 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
   };
 
   try {
-    cloudPapers = await withTimeout(fetchOp(), 6000);
+    cloudPapers = await withTimeout(fetchOp(), 8000);
   } catch (error: any) {
     console.warn("Cloud fetch failed, trying admin if permission issue:", error?.code);
     if (error?.code === 'permission-denied') {
       try {
-        cloudPapers = await withTimeout(executeAsAdmin(fetchOp), 6000);
+        cloudPapers = await withTimeout(executeAsAdmin(fetchOp), 8000);
       } catch (adminErr) {
         console.warn("Admin fallback cloud fetch failed", adminErr);
       }
@@ -341,6 +351,18 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
   cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
 
   const mergedPapers = Array.from(paperMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  // Sync to device localStorage so mobile offline storage immediately has all fresh papers
+  if (cloudPapers.length > 0) {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
+      const allMap = new Map<string, SavedPaper>();
+      allLocal.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
+      cloudPapers.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(allMap.values())));
+    } catch (_) {}
+  }
   
   // Update memory cache
   cachedPapers[cacheKey] = mergedPapers;
@@ -434,6 +456,16 @@ export const subscribeToSavedPapers = (
 
   return onSnapshot(q, (snapshot) => {
     const cloudPapers = snapshot.docs.map(doc => doc.data() as SavedPaper);
+    if (cloudPapers.length > 0) {
+      try {
+        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+        const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
+        const allMap = new Map<string, SavedPaper>();
+        allLocal.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
+        cloudPapers.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(allMap.values())));
+      } catch (_) {}
+    }
     callback(getMergedPapers(cloudPapers));
   }, (err) => {
     console.warn("Saved papers onSnapshot error:", err.message);

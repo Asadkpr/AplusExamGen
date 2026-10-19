@@ -23,7 +23,7 @@ const CACHE_KEY = 'aplus_all_patterns_cache';
 // 🔹 Memory Cache
 let cachedPatterns: PaperPattern[] | null = null;
 let lastFetchTime = 0;
-const CACHE_DURATION = 25 * 1000; // 25 seconds for fast sync across devices
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache to prevent Firestore quota exhaustion
 
 let cachedPatternCount: number | null = null;
 let lastPatternCountFetchTime = 0;
@@ -50,7 +50,7 @@ export const getPatternCount = async (forceRefresh: boolean = false): Promise<nu
   try {
     const coll = collection(db, COLLECTION);
     const countPromise = getCountFromServer(coll);
-    const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+    const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
     const snapshot = await Promise.race([countPromise, timeoutPromise]) as any;
     const count = snapshot.data().count;
     cachedPatternCount = count;
@@ -58,18 +58,8 @@ export const getPatternCount = async (forceRefresh: boolean = false): Promise<nu
     localStorage.setItem('total_patterns_count', count.toString());
     return count;
   } catch (error) {
-    try {
-      const coll = collection(db, COLLECTION);
-      const docsPromise = getDocs(coll);
-      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
-      const snapshot = await Promise.race([docsPromise, timeoutPromise]) as any;
-      const count = snapshot.docs.length;
-      cachedPatternCount = count;
-      localStorage.setItem('total_patterns_count', count.toString());
-      return count;
-    } catch (fallbackError) {
-      return cachedPatternCount || parseInt(localStorage.getItem('total_patterns_count') || '0', 10);
-    }
+    // Return cached count or local storage without downloading 1600 documents
+    return cachedPatternCount || parseInt(localStorage.getItem('total_patterns_count') || '0', 10);
   }
 };
 

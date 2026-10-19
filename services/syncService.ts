@@ -34,6 +34,7 @@ class SyncService {
   private currentIsAdmin: boolean = false;
   private isSubscribed: boolean = false;
   private isRefreshing: boolean = false;
+  private lastRefreshTime: number = 0;
 
   constructor() {
     this.loadFromLocalStorage();
@@ -123,8 +124,17 @@ class SyncService {
    * using server-side count aggregations (NO limits, counts ALL documents).
    */
   public async refreshServerCounts(userId?: string, isAdmin?: boolean) {
-    if (this.isRefreshing) return;
+    const now = Date.now();
+    if (this.isRefreshing || (now - this.lastRefreshTime < 8000)) return;
     this.isRefreshing = true;
+    this.lastRefreshTime = now;
+
+    const safeTimeout = <T>(p: Promise<T>, ms: number = 6000): Promise<T> => {
+      return Promise.race([
+        p,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), ms))
+      ]);
+    };
 
     const effectiveAdmin = isAdmin ?? this.currentIsAdmin;
     const effectiveUserId = userId ?? this.currentUserId;
@@ -136,60 +146,56 @@ class SyncService {
       if (!effectiveAdmin && effectiveUserId) {
         papersQuery = query(collection(db, 'papers'), where('userId', '==', effectiveUserId));
       }
-      let exactPapers: number;
       try {
-        const papersSnap = await getCountFromServer(papersQuery);
-        exactPapers = papersSnap.data().count;
-      } catch (_) {
-        const snap = await getDocs(papersQuery);
-        exactPapers = snap.docs.length;
-      }
-      this.stats.papersCount = exactPapers;
-      localStorage.setItem(`total_papers_count_${key}`, exactPapers.toString());
-    } catch (e: any) {
-      console.warn('Exact paper count fetch warning:', e?.message || e);
-    }
-
-    // 2. Exact count of Schools/Users for Admin in DB
-    if (effectiveAdmin) {
-      try {
-        const usersColl = collection(db, 'users');
-        let totalRaw: number;
+        let exactPapers: number;
         try {
-          const usersSnap = await getCountFromServer(usersColl);
-          totalRaw = usersSnap.data().count;
+          const papersSnap = await safeTimeout(getCountFromServer(papersQuery), 5000);
+          exactPapers = papersSnap.data().count;
         } catch (_) {
-          const snap = await getDocs(usersColl);
-          totalRaw = snap.docs.length;
+          const snap = await safeTimeout(getDocs(query(papersQuery, limit(500))), 5000);
+          exactPapers = snap.docs.length;
         }
-        // Exclude system admin from school count
-        const exactSchools = Math.max(0, totalRaw > 1 ? totalRaw - 1 : totalRaw);
-        this.stats.schoolsCount = exactSchools;
-        localStorage.setItem('total_users_count', exactSchools.toString());
+        this.stats.papersCount = exactPapers;
+        localStorage.setItem(`total_papers_count_${key}`, exactPapers.toString());
       } catch (e: any) {
-        console.warn('Exact user count fetch warning:', e?.message || e);
+        console.warn('Exact paper count fetch warning:', e?.message || e);
       }
-    }
 
-    // 3. Exact count of Patterns in DB (for both admin and teachers)
-    try {
-      const patternsColl = collection(db, 'patterns');
-      let exactPatterns: number;
+      // 2. Exact count of Schools/Users for Admin in DB
+      if (effectiveAdmin) {
+        try {
+          const usersColl = collection(db, 'users');
+          let totalRaw: number;
+          try {
+            const usersSnap = await safeTimeout(getCountFromServer(usersColl), 5000);
+            totalRaw = usersSnap.data().count;
+          } catch (_) {
+            const snap = await safeTimeout(getDocs(query(usersColl, limit(500))), 5000);
+            totalRaw = snap.docs.length;
+          }
+          // Exclude system admin from school count
+          const exactSchools = Math.max(0, totalRaw > 1 ? totalRaw - 1 : totalRaw);
+          this.stats.schoolsCount = exactSchools;
+          localStorage.setItem('total_users_count', exactSchools.toString());
+        } catch (e: any) {
+          console.warn('Exact user count fetch warning:', e?.message || e);
+        }
+      }
+
+      // 3. Exact count of Patterns in DB (server aggregate only, zero document downloads)
       try {
-        const patternsSnap = await getCountFromServer(patternsColl);
-        exactPatterns = patternsSnap.data().count;
-      } catch (_) {
-        const snap = await getDocs(patternsColl);
-        exactPatterns = snap.docs.length;
+        const patternsColl = collection(db, 'patterns');
+        const patternsSnap = await safeTimeout(getCountFromServer(patternsColl), 5000);
+        const exactPatterns = patternsSnap.data().count;
+        this.stats.patternsCount = exactPatterns;
+        localStorage.setItem('total_patterns_count', exactPatterns.toString());
+      } catch (e: any) {
+        console.warn('Exact pattern count fetch warning:', e?.message || e);
       }
-      this.stats.patternsCount = exactPatterns;
-      localStorage.setItem('total_patterns_count', exactPatterns.toString());
-    } catch (e: any) {
-      console.warn('Exact pattern count fetch warning:', e?.message || e);
+    } finally {
+      this.isRefreshing = false;
+      this.notify();
     }
-
-    this.isRefreshing = false;
-    this.notify();
   }
 
   public clearCache() {

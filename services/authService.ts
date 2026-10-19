@@ -241,7 +241,9 @@ export const loginUser = async (identifier: string, password: string): Promise<{
   let usedAdminFallback = false;
 
   // Handle Special Admin Logic
-  if ((identifier === 'admin' || identifier === 'admin@aplusexamgen.com') && password === 'admin0086') {
+  const cleanId = identifier.trim().toLowerCase();
+  const cleanPwd = password.trim();
+  if ((cleanId === 'admin' || cleanId === 'admin@aplusexamgen.com') && cleanPwd === 'admin0086') {
     email = ADMIN_EMAIL;
     pwd = ADMIN_PASS_MAPPING;
   }
