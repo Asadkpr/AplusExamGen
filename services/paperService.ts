@@ -424,7 +424,7 @@ export const deletePaper = async (id: string): Promise<void> => {
 export const subscribeToSavedPapers = (
   userId: string, 
   isAdmin: boolean, 
-  callback: (papers: SavedPaper[]) => void
+  callback: (papers: SavedPaper[], isFromCloud?: boolean) => void
 ): Unsubscribe => {
   const getMergedPapers = (cloudPapers: SavedPaper[] = []): SavedPaper[] => {
     let localPapers: SavedPaper[] = [];
@@ -443,13 +443,16 @@ export const subscribeToSavedPapers = (
     return Array.from(paperMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   };
 
-  // 1. Immediately emit local data so UI loads with 0ms delay
-  callback(getMergedPapers([]));
+  // 1. Immediately emit local data if available for instant 0ms render
+  const initialLocal = getMergedPapers([]);
+  if (initialLocal.length > 0) {
+    callback(initialLocal, false);
+  }
 
   // 2. Subscribe to Firestore live snapshots
   let q;
   if (isAdmin) {
-    q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"), limit(1000));
+    q = query(collection(db, COLLECTION), limit(1000));
   } else {
     q = query(collection(db, COLLECTION), where("userId", "==", userId), limit(1000));
   }
@@ -466,11 +469,15 @@ export const subscribeToSavedPapers = (
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(allMap.values())));
       } catch (_) {}
     }
-    callback(getMergedPapers(cloudPapers));
+    callback(getMergedPapers(cloudPapers), true);
   }, (err) => {
     console.warn("Saved papers onSnapshot error:", err.message);
-    // Fallback: continue providing local papers
-    callback(getMergedPapers([]));
+    // Reliable fallback: fetch via getDocs directly
+    getSavedPapers(userId, isAdmin, true).then((fallbackPapers) => {
+      callback(fallbackPapers, true);
+    }).catch(() => {
+      callback(getMergedPapers([]), true);
+    });
   });
 };
 

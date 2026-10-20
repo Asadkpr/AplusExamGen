@@ -179,7 +179,10 @@ export const refreshUserProfile = async (userId: string): Promise<User | null> =
   };
 
   try {
-    return await fetchOp();
+    return await Promise.race([
+      fetchOp(),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timeout')), 3500))
+    ]);
   } catch (e: any) {
     return null;
   }
@@ -289,9 +292,12 @@ export const loginUser = async (identifier: string, password: string): Promise<{
     };
 
     try {
-      userProfile = await fetchProfile();
+      userProfile = await Promise.race([
+        fetchProfile(),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Profile timeout')), 3500))
+      ]);
     } catch(e: any) {
-      console.error("Fetch profile failed", e);
+      console.warn("Fetch profile failed or timed out:", e?.message);
     }
 
     if (userProfile?.isBlocked) {
@@ -848,8 +854,11 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
 
       const docRef = doc(db, "users", firebaseUser.uid);
       try {
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        const docSnap = await Promise.race([
+          getDoc(docRef),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Auth doc timeout')), 3500))
+        ]);
+        if (docSnap && docSnap.exists()) {
           const u = docSnap.data() as User;
           if (u.isBlocked) {
             await logoutUser();

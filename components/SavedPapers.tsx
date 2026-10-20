@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SavedPaper, User } from '../types';
 import { getSavedPapers, deletePaper, subscribeToSavedPapers } from '../services/paperService';
 import { Button } from './Button';
-import { ArrowLeft, Trash2, Eye, FileText, Calendar, Search, User as UserIcon, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Trash2, Eye, FileText, Calendar, Search, User as UserIcon, RefreshCw, Info, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 interface SavedPapersProps {
   onBack: () => void;
@@ -14,7 +14,7 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
   const [papers, setPapers] = useState<SavedPaper[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [displayLimit, setDisplayLimit] = useState(20);
+  const [displayLimit, setDisplayLimit] = useState(60);
   
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
 
@@ -27,11 +27,30 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
 
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribe = subscribeToSavedPapers(user.id, isAdmin, (livePapers) => {
+
+    // 1. Parallel getSavedPapers for instant response on mobile or new device
+    getSavedPapers(user.id, isAdmin, false).then((data) => {
+      if (data && data.length > 0) {
+        setPapers(data);
+        setIsLoading(false);
+      }
+    }).catch(() => {});
+
+    // 2. Real-time live Firestore subscription
+    const unsubscribe = subscribeToSavedPapers(user.id, isAdmin, (livePapers, isFromCloud) => {
       setPapers(livePapers);
-      setIsLoading(false);
+      if (livePapers.length > 0 || isFromCloud) {
+        setIsLoading(false);
+      }
     });
+
+    // 3. Safety timeout: on empty accounts or slow 3G/4G, never hang
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 3500);
+
     return () => {
+      clearTimeout(timer);
       unsubscribe();
     };
   }, [user.id, isAdmin]);
@@ -84,6 +103,28 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
       </header>
 
       <main className="flex-grow p-4 sm:p-8 max-w-6xl mx-auto w-full print:hidden">
+        {/* Account Scope Clarification Banner */}
+        <div className="mb-6 p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs bg-gray-800/80 border-gray-700">
+          <div className="flex items-center gap-2.5">
+            {isAdmin ? (
+              <ShieldCheck size={18} className="text-gold-400 flex-shrink-0" />
+            ) : (
+              <UserIcon size={18} className="text-emerald-400 flex-shrink-0" />
+            )}
+            <div className="text-theme-text-muted">
+              {isAdmin ? (
+                <span><strong className="text-gold-400">Master Admin View:</strong> Showing all papers across all registered schools & teachers.</span>
+              ) : (
+                <span><strong className="text-emerald-400">Personal View ({user.name}):</strong> Showing your saved papers ({papers.length}). Master Admin accounts view all system papers.</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-gray-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Live Cloud DB Connected</span>
+          </div>
+        </div>
+
         <div className="mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="relative w-full sm:w-96">
             <input 
@@ -95,21 +136,29 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
             />
             <Search className="absolute left-3 top-3 text-gray-500" size={18} />
           </div>
-          <div className="text-xs text-theme-text-muted font-bold uppercase tracking-widest">
-            {filteredPapers.length} Papers Found
+          <div className="text-xs text-theme-text-muted font-bold uppercase tracking-widest flex items-center gap-2">
+            <span>{filteredPapers.length} Papers Found</span>
+            {filteredPapers.length > displayLimit && (
+              <span className="text-[10px] text-gold-400 font-normal">(Displaying first {displayLimit})</span>
+            )}
           </div>
         </div>
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-50">
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="w-12 h-12 border-4 border-gold-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="font-bold uppercase tracking-tighter text-gold-500">Loading Database...</p>
+            <div className="text-center">
+              <p className="font-bold uppercase tracking-wider text-gold-500 text-sm">Syncing with Cloud Database...</p>
+              <p className="text-xs text-gray-400 mt-1">Connecting to live papers for {isAdmin ? "all schools" : user.name}</p>
+            </div>
           </div>
         ) : filteredPapers.length === 0 ? (
           <div className="bg-gray-800 rounded-2xl border border-dashed border-gray-700 p-20 text-center text-theme-text-muted">
             <FileText size={64} className="mx-auto mb-4 opacity-10" /> 
             <p className="text-lg font-bold">{searchTerm ? "No papers match your search criteria." : "No saved papers available yet."}</p>
-            {!searchTerm && <p className="text-sm mt-2">Generate your first paper to see it listed here.</p>}
+            {!searchTerm && (
+              <p className="text-sm mt-2 text-gray-400">Generate your first paper to see it listed here.</p>
+            )}
           </div>
         ) : (
           <>
@@ -155,12 +204,18 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
           </div>
           
           {filteredPapers.length > displayLimit && (
-            <div className="mt-8 flex justify-center">
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
               <button 
-                onClick={() => setDisplayLimit(prev => prev + 20)}
-                className="px-8 py-3 bg-gray-800 text-gold-500 font-bold rounded-xl hover:bg-gray-700 hover:text-gold-400 border border-gold-500/30 transition-colors uppercase tracking-widest text-sm shadow-lg shadow-black/20"
+                onClick={() => setDisplayLimit(prev => prev + 60)}
+                className="px-6 py-2.5 bg-gray-800 text-gold-500 font-bold rounded-xl hover:bg-gray-700 hover:text-gold-400 border border-gold-500/30 transition-colors uppercase tracking-widest text-xs shadow-lg shadow-black/20"
               >
-                Load More Papers
+                Load More (+60)
+              </button>
+              <button 
+                onClick={() => setDisplayLimit(filteredPapers.length)}
+                className="px-6 py-2.5 bg-gold-500 text-gray-950 font-black rounded-xl hover:bg-gold-400 transition-colors uppercase tracking-widest text-xs shadow-lg shadow-black/20"
+              >
+                Show All ({filteredPapers.length} Papers)
               </button>
             </div>
           )}

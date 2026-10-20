@@ -223,7 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* Stats inside Banner (Right Side) */}
             <div className="grid grid-cols-2 gap-3 z-10 w-full lg:w-[55%] xl:w-[50%]">
               {isAdmin && (
-                <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+                <div onClick={() => onNavigate('TEACHERS_DIRECTORY')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                   <div className="bg-gold-500/10 p-2 md:p-2.5 rounded-full text-gold-500 shrink-0 group-hover:scale-110 transition-transform"><Users size={16} /></div>
                   <div>
                     <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{userCount !== null ? userCount : 0}</h3>
@@ -231,7 +231,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 </div>
               )}
-              <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+              <div onClick={() => onNavigate('SAVED_PAPERS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                 <div className="bg-blue-500/10 p-2 md:p-2.5 rounded-full text-blue-400 shrink-0 group-hover:scale-110 transition-transform"><FolderOpen size={16} /></div>
                 <div>
                   <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{paperCount !== null ? paperCount : 0}</h3>
@@ -239,7 +239,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
               {isAdmin && (
-                <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+                <div onClick={() => onNavigate('PAPER_PATTERNS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                   <div className="bg-emerald-500/10 p-2 md:p-2.5 rounded-full text-emerald-400 shrink-0 group-hover:scale-110 transition-transform"><Layout size={16} /></div>
                   <div>
                     <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{patternCount !== null ? patternCount : 0}</h3>
@@ -247,7 +247,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 </div>
               )}
-              <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+              <div onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                 <div className="bg-purple-500/10 p-2 md:p-2.5 rounded-full text-purple-400 shrink-0 group-hover:scale-110 transition-transform"><Megaphone size={16} /></div>
                 <div>
                   <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{newsList.length > 0 ? newsList.length : (latestAnnouncement ? '1' : '1')}</h3>
