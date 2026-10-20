@@ -269,10 +269,12 @@ export const subscribeToPatterns = (
   return onSnapshot(collection(db, COLLECTION), async (snapshot) => {
     const cloudPatterns = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PaperPattern));
     
-    // Merge cloud and local patterns
     const map = new Map<string, PaperPattern>();
-    localPatterns.forEach(p => { if (p && p.id) map.set(p.id, p); });
-    cloudPatterns.forEach(p => { if (p && p.id) map.set(p.id, p); });
+    if (cloudPatterns.length > 0) {
+      cloudPatterns.forEach(p => { if (p && p.id) map.set(p.id, p); });
+    } else {
+      localPatterns.forEach(p => { if (p && p.id) map.set(p.id, p); });
+    }
 
     let hiddenPatternIds: string[] = [];
     try {
@@ -285,6 +287,10 @@ export const subscribeToPatterns = (
     lastFetchTime = Date.now();
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
+      if (cloudPatterns.length > 0) {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
+        localPatterns = merged;
+      }
     } catch (_) {}
     callback(merged);
   }, (err) => {

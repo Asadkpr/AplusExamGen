@@ -443,7 +443,7 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
   useEffect(() => {
     if (view === 'CREATE' && formData.classLevel && (editingPattern?.subject || selectedSubject)) {
       const fetchChapters = async () => {
-        const chapters = await getChapters(editingPattern?.subject || selectedSubject, formData.classLevel, false);
+        const chapters = await getChapters(editingPattern?.subject || selectedSubject, formData.classLevel, false, true);
         setAvailableChapters(chapters);
       };
       fetchChapters();
