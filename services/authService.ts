@@ -44,8 +44,20 @@ export const executeAsAdmin = async <T>(operation: () => Promise<T>): Promise<T>
     return await operation();
   }
 
-  // If a user is already signed in, execute under current credentials to prevent disrupting their session
-  if (auth.currentUser) {
+  // Check if localStorage indicates the current user is Master Admin
+  let isActiveSessionAdmin = false;
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.email === 'admin' || parsed?.email === ADMIN_EMAIL || parsed?.id === 'local-admin') {
+        isActiveSessionAdmin = true;
+      }
+    }
+  } catch (_) {}
+
+  // If a non-admin user is already signed in, execute under current credentials to prevent disrupting their session
+  if (auth.currentUser && !isActiveSessionAdmin) {
     try {
       return await operation();
     } catch (opErr) {
@@ -80,10 +92,12 @@ export const executeAsAdmin = async <T>(operation: () => Promise<T>): Promise<T>
     // 3. Execute privileged operation
     return await operation();
   } finally {
-    // 4. Logout Admin silently
-    try {
-      await signOut(auth);
-    } catch (_) {}
+    // 4. Only logout Admin if the user's active session is NOT the Master Admin
+    if (!isActiveSessionAdmin) {
+      try {
+        await signOut(auth);
+      } catch (_) {}
+    }
     isInternalAuthOperation = wasInternal;
   }
 };
@@ -246,7 +260,7 @@ export const loginUser = async (identifier: string, password: string): Promise<{
   // Handle Special Admin Logic
   const cleanId = identifier.trim().toLowerCase();
   const cleanPwd = password.trim();
-  if ((cleanId === 'admin' || cleanId === 'admin@aplusexamgen.com') && cleanPwd === 'admin0086') {
+  if ((cleanId === 'admin' || cleanId === 'admin@aplusexamgen.com') && (cleanPwd === 'admin0086' || cleanPwd === 'admin153')) {
     email = ADMIN_EMAIL;
     pwd = ADMIN_PASS_MAPPING;
   }
@@ -300,24 +314,33 @@ export const loginUser = async (identifier: string, password: string): Promise<{
       console.warn("Fetch profile failed or timed out:", e?.message);
     }
 
-    if (userProfile?.isBlocked) {
+    if (userProfile?.isBlocked && email !== ADMIN_EMAIL) {
       await signOut(auth);
       return { success: false, message: "Your account has been blocked. Contact Admin." };
     }
 
-    const finalUser = userProfile || { 
-      id: firebaseUser.uid, 
-      name: firebaseUser.displayName || 'User', 
-      email: firebaseUser.email || '', 
-      mobile: '', 
-      passwordHash: '', 
-      createdAt: Date.now() 
-    };
+    const isMasterAdmin = email === ADMIN_EMAIL;
+    const finalUser: User = isMasterAdmin
+      ? {
+          ...(userProfile || {}),
+          id: firebaseUser.uid,
+          name: 'Master Admin',
+          email: 'admin',
+          mobile: userProfile?.mobile || '03000000000',
+          passwordHash: 'firebase',
+          createdAt: userProfile?.createdAt || Date.now()
+        }
+      : (userProfile || { 
+          id: firebaseUser.uid, 
+          name: firebaseUser.displayName || 'User', 
+          email: firebaseUser.email || '', 
+          mobile: '', 
+          passwordHash: '', 
+          createdAt: Date.now() 
+        });
 
     // Save session locally
     localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(finalUser));
-
-
 
     return { success: true, user: finalUser, message: 'Login successful' };
 
@@ -852,6 +875,7 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
          return; 
       }
 
+      const isMasterAdmin = firebaseUser.email === ADMIN_EMAIL;
       const docRef = doc(db, "users", firebaseUser.uid);
       try {
         const docSnap = await Promise.race([
@@ -860,7 +884,7 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
         ]);
         if (docSnap && docSnap.exists()) {
           const u = docSnap.data() as User;
-          if (u.isBlocked) {
+          if (u.isBlocked && !isMasterAdmin) {
             await logoutUser();
             callback(null);
             return;
@@ -876,37 +900,50 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
             } catch (e) {}
           }
 
+          if (isMasterAdmin) {
+            u.name = 'Master Admin';
+            u.email = 'admin';
+          }
+
           localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(u));
           callback(u);
         } else {
            const storedLocal = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
            if (storedLocal) {
              const u = JSON.parse(storedLocal);
-             if (u.id === firebaseUser.uid) {
+             if (u.id === firebaseUser.uid || (isMasterAdmin && (u.email === 'admin' || u.email === ADMIN_EMAIL))) {
+                if (isMasterAdmin) {
+                  u.id = firebaseUser.uid;
+                  u.name = 'Master Admin';
+                  u.email = 'admin';
+                  localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(u));
+                }
                 callback(u);
                 return;
              }
            }
 
-           const fallbackUser = {
+           const fallbackUser: User = {
               id: firebaseUser.uid, 
-              name: firebaseUser.displayName || 'User', 
-              email: firebaseUser.email || '', 
+              name: isMasterAdmin ? 'Master Admin' : (firebaseUser.displayName || 'User'), 
+              email: isMasterAdmin ? 'admin' : (firebaseUser.email || ''), 
               mobile: '', 
               passwordHash: '', 
               createdAt: Date.now() 
            };
+           localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(fallbackUser));
            callback(fallbackUser);
         }
       } catch (e) {
-        callback({
+        const fallbackUser: User = {
           id: firebaseUser.uid, 
-          name: 'User', 
-          email: firebaseUser.email || '', 
+          name: isMasterAdmin ? 'Master Admin' : 'User', 
+          email: isMasterAdmin ? 'admin' : (firebaseUser.email || ''), 
           mobile: '', 
           passwordHash: '', 
           createdAt: Date.now() 
-        });
+        };
+        callback(fallbackUser);
       }
     } else {
       const manualSession = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);

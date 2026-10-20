@@ -85,7 +85,7 @@ export const getPatterns = async (forceRefresh: boolean = false): Promise<PaperP
     try {
       const fetchPromise = getDocs(collection(db, COLLECTION));
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error("Firebase fetch timeout")), 3500)
+        setTimeout(() => reject(new Error("Firebase fetch timeout")), 10000)
       );
       
       const querySnapshot = await Promise.race([fetchPromise, timeoutPromise]) as any;
@@ -96,26 +96,31 @@ export const getPatterns = async (forceRefresh: boolean = false): Promise<PaperP
       console.warn("Firebase fetch patterns failed or timed out (using local backup):", e.message);
     }
 
-    try {
-      const stored = localStorage.getItem(LOCAL_KEY);
-      if (stored) {
-        const localPatterns: PaperPattern[] = JSON.parse(stored);
-        localPatterns.forEach(p => {
-          if (!mergedPatterns.find(cp => cp.id === p.id)) {
-            mergedPatterns.push(p);
-          }
-        });
+    if (!fetchSucceeded) {
+      try {
+        const stored = localStorage.getItem(LOCAL_KEY);
+        if (stored) {
+          const localPatterns: PaperPattern[] = JSON.parse(stored);
+          localPatterns.forEach(p => {
+            if (!mergedPatterns.find(cp => cp.id === p.id)) {
+              mergedPatterns.push(p);
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Local fetch patterns error", e);
       }
-    } catch (e) {
-      console.error("Local fetch patterns error", e);
     }
 
     const finalPatterns = mergedPatterns.filter(p => !hiddenPatternIds.includes(p.id));
     
-    // Update local cache & memory
+    // Update local cache & memory so all devices stay in sync with cloud truth
     if (fetchSucceeded || finalPatterns.length > 0) {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(finalPatterns));
+        if (fetchSucceeded) {
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(finalPatterns));
+        }
       } catch (e) {}
       cachedPatterns = finalPatterns;
       lastFetchTime = Date.now();

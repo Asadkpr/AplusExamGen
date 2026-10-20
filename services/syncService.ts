@@ -123,9 +123,9 @@ class SyncService {
    * Fetches the 100% true, exact total count directly from Firestore database
    * using server-side count aggregations (NO limits, counts ALL documents).
    */
-  public async refreshServerCounts(userId?: string, isAdmin?: boolean) {
+  public async refreshServerCounts(userId?: string, isAdmin?: boolean, force: boolean = false) {
     const now = Date.now();
-    if (this.isRefreshing || (now - this.lastRefreshTime < 8000)) return;
+    if (!force && (this.isRefreshing || (now - this.lastRefreshTime < 8000))) return;
     this.isRefreshing = true;
     this.lastRefreshTime = now;
 

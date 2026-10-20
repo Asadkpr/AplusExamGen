@@ -20,7 +20,7 @@ const CONTENT_CACHE_KEY = 'aplus_content_cache_v2';
 // 🔹 Memory Cache
 let memoryContentCache: Record<string, UploadedContent> = {};
 let lastFetchTime: Record<string, number> = {};
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 45 * 1000; // 45 seconds for rapid multi-admin synchronization
 
 export const resetQuestionCache = () => {
   memoryContentCache = {};
@@ -37,7 +37,7 @@ interface UploadedContent {
 }
 
 // Helper timeout
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 3000): Promise<T> => {
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Network/Quota timeout')), timeoutMs))
@@ -58,7 +58,7 @@ export const getAllClassUploadedContent = async (classLevel: string, forceRefres
       collection(db, COLLECTION), 
       where("classLevel", "==", cleanClass)
     );
-    const snapshot = await withTimeout(getDocs(q), 3000);
+    const snapshot = await withTimeout(getDocs(q), 8000);
     return snapshot.docs.map(doc => doc.data() as UploadedContent);
   };
 

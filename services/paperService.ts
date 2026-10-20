@@ -332,35 +332,49 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
     }
   };
 
+  let cloudFetchSucceeded = false;
   try {
-    cloudPapers = await withTimeout(fetchOp(), 8000);
+    cloudPapers = await withTimeout(fetchOp(), 10000);
+    cloudFetchSucceeded = true;
   } catch (error: any) {
     console.warn("Cloud fetch failed, trying admin if permission issue:", error?.code);
     if (error?.code === 'permission-denied') {
       try {
-        cloudPapers = await withTimeout(executeAsAdmin(fetchOp), 8000);
+        cloudPapers = await withTimeout(executeAsAdmin(fetchOp), 10000);
+        cloudFetchSucceeded = true;
       } catch (adminErr) {
         console.warn("Admin fallback cloud fetch failed", adminErr);
       }
     }
   }
 
-  // 3. Merge Local & Cloud Papers (Deduplicate by ID, keeping most comprehensive data)
+  // 3. Reconcile Cloud & Local Papers (Cloud is authoritative when online; keep only <30s in-flight local papers)
   const paperMap = new Map<string, SavedPaper>();
-  localPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
-  cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+  if (cloudFetchSucceeded) {
+    localPapers.forEach(p => {
+      if (p && p.id && (now - (p.createdAt || 0) < 30000)) {
+        paperMap.set(p.id, p);
+      }
+    });
+    cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+  } else {
+    localPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+    cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+  }
 
   const mergedPapers = Array.from(paperMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-  // Sync to device localStorage so mobile offline storage immediately has all fresh papers
-  if (cloudPapers.length > 0) {
+  // Sync to device localStorage so offline storage matches authoritative cloud state
+  if (cloudFetchSucceeded) {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
-      const allMap = new Map<string, SavedPaper>();
-      allLocal.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
-      cloudPapers.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(allMap.values())));
+      if (isAdmin) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedPapers));
+      } else {
+        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+        const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
+        const otherUsersPapers = allLocal.filter(p => p && p.userId !== userId);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([...mergedPapers, ...otherUsersPapers]));
+      }
     } catch (_) {}
   }
   
@@ -405,12 +419,12 @@ export const deletePaper = async (id: string): Promise<void> => {
   };
 
   try {
-    await withTimeout(deleteOp(), 4000);
+    await withTimeout(deleteOp(), 6000);
   } catch (error: any) {
     console.warn("Cloud delete failed, trying admin:", error?.code);
     if (error?.code === 'permission-denied') {
       try {
-        await withTimeout(executeAsAdmin(deleteOp), 5000);
+        await withTimeout(executeAsAdmin(deleteOp), 6000);
       } catch (adminErr) {
         console.warn("Admin fallback cloud delete failed", adminErr);
       }
@@ -419,14 +433,14 @@ export const deletePaper = async (id: string): Promise<void> => {
 };
 
 /**
- * Real-time subscription for Saved Papers with instant local-first merge
+ * Real-time subscription for Saved Papers with cloud-authoritative reconciliation
  */
 export const subscribeToSavedPapers = (
   userId: string, 
   isAdmin: boolean, 
   callback: (papers: SavedPaper[], isFromCloud?: boolean) => void
 ): Unsubscribe => {
-  const getMergedPapers = (cloudPapers: SavedPaper[] = []): SavedPaper[] => {
+  const getMergedPapers = (cloudPapers: SavedPaper[] = [], isAuthoritativeCloud: boolean = false): SavedPaper[] => {
     let localPapers: SavedPaper[] = [];
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -436,15 +450,25 @@ export const subscribeToSavedPapers = (
       }
     } catch (_) {}
 
+    const now = Date.now();
     const paperMap = new Map<string, SavedPaper>();
-    localPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
-    cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+    if (isAuthoritativeCloud) {
+      localPapers.forEach(p => {
+        if (p && p.id && (now - (p.createdAt || 0) < 30000)) {
+          paperMap.set(p.id, p);
+        }
+      });
+      cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+    } else {
+      localPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+      cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+    }
 
     return Array.from(paperMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   };
 
   // 1. Immediately emit local data if available for instant 0ms render
-  const initialLocal = getMergedPapers([]);
+  const initialLocal = getMergedPapers([], false);
   if (initialLocal.length > 0) {
     callback(initialLocal, false);
   }
@@ -459,24 +483,25 @@ export const subscribeToSavedPapers = (
 
   return onSnapshot(q, (snapshot) => {
     const cloudPapers = snapshot.docs.map(doc => doc.data() as SavedPaper);
-    if (cloudPapers.length > 0) {
-      try {
+    const reconciled = getMergedPapers(cloudPapers, true);
+    try {
+      if (isAdmin) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reconciled));
+      } else {
         const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
         const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
-        const allMap = new Map<string, SavedPaper>();
-        allLocal.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
-        cloudPapers.forEach(p => { if (p && p.id) allMap.set(p.id, p); });
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(Array.from(allMap.values())));
-      } catch (_) {}
-    }
-    callback(getMergedPapers(cloudPapers), true);
+        const otherUsersPapers = allLocal.filter(p => p && p.userId !== userId);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([...reconciled, ...otherUsersPapers]));
+      }
+    } catch (_) {}
+    callback(reconciled, true);
   }, (err) => {
     console.warn("Saved papers onSnapshot error:", err.message);
     // Reliable fallback: fetch via getDocs directly
     getSavedPapers(userId, isAdmin, true).then((fallbackPapers) => {
       callback(fallbackPapers, true);
     }).catch(() => {
-      callback(getMergedPapers([]), true);
+      callback(getMergedPapers([], false), true);
     });
   });
 };

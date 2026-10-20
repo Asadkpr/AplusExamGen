@@ -1,10 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from '../types';
-import { getAllUsers, getUserCount, getCachedUserCountSync } from '../services/authService';
-import { getAnnouncements, getCachedAnnouncementsSync, subscribeToAnnouncements } from '../services/announcementService';
-import { getPaperCount, getCachedPaperCountSync } from '../services/paperService';
-import { getPatternCount, getCachedPatternCountSync } from '../services/patternService';
+import { getAllUsers, getUserCount, getCachedUserCountSync, resetUserCache } from '../services/authService';
+import { getAnnouncements, getCachedAnnouncementsSync, subscribeToAnnouncements, resetAnnouncementCache } from '../services/announcementService';
+import { getPaperCount, getCachedPaperCountSync, resetPaperCache } from '../services/paperService';
+import { getPatternCount, getCachedPatternCountSync, resetPatternCache } from '../services/patternService';
+import { resetChapterCache } from '../services/chapterService';
+import { resetSubjectCache } from '../services/subjectService';
+import { resetQuestionCache } from '../services/questionService';
 import { syncService, DashboardStats } from '../services/syncService';
 import { APP_NAME, COPYRIGHT_TEXT } from '../constants';
 import { useTheme } from '../context/ThemeContext';
@@ -52,7 +55,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleManualSyncCounts = async () => {
     setIsSyncingCounts(true);
     try {
-      await syncService.refreshServerCounts(user.id, isAdmin);
+      resetUserCache();
+      resetPaperCache();
+      resetPatternCache();
+      resetAnnouncementCache();
+      resetChapterCache();
+      resetSubjectCache();
+      resetQuestionCache();
+      await syncService.refreshServerCounts(user.id, isAdmin, true);
     } catch (_) {}
     setIsSyncingCounts(false);
   };
