@@ -111,28 +111,114 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="min-h-screen bg-gray-900 flex text-theme-text-main font-sans selection:bg-gold-500 selection:text-black transition-colors duration-300">
       <div className="lg:hidden fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50 px-4 py-3 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3"><button onClick={() => setIsSidebarOpen(true)} className="text-gold-500"><Menu size={24} /></button><span className="font-bold text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span></div>
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => setIsSidebarOpen(true)} 
+            className="text-gold-500 p-1 -ml-1 rounded-lg active:bg-gray-700 transition-colors"
+            aria-label="Open menu"
+          >
+            <Menu size={24} />
+          </button>
+          <span className="font-bold text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span>
+        </div>
+
+        {/* Mobile Top Bar Logout Button - Instantly visible & accessible on mobile */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onLogout();
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black text-white bg-red-600 hover:bg-red-500 active:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-950/40 border border-red-500/80 cursor-pointer"
+          title="Log Out"
+        >
+          <LogOut size={14} className="text-white" />
+          <span>Log Out</span>
+        </button>
       </div>
 
-      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm transition-opacity" 
+          onClick={() => setIsSidebarOpen(false)} 
+        />
+      )}
 
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900/50"><h1 className="text-xl font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1><button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-theme-text-muted"><X size={24} /></button></div>
-        <div className="p-5 border-b border-gray-700 bg-gray-800 transition-colors">
-           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500 font-bold border border-gold-500/30">{user.name.charAt(0)}</div><div className="overflow-hidden">
-             <p className="text-sm font-bold text-theme-text-main truncate w-32">{isAdmin ? "Admin Access" : user.name}</p>
-             <p className="text-xs text-gold-500">{isAdmin ? "System Admin" : "Teacher"}</p>
-           </div></div>
-           <div className={`mt-3 flex items-center justify-center gap-2 px-2 py-1.5 rounded text-[10px] font-bold uppercase border bg-green-500/10 border-green-500/30 text-green-400`}><Wifi size={12} />Cloud Connected</div>
+      <aside 
+        className={`fixed lg:sticky top-0 left-0 h-[100dvh] max-h-[100dvh] w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50 shrink-0">
+          <h1 className="text-lg font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1>
+          <div className="flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsSidebarOpen(false);
+                onLogout();
+              }}
+              className="lg:hidden flex items-center gap-1 px-2.5 py-1 text-[11px] font-black text-white bg-red-600 hover:bg-red-500 rounded-lg active:scale-95 transition-all shadow border border-red-500"
+              title="Log Out"
+            >
+              <LogOut size={12} />
+              <span>Log Out</span>
+            </button>
+            <button 
+              type="button"
+              onClick={() => setIsSidebarOpen(false)} 
+              className="lg:hidden text-theme-text-muted hover:text-white p-1"
+              aria-label="Close menu"
+            >
+              <X size={22} />
+            </button>
+          </div>
+        </div>
+        <div className="p-4 border-b border-gray-700 bg-gray-800 transition-colors shrink-0">
+           <div className="flex items-center gap-3">
+             <div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500 font-bold border border-gold-500/30 shrink-0">{user.name.charAt(0)}</div>
+             <div className="overflow-hidden">
+               <p className="text-sm font-bold text-theme-text-main truncate w-32">{isAdmin ? "Admin Access" : user.name}</p>
+               <p className="text-xs text-gold-500">{isAdmin ? "System Admin" : "Teacher"}</p>
+             </div>
+           </div>
+           <div className={`mt-3 flex items-center justify-center gap-2 px-2 py-1 rounded text-[10px] font-bold uppercase border bg-green-500/10 border-green-500/30 text-green-400`}><Wifi size={12} />Cloud Connected</div>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
            {sidebarItems.map(item => (
-             <button key={item.id} onClick={() => handleNavClick(item.id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-theme-text-muted hover:bg-gray-750 hover:text-gold-500 transition-all group"><span className="group-hover:scale-110 transition-transform">{item.icon}</span>{item.label}<ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100" /></button>
+             <button 
+               key={item.id} 
+               type="button"
+               onClick={() => handleNavClick(item.id)} 
+               className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-theme-text-muted hover:bg-gray-750 hover:text-gold-500 transition-all group"
+             >
+               <span className="group-hover:scale-110 transition-transform">{item.icon}</span>
+               {item.label}
+               <ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100" />
+             </button>
            ))}
         </nav>
-        <div className="p-4 border-t border-gray-700 bg-gray-900/30 space-y-3">
-          <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-main bg-gray-900/50 rounded-lg transition-colors border border-gray-700">{isDarkMode ? <Sun size={16} className="text-gold-400" /> : <Moon size={16} className="text-indigo-400" />}{isDarkMode ? "Light Mode" : "Dark Mode"}</button>
-          <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"><LogOut size={16} />Log Out</button>
+        <div className="p-4 border-t border-gray-700 bg-gray-900/60 space-y-2.5 pb-6 shrink-0">
+          <button 
+            type="button"
+            onClick={toggleTheme} 
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-theme-text-muted hover:text-theme-text-main bg-gray-800 rounded-xl transition-colors border border-gray-700 active:scale-98"
+          >
+            {isDarkMode ? <Sun size={15} className="text-gold-400" /> : <Moon size={15} className="text-indigo-400" />}
+            {isDarkMode ? "Light Mode" : "Dark Mode"}
+          </button>
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSidebarOpen(false);
+              onLogout();
+            }} 
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-black text-white bg-red-600 hover:bg-red-500 active:bg-red-700 rounded-xl transition-all shadow-lg shadow-red-950/50 border border-red-500 cursor-pointer active:scale-98"
+          >
+            <LogOut size={18} className="text-white" />
+            <span>Log Out</span>
+          </button>
         </div>
       </aside>
 
@@ -288,6 +374,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      <p className="text-gray-400 text-xs mt-0.5">FAQs and contact information.</p>
                    </div>
                    <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+                </div>
+
+                <div 
+                  onClick={onLogout} 
+                  className="bg-gray-800 border border-red-500/40 hover:border-red-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all hover:bg-red-500/5 active:scale-[0.99]"
+                >
+                   <div className="bg-red-600 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0 shadow-md shadow-red-900/40">
+                     <LogOut size={20} />
+                   </div>
+                   <div className="flex-grow">
+                     <h3 className="text-sm md:text-base font-bold text-red-400 group-hover:text-red-300">Log Out</h3>
+                     <p className="text-gray-400 text-xs mt-0.5">Sign out of your session on this device.</p>
+                   </div>
+                   <div className="bg-gray-700 text-red-400 rounded-full p-1.5 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                     <ChevronRight size={16} />
+                   </div>
                 </div>
 
 

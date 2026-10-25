@@ -215,13 +215,30 @@ export const sortSectionsByStandardSequence = (
     let nextTitle = sec.title || '';
     let nextTitleUrdu = sec.titleUrdu || '';
 
-    // Only update title with question index if the section originally has a title
+    // Update title with question index while preserving custom text
     if (sec.title && sec.title.trim()) {
+      const cleanTitle = sec.title.replace(/^Q\d+\.\s*/i, '').replace(/^سوال نمبر \d+[۔\.]\s*/, '').trim();
+      const isUrduType = isUrdu(sec.type) || isUrdu(sec.title);
+      if (cleanTitle) {
+        nextTitle = isUrduType ? `سوال نمبر ${newIdx + 1}۔ ${cleanTitle}` : `Q${newIdx + 1}. ${cleanTitle}`;
+      } else {
+        const autoTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject);
+        if (autoTitle) nextTitle = autoTitle;
+      }
+    } else {
       const autoTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject);
       if (autoTitle) nextTitle = autoTitle;
     }
 
     if (sec.titleUrdu && sec.titleUrdu.trim()) {
+      const cleanUrdu = sec.titleUrdu.replace(/^سوال نمبر \d+[۔\.]\s*/, '').trim();
+      if (cleanUrdu) {
+        nextTitleUrdu = `سوال نمبر ${newIdx + 1}۔ ${cleanUrdu}`;
+      } else {
+        const autoUrduTitle = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx);
+        if (autoUrduTitle) nextTitleUrdu = autoUrduTitle;
+      }
+    } else {
       const autoUrduTitle = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx);
       if (autoUrduTitle) nextTitleUrdu = autoUrduTitle;
     }

@@ -422,9 +422,11 @@ export const loginUser = async (identifier: string, password: string): Promise<{
 export const logoutUser = async (): Promise<void> => {
   localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
   try {
-    await signOut(auth);
+    const signOutPromise = signOut(auth);
+    const timeoutPromise = new Promise<void>((_, reject) => setTimeout(() => reject(new Error('SignOut timeout')), 2500));
+    await Promise.race([signOutPromise, timeoutPromise]);
   } catch (e) {
-    console.log("Local logout");
+    console.log("Local logout complete");
   }
 };
 

@@ -95,11 +95,23 @@ const App: React.FC = () => {
   }, [currentUser?.instituteProfile?.logoUrl]);
 
   const handleLogout = async () => {
-    await logoutUser();
-    sessionStorage.removeItem('aplus_demo_seen');
+    // 1. Instantly reset state in UI so user is logged out on the very first touch without delay
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+      sessionStorage.removeItem('aplus_demo_seen');
+      sessionStorage.clear();
+    } catch (_) {}
+
     setHasSeenDemoAlert(false);
     setCurrentUser(null);
     setCurrentView('LOGIN');
+
+    // 2. Perform Firebase Auth signOut in the background
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.warn("Background signout warning:", e);
+    }
   };
 
   const handleAuthSuccess = async (user: User) => {
