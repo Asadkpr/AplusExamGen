@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { InstituteProfile, PaperPatternSection, Question } from '../types';
 
 interface PrintablePaperProps {
@@ -91,6 +91,28 @@ const translateHeadingToUrdu = (heading: string) => {
   return '';
 };
 
+const PageBoundaryBanner: React.FC<{ endedPage: number; nextPage: number; isManual?: boolean }> = ({ endedPage, nextPage, isManual }) => (
+  <div className="page-boundary-marker my-3 select-none print:hidden col-span-full w-full" dir="ltr">
+    <div className="bg-red-50 border-t-2 border-x-2 border-dashed border-red-500 rounded-t-lg px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-red-700 text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
+      <span>▲ Page {endedPage} Ends Here (صفحہ {endedPage} یہاں تک ہے)</span>
+      <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[9px] font-extrabold">
+        {isManual ? '✂ Manual Page Break' : `Print Page ${endedPage} End`}
+      </span>
+    </div>
+    <div className="h-3.5 bg-slate-900 border-y border-slate-700 flex items-center justify-center px-2">
+      <span className="text-[8px] sm:text-[9px] text-amber-400 font-black tracking-widest uppercase truncate">
+        ─── ✂ Page {endedPage} ختم • Page {nextPage} شروع (Adjust Space/Font above to fit questions) ✂ ───
+      </span>
+    </div>
+    <div className="bg-emerald-50 border-b-2 border-x-2 border-dashed border-emerald-600 rounded-b-lg px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-emerald-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-sm">
+      <span>▼ Page {nextPage} Starts Here (صفحہ {nextPage} یہاں سے شروع ہے)</span>
+      <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 normal-case">
+        Use <strong>Space (-/+)</strong> or <strong>Font (-/+)</strong> at top to adjust
+      </span>
+    </div>
+  </div>
+);
+
 export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   instituteProfile,
   classLevel,
@@ -110,6 +132,10 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   pageBreakAfterMCQ = false
 }) => {
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pageBreakMap, setPageBreakMap] = useState<Record<string, { endedPage: number; nextPage: number; isManual?: boolean }>>({});
+  const [pageSummary, setPageSummary] = useState<{ totalPages: number; lastPageUsedPercent: number }>({ totalPages: 1, lastPageUsedPercent: 45 });
+
   useEffect(() => {
     // Re-run MathJax whenever questions, subject, or font size changes
     const s = (subject || '').toLowerCase();
@@ -119,6 +145,112 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       }
     }
   }, [questions, subject, showAnswerKey, medium, baseFontSize]);
+
+  useEffect(() => {
+    const calculatePagination = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      if (containerRect.width === 0) return;
+
+      // Standard A4 printable height: 280mm out of 297mm height for 210mm width
+      const a4PageHeightPx = Math.max(960, (containerRect.width / 210) * 280);
+
+      // Measure existing screen-only page boundary banners so we subtract their height
+      const markers = Array.from(container.querySelectorAll('.page-boundary-marker')) as HTMLElement[];
+      const markerRects = markers.map(m => {
+        const r = m.getBoundingClientRect();
+        const style = window.getComputedStyle(m);
+        const mt = parseFloat(style.marginTop || '0') || 0;
+        const mb = parseFloat(style.marginBottom || '0') || 0;
+        return {
+          top: r.top - containerRect.top,
+          totalHeight: r.height + mt + mb
+        };
+      });
+
+      const getVirtualY = (screenY: number) => {
+        let virtualY = screenY;
+        for (const m of markerRects) {
+          if (m.top < screenY - 1) {
+            virtualY -= m.totalHeight;
+          }
+        }
+        return Math.max(0, virtualY);
+      };
+
+      const items = Array.from(container.querySelectorAll('[data-block-id]')) as HTMLElement[];
+      const newBreakMap: Record<string, { endedPage: number; nextPage: number; isManual?: boolean }> = {};
+
+      let currentPage = 1;
+      let currentPageStartY = 0;
+      let maxVirtualBottom = 0;
+
+      for (const item of items) {
+        const blockId = item.getAttribute('data-block-id');
+        if (!blockId) continue;
+
+        const isManualBreak = item.getAttribute('data-manual-break') === 'true';
+        const rect = item.getBoundingClientRect();
+        const vTop = getVirtualY(rect.top - containerRect.top);
+        const vBottom = getVirtualY(rect.bottom - containerRect.top);
+        if (vBottom > maxVirtualBottom) maxVirtualBottom = vBottom;
+
+        if (isManualBreak) {
+          newBreakMap[blockId] = {
+            endedPage: currentPage,
+            nextPage: currentPage + 1,
+            isManual: true
+          };
+          currentPage += 1;
+          currentPageStartY = vTop;
+          continue;
+        }
+
+        if (vBottom - currentPageStartY > a4PageHeightPx && vTop - currentPageStartY > 40) {
+          newBreakMap[blockId] = {
+            endedPage: currentPage,
+            nextPage: currentPage + 1,
+            isManual: false
+          };
+          currentPage += 1;
+          currentPageStartY = vTop;
+        }
+      }
+
+      const lastPageHeight = Math.max(0, maxVirtualBottom - currentPageStartY);
+      const usedPercent = Math.min(100, Math.max(5, Math.round((lastPageHeight / a4PageHeightPx) * 100)));
+
+      setPageBreakMap(prev => {
+        const prevKeys = Object.keys(prev);
+        const nextKeys = Object.keys(newBreakMap);
+        if (
+          prevKeys.length === nextKeys.length &&
+          prevKeys.every(k => prev[k]?.endedPage === newBreakMap[k]?.endedPage && prev[k]?.isManual === newBreakMap[k]?.isManual)
+        ) {
+          return prev;
+        }
+        return newBreakMap;
+      });
+
+      setPageSummary(prev => {
+        if (prev.totalPages === currentPage && Math.abs(prev.lastPageUsedPercent - usedPercent) <= 1) {
+          return prev;
+        }
+        return { totalPages: currentPage, lastPageUsedPercent: usedPercent };
+      });
+    };
+
+    const t1 = setTimeout(calculatePagination, 50);
+    const t2 = setTimeout(calculatePagination, 250);
+    window.addEventListener('resize', calculatePagination);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', calculatePagination);
+    };
+  }, [questions, sections, baseFontSize, lineSpacing, medium, showAnswerKey, headerStyle, pageBreakAfterMCQ, classLevel, subject, timeAllowed, paperCode]);
 
   const getLayoutStyles = (mode: number, baseSize: number) => {
     // Flexible baseSize scaling between 8px and 20px
@@ -325,8 +457,15 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
   return (
     <div className="print-container">
+      <style>{`
+        .pdf-exporting .print\\:hidden,
+        .pdf-exporting .page-boundary-marker {
+          display: none !important;
+        }
+      `}</style>
       <div 
         id="printable-section"
+        ref={containerRef}
         className="p-2 md:p-3 tex2jax_process relative overflow-visible" 
         style={{ 
           backgroundColor: '#ffffff', 
@@ -340,6 +479,14 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         }}
         dir="ltr"
       >
+        {/* PAGE 1 START INDICATOR (Screen Only) */}
+        <div className="page-boundary-marker mb-2 px-3 py-1.5 bg-blue-50 border-2 border-dashed border-blue-400 rounded-lg flex flex-wrap items-center justify-between gap-2 text-blue-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider select-none print:hidden" dir="ltr">
+          <span>▼ Page 1 Starts Here (پہلا صفحہ یہاں سے شروع ہے)</span>
+          <span className="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold">
+            Total Print Pages: {pageSummary.totalPages} {pageSummary.totalPages === 1 ? 'Page' : 'Pages'} (کل صفحات: {pageSummary.totalPages})
+          </span>
+        </div>
+
         {/* HEADER BLOCK */}
         {headerStyle === 'sba' ? (
           <div className="border border-black p-1 mb-2 relative z-10" style={{ borderColor: '#000000' }} dir="ltr">
@@ -622,15 +769,17 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               // 🔹 DYNAMIC FONT SIZE RESOLUTION
               const customTitleSize = section.titleFontSize ? `${section.titleFontSize}px` : styles.sectionTitle;
               const isBreakSection = Boolean(pageBreakAfterMCQ && section.id === firstSubjectiveSectionId);
+              const secHeaderBlockId = `sec-header-${idx}`;
+              const secHeaderBreak = pageBreakMap[secHeaderBlockId];
 
               return (
                 <React.Fragment key={section.id || idx}>
-                  {isBreakSection && (
-                    <div className="my-6 py-2 px-3 border-2 border-dashed border-gold-500/60 bg-amber-50 text-center print:hidden rounded-lg select-none shadow-sm">
-                      <div className="flex items-center justify-center gap-2 text-gold-700 text-xs font-black uppercase tracking-wider">
-                        <span>✂</span> Page Break — Page 1: MCQs • Page 2: Short & Long Questions
-                      </div>
-                    </div>
+                  {secHeaderBreak && (
+                    <PageBoundaryBanner
+                      endedPage={secHeaderBreak.endedPage}
+                      nextPage={secHeaderBreak.nextPage}
+                      isManual={secHeaderBreak.isManual}
+                    />
                   )}
                   <div 
                     style={{ 
@@ -639,11 +788,16 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                     }}
                     className={isBreakSection ? 'page-break-before print:pt-4' : ''}
                   >
-                    {showHeading && (
-                    <div className={`text-center mt-3 mb-1 font-bold tracking-widest py-0.5 text-black ${isUrduText(actualHeading) ? 'font-urdu' : ''}`} style={{ fontSize: `calc(${styles.sectionTitle} * 1.2)` }} dir={isUrduText(actualHeading) ? "rtl" : "ltr"}>
-                      ( {renderFormattedText(actualHeading)} {medium === 'Both' && translateHeadingToUrdu(actualHeading) ? `/ ${translateHeadingToUrdu(actualHeading)}` : ''} )
+                    <div
+                      data-block-id={secHeaderBlockId}
+                      data-manual-break={isBreakSection ? 'true' : 'false'}
+                    >
+                      {showHeading && (
+                        <div className={`text-center mt-3 mb-1 font-bold tracking-widest py-0.5 text-black ${isUrduText(actualHeading) ? 'font-urdu' : ''}`} style={{ fontSize: `calc(${styles.sectionTitle} * 1.2)` }} dir={isUrduText(actualHeading) ? "rtl" : "ltr"}>
+                          ( {renderFormattedText(actualHeading)} {medium === 'Both' && translateHeadingToUrdu(actualHeading) ? `/ ${translateHeadingToUrdu(actualHeading)}` : ''} )
+                        </div>
+                      )}
                     </div>
-                  )}
                   
                   <div className="border-[1.5px] border-black p-1 rounded-sm">
                     {/* 🔹 LANGUAGE-AWARE SECTION HEADING WITH AUTO MARKS */}
@@ -695,22 +849,33 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                 <div style={{ fontSize: styles.questionText }} className={`font-bold italic mb-2 opacity-90 border-l-4 border-black pl-2 text-black ${isPartUrdu ? 'font-urdu text-right border-l-0 border-r-4 pr-2' : ''}`} dir={isPartUrdu ? 'rtl' : 'ltr'}>{renderFormattedText(part.label)}</div>
                                 {partQuestions.map((q) => {
                                   runningMCQCounter++;
+                                  const qBlockId = `mcq-${idx}-${pIdx}-${q.id}-${runningMCQCounter}`;
+                                  const qBreak = pageBreakMap[qBlockId];
                                   return (
-                                    <div key={q.id} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className="break-inside-avoid">
-                                      <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
-                                      {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
-                                      <div 
-                                        className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : 'flex flex-wrap gap-x-8'} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} 
-                                        dir={baseDir}
-                                      >
-                                        {q.options?.map((_, oIdx) => (
-                                          <div key={oIdx} style={{ fontSize: styles.optionText }} className="flex items-start gap-1">
-                                            <span className="font-bold text-black">({String.fromCharCode(97 + oIdx)})</span> 
-                                            <div className="flex-grow">{renderOptionContent(q, oIdx)}</div>
-                                          </div>
-                                        ))}
+                                    <React.Fragment key={q.id}>
+                                      {qBreak && (
+                                        <PageBoundaryBanner
+                                          endedPage={qBreak.endedPage}
+                                          nextPage={qBreak.nextPage}
+                                          isManual={qBreak.isManual}
+                                        />
+                                      )}
+                                      <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className="break-inside-avoid">
+                                        <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
+                                        {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
+                                        <div 
+                                          className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : 'flex flex-wrap gap-x-8'} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} 
+                                          dir={baseDir}
+                                        >
+                                          {q.options?.map((_, oIdx) => (
+                                            <div key={oIdx} style={{ fontSize: styles.optionText }} className="flex items-start gap-1">
+                                              <span className="font-bold text-black">({String.fromCharCode(97 + oIdx)})</span> 
+                                              <div className="flex-grow">{renderOptionContent(q, oIdx)}</div>
+                                            </div>
+                                          ))}
+                                        </div>
                                       </div>
-                                    </div>
+                                    </React.Fragment>
                                   );
                                 })}
                              </div>
@@ -719,22 +884,33 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                       ) : (
                         sectionQuestions.map((q) => {
                           runningMCQCounter++;
+                          const qBlockId = `mcq-${idx}-${q.id}-${runningMCQCounter}`;
+                          const qBreak = pageBreakMap[qBlockId];
                           return (
-                            <div key={q.id} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className="break-inside-avoid">
-                              <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
-                              {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
-                              <div 
-                                className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : 'flex flex-wrap gap-x-8'} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} 
-                                dir={baseDir}
-                              >
-                                {q.options?.map((_, oIdx) => (
-                                  <div key={oIdx} style={{ fontSize: styles.optionText }} className="flex items-start gap-1">
-                                    <span className="font-bold text-black">({String.fromCharCode(97 + oIdx)})</span> 
-                                    <div className="flex-grow">{renderOptionContent(q, oIdx)}</div>
-                                  </div>
-                                ))}
+                            <React.Fragment key={q.id}>
+                              {qBreak && (
+                                <PageBoundaryBanner
+                                  endedPage={qBreak.endedPage}
+                                  nextPage={qBreak.nextPage}
+                                  isManual={qBreak.isManual}
+                                />
+                              )}
+                              <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className="break-inside-avoid">
+                                <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
+                                {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
+                                <div 
+                                  className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : 'flex flex-wrap gap-x-8'} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0`} 
+                                  dir={baseDir}
+                                >
+                                  {q.options?.map((_, oIdx) => (
+                                    <div key={oIdx} style={{ fontSize: styles.optionText }} className="flex items-start gap-1">
+                                      <span className="font-bold text-black">({String.fromCharCode(97 + oIdx)})</span> 
+                                      <div className="flex-grow">{renderOptionContent(q, oIdx)}</div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
+                            </React.Fragment>
                           );
                         })
                       )}
@@ -750,15 +926,26 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                           ? `${toRoman(localQuestionCounter)}.` 
                           : ((isSentences || isVoice) ? `(${toRoman(localQuestionCounter)})` : localQuestionCounter);
 
+                        const qBlockId = `q-${idx}-${qIdx}`;
+                        const qBreak = pageBreakMap[qBlockId];
+
                         return (
-                          <div 
-                            key={qIdx} 
-                            className="break-inside-avoid" 
-                            style={{ 
-                              paddingBottom: isGridSection ? '0px' : questionPaddingBottom, 
-                              marginBottom: isGridSection ? '0px' : questionMarginBottom 
-                            }}
-                          >
+                          <React.Fragment key={qIdx}>
+                            {qBreak && (
+                              <PageBoundaryBanner
+                                endedPage={qBreak.endedPage}
+                                nextPage={qBreak.nextPage}
+                                isManual={qBreak.isManual}
+                              />
+                            )}
+                            <div 
+                              data-block-id={qBlockId}
+                              className="break-inside-avoid" 
+                              style={{ 
+                                paddingBottom: isGridSection ? '0px' : questionPaddingBottom, 
+                                marginBottom: isGridSection ? '0px' : questionMarginBottom 
+                              }}
+                            >
                             {section.subParts && section.subParts.length > 0 ? (
                                <div className="space-y-0">
                                   {!skipNumbering && section.type.toUpperCase() !== 'LONG' && <div className="font-bold text-black" style={{ fontSize: styles.questionText }}>{localQuestionCounter}.</div>}
@@ -824,6 +1011,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                </div>
                             )}
                           </div>
+                          </React.Fragment>
                         );
                       })}
                     </div>
@@ -850,7 +1038,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           </div>
         )}
 
-        <div className="pt-1 border-t border-gray-200 mt-4 z-10 relative" dir="ltr">
+        <div data-block-id="paper-footer-block" className="pt-1 border-t border-gray-200 mt-4 z-10 relative" dir="ltr">
           <div className="flex justify-between text-[6px] text-gray-400 uppercase font-bold mb-1">
             <span>Aplus ExamGen • v1.0.3</span>
             <span>By: Nauman Ali</span>
@@ -858,6 +1046,14 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           <div className="text-center text-[9px] text-gray-500 font-medium">
             Generated by <a href="https://aplusexamgen.netlify.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline decoration-blue-600/30">https://aplusexamgen.netlify.app</a>
           </div>
+        </div>
+
+        {/* END OF LAST PAGE INDICATOR (Screen Only) */}
+        <div className="page-boundary-marker mt-3 px-3 py-2 bg-amber-50 border-2 border-dashed border-amber-500 rounded-lg flex flex-wrap items-center justify-between gap-2 text-amber-900 text-[10px] sm:text-[11px] font-black uppercase tracking-wider select-none print:hidden" dir="ltr">
+          <span>▲ Page {pageSummary.totalPages} Ends Here (صفحہ {pageSummary.totalPages} یہاں تک ہے)</span>
+          <span className="bg-amber-600 text-white px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold">
+            Page {pageSummary.totalPages} Filled: ~{pageSummary.lastPageUsedPercent}% • Free Space: ~{Math.max(0, 100 - pageSummary.lastPageUsedPercent)}%
+          </span>
         </div>
       </div>
     </div>

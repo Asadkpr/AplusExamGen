@@ -3,6 +3,7 @@ import { User, PaperPattern, PaperPatternSection, PaperPatternSectionPart, Chapt
 import { getPatterns, savePattern, deletePattern, subscribeToPatterns } from '../services/patternService';
 import { getSubjects } from '../services/subjectService';
 import { getChapters } from '../services/chapterService';
+import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -1435,6 +1436,15 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     else if (view === 'LIST') setView('SUBJECTS');
     else if (view === 'CREATE') setView('LIST');
   };
+
+  useEffect(() => {
+    pushBackGuard();
+  }, [view]);
+
+  useBackHandler(() => {
+    handleGlobalBack();
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col font-sans transition-colors duration-300">

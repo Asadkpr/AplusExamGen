@@ -4,6 +4,7 @@ import { CLASSES, CARD_COLORS } from '../constants';
 import { getSubjects } from '../services/subjectService';
 import { getChapters, getVisibilitySettings, toggleVisibility, VisibilityState, deleteChapterPermanently } from '../services/chapterService';
 import { getQuestionsForChapters, updateChapterQuestion, deleteChapterQuestion, getAllClassUploadedContent, deleteSubtopicPermanently } from '../services/questionService';
+import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
 import { Button } from './Button';
 import { Input } from './Input'; 
 import { 
@@ -285,6 +286,30 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
         default: return 'bg-gray-800 text-gray-400 border-gray-600 [.light-theme_&]:bg-gray-100 [.light-theme_&]:text-gray-700 [.light-theme_&]:border-gray-200';
     }
   };
+
+  useEffect(() => {
+    pushBackGuard();
+  }, [step, editingQuestion]);
+
+  useBackHandler(() => {
+    if (editingQuestion) {
+      setEditingQuestion(null);
+      return true;
+    }
+    if (step === 3) {
+      setSelectedSubject('');
+      setStep(2);
+      setActiveTab('QUESTIONS');
+      return true;
+    }
+    if (step === 2) {
+      setSelectedClass('');
+      setStep(1);
+      return true;
+    }
+    onBack();
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col font-sans tex2jax_process">

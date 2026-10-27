@@ -9,6 +9,7 @@ import { resetChapterCache } from './services/chapterService';
 import { resetSubjectCache } from './services/subjectService';
 import { resetQuestionCache } from './services/questionService';
 import { syncService } from './services/syncService';
+import { useBackHandler, pushBackGuard } from './services/backNavigationService';
 import { Login } from './components/Login';
 import { SignUp } from './components/SignUp';
 import { Dashboard } from './components/Dashboard';
@@ -199,6 +200,27 @@ const App: React.FC = () => {
     setSelectedPatternForGeneration(undefined);
     setCurrentView('GENERATE_PAPER');
   };
+
+  // Ensure browser/mobile back button always goes 1 step back instead of closing the app
+  useEffect(() => {
+    pushBackGuard();
+  }, [currentView]);
+
+  useBackHandler(() => {
+    if (currentView === 'SIGNUP') {
+      setCurrentView('LOGIN');
+      return true;
+    }
+    if (currentUser && currentView !== 'DASHBOARD') {
+      if (currentView === 'GENERATE_PAPER' && selectedPaperToOpen) {
+        setCurrentView('SAVED_PAPERS');
+      } else {
+        setCurrentView('DASHBOARD');
+      }
+      return true;
+    }
+    return true;
+  });
 
   if (isInitializing) {
     return (

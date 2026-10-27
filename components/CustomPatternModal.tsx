@@ -405,24 +405,24 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-gray-800 border-2 border-gold-500/40 rounded-2xl max-w-6xl w-full p-3 sm:p-6 shadow-2xl relative my-auto max-h-[92dvh] lg:max-h-[94vh] flex flex-col overflow-hidden text-theme-text-main animate-scaleIn">
+    <div className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-1.5 sm:p-4 overflow-y-auto animate-fadeIn">
+      <div className="bg-gray-800 border-2 border-gold-500/40 rounded-2xl max-w-6xl w-full p-2.5 sm:p-6 shadow-2xl relative my-auto h-[95dvh] max-h-[95dvh] lg:h-auto lg:max-h-[94vh] flex flex-col overflow-hidden text-theme-text-main animate-scaleIn">
         
         {/* HEADER */}
-        <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-gray-700 shrink-0">
+        <div className="flex items-center lg:items-start justify-between pb-2 lg:pb-4 border-b border-gray-700 shrink-0">
           <div>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-gold-500/10 border border-gold-500/30 rounded-xl text-gold-500 shrink-0">
-                <Sliders size={20} />
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <div className="p-1.5 sm:p-2 bg-gold-500/10 border border-gold-500/30 rounded-xl text-gold-500 shrink-0">
+                <Sliders size={18} className="sm:w-5 sm:h-5" />
               </div>
               <div>
-                <h2 className="text-base sm:text-xl font-black text-theme-text-main uppercase tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h2 className="text-sm sm:text-xl font-black text-theme-text-main uppercase tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
                   Custom Paper Pattern Builder
                   <span className="text-[10px] bg-gold-500 text-black px-2 py-0.5 rounded-full font-bold">
                     {subject} • {classLevel}
                   </span>
                 </h2>
-                <p className="text-[11px] sm:text-xs text-theme-text-muted mt-0.5">
+                <p className="hidden lg:block text-xs text-theme-text-muted mt-0.5">
                   Configure MCQs (Section I), Short Questions (Section II), Long Questions (Section III) & Titles.
                 </p>
               </div>

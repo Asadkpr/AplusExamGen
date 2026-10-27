@@ -11,6 +11,7 @@ import { savePaper, updatePaper } from '../services/paperService';
 import { PrintablePaper } from './PrintablePaper';
 import { CustomPatternModal } from './CustomPatternModal';
 import { sortSectionsByStandardSequence } from './PaperPatterns';
+import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
 import { 
   ArrowLeft, CheckSquare, Square, ChevronRight, ChevronDown, CheckCircle, 
   Printer, RefreshCw, AlertCircle, Save, GraduationCap, 
@@ -174,6 +175,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [mandatoryChapterIds, setMandatoryChapterIds] = useState<string[]>([]);
   const [saveStatusMessage, setSaveStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [savedPaperId, setSavedPaperId] = useState<string | null>(initialPaper?.id || null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = React.useRef<HTMLDivElement>(null);
 
@@ -194,6 +196,31 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     partType?: string;
     partChapters?: string[];
   } | null>(null);
+
+  useEffect(() => {
+    pushBackGuard();
+  }, [step, showCustomPatternModal, swappingSlot]);
+
+  useBackHandler(() => {
+    if (showCustomPatternModal) {
+      setShowCustomPatternModal(false);
+      return true;
+    }
+    if (swappingSlot) {
+      setSwappingSlot(null);
+      return true;
+    }
+    if (isActionsMenuOpen) {
+      setIsActionsMenuOpen(false);
+      return true;
+    }
+    if (step > 1) {
+      setStep(prev => prev - 1);
+      return true;
+    }
+    onBack();
+    return true;
+  });
 
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
   const isUrduPaper = isUrduStyleSubject(selectedSubject);
@@ -786,9 +813,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     }
   };
 
-  const handlePrint = async () => {
-    // 1. Auto-save paper first so user work is 100% saved in DB
-    await executeSave(true, "Paper saved successfully! Opening print dialog... (پیپر محفوظ ہو گیا، پرنٹ ڈائیلاگ کھل رہا ہے)");
+  const handlePrint = () => {
     setIsActionsMenuOpen(false);
     const originalTitle = document.title;
     const cleanFileName = `${selectedClass}_${selectedSubject}_Exam_Paper`.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
@@ -796,20 +821,54 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     setTimeout(() => {
       window.print();
       setTimeout(() => { document.title = originalTitle; }, 2000);
-    }, 400);
+    }, 150);
   };
 
   const handleDownloadPdf = async () => {
-    // 1. Auto-save paper first
-    await executeSave(true, "Paper saved! In destination, select 'Save as PDF' to download. (پی ڈی ایف کے لیے Save as PDF منتخب کریں)");
+    if (isDownloadingPdf) return;
     setIsActionsMenuOpen(false);
-    const originalTitle = document.title;
     const cleanFileName = `${selectedClass}_${selectedSubject}_Exam_Paper`.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
-    document.title = cleanFileName;
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => { document.title = originalTitle; }, 2000);
-    }, 400);
+    const element = document.getElementById('printable-section');
+
+    if (element && typeof (window as any).html2pdf === 'function') {
+      setIsDownloadingPdf(true);
+      try {
+        element.classList.add('pdf-exporting');
+        const opt = {
+          margin: [5, 5, 5, 5],
+          filename: `${cleanFileName}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            scrollY: 0,
+            backgroundColor: '#ffffff'
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'], before: '.page-break-before', avoid: '.break-inside-avoid' }
+        };
+        await (window as any).html2pdf().set(opt).from(element).save();
+        setSaveStatusMessage({
+          type: 'success',
+          text: "PDF downloaded successfully! (پی ڈی ایف کامیابی سے ڈاؤن لوڈ ہو گئی ہے)"
+        });
+        setTimeout(() => setSaveStatusMessage(null), 4000);
+      } catch (err) {
+        console.error("PDF download error:", err);
+        window.print();
+      } finally {
+        element.classList.remove('pdf-exporting');
+        setIsDownloadingPdf(false);
+      }
+    } else {
+      const originalTitle = document.title;
+      document.title = cleanFileName;
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => { document.title = originalTitle; }, 2000);
+      }, 150);
+    }
   };
 
   const handleSaveOrUpdate = () => executeSave(true);
@@ -1047,31 +1106,31 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                       title="Save this exam paper to database"
                     >
                       <Save size={13} className={`mr-1 sm:mr-1.5 sm:w-3.5 sm:h-3.5 ${isSavingPaper ? 'animate-spin' : ''}`} /> 
-                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update' : 'Save Paper')}</span>
+                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update Paper' : 'Save Paper')}</span>
                     </Button>
 
-                    {/* Direct Print Button (Auto-saves first) */}
+                    {/* Direct Print Button */}
                     <Button 
                       onClick={handlePrint} 
-                      disabled={isSavingPaper}
+                      disabled={isSavingPaper || isDownloadingPdf}
                       variant="secondary" 
                       className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600"
-                      title="Auto-saves and opens print dialog"
+                      title="Open print dialog"
                     >
                       <Printer size={12} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
                       <span className="hidden xs:inline">Print</span>
                     </Button>
 
-                    {/* Direct PDF Download Button (Auto-saves first) */}
+                    {/* Direct PDF Download Button */}
                     <Button 
                       onClick={handleDownloadPdf} 
-                      disabled={isSavingPaper}
+                      disabled={isDownloadingPdf || isSavingPaper}
                       variant="secondary" 
                       className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600"
-                      title="Auto-saves and downloads as PDF"
+                      title="Download paper as PDF"
                     >
-                      <FileDown size={12} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
-                      <span>Download PDF</span>
+                      <FileDown size={12} className={`mr-1 text-gold-400 sm:w-3.5 sm:h-3.5 ${isDownloadingPdf ? 'animate-bounce' : ''}`} /> 
+                      <span>{isDownloadingPdf ? 'Downloading...' : 'Download PDF'}</span>
                     </Button>
 
                     {/* More Actions Toggle Dropdown */}
@@ -1698,7 +1757,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           )}
 
           {step === 7 && (
-            <div className="animate-fadeIn space-y-4 h-full flex flex-col relative pb-20 sm:pb-24">
+            <div className="animate-fadeIn space-y-4 h-full flex flex-col relative pb-8">
                <div className="bg-surface-800 p-1 sm:p-8 rounded-xl overflow-x-auto border border-surface-700 flex-grow print:p-0 print:bg-white print:border-none">
                   <div className="mx-auto shadow-2xl print:shadow-none w-full max-w-[210mm] transition-all relative group/paper" style={{ minHeight: '297mm', color: '#000000', backgroundColor: '#ffffff' }}>
                      <PrintablePaper 
@@ -1709,44 +1768,6 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        chaptersDisplay={getChaptersDisplay()} headerStyle={headerStyle}
                        pageBreakAfterMCQ={pageBreakAfterMCQ}
                      />
-                  </div>
-               </div>
-
-               {/* Step 7 Floating Bottom Action Toolbar */}
-               <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[100] print:hidden w-auto max-w-[95vw]">
-                  <div className="bg-surface-800/95 backdrop-blur-md border border-gold-500/40 rounded-full shadow-[0_10px_35px_rgba(0,0,0,0.6)] px-3 py-2 flex items-center gap-2 sm:gap-3">
-                    <Button
-                      onClick={() => executeSave(true)}
-                      disabled={isSavingPaper}
-                      variant="primary"
-                      className="!w-auto !h-9 sm:!h-10 !py-1 sm:!py-2 !px-3 sm:!px-5 text-[10px] sm:text-xs font-black shadow-lg flex items-center gap-1.5 sm:gap-2 bg-gold-500 hover:bg-gold-400 text-black border-none rounded-full"
-                      title="Save exam paper"
-                    >
-                      <Save size={15} className={isSavingPaper ? "animate-spin" : ""} />
-                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update Paper' : 'Save Paper')}</span>
-                    </Button>
-
-                    <Button
-                      onClick={handlePrint}
-                      disabled={isSavingPaper}
-                      variant="secondary"
-                      className="!w-auto !h-9 sm:!h-10 !py-1 sm:!py-2 !px-3 sm:!px-4 text-[10px] sm:text-xs font-bold flex items-center gap-1.5 sm:gap-2 bg-surface-700 hover:bg-surface-600 text-theme-text-main border border-surface-600 rounded-full"
-                      title="Auto-saves and opens print dialog"
-                    >
-                      <Printer size={15} className="text-gold-400" />
-                      <span>Print</span>
-                    </Button>
-
-                    <Button
-                      onClick={handleDownloadPdf}
-                      disabled={isSavingPaper}
-                      variant="secondary"
-                      className="!w-auto !h-9 sm:!h-10 !py-1 sm:!py-2 !px-3 sm:!px-5 text-[10px] sm:text-xs font-bold flex items-center gap-1.5 sm:gap-2 bg-surface-700 hover:bg-surface-600 text-theme-text-main border border-surface-600 rounded-full"
-                      title="Auto-saves and downloads as PDF"
-                    >
-                      <FileDown size={15} className="text-gold-400" />
-                      <span>Download PDF</span>
-                    </Button>
                   </div>
                </div>
             </div>

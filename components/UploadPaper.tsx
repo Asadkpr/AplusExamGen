@@ -5,6 +5,7 @@ import { CLASSES, SUBJECTS_BY_CLASS, CARD_COLORS } from '../constants';
 import { getSubjects, addSubject, deleteSubject, renameSubject } from '../services/subjectService';
 import { getChapters, addChapter, deleteChapter, renameChapter } from '../services/chapterService';
 import { saveUploadedChapterContent } from '../services/questionService';
+import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
 import { GoogleGenAI } from "@google/genai";
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, X, Info, 
@@ -183,6 +184,22 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
   const [newChapterName, setNewChapterName] = useState('');
   const [editChapterModal, setEditChapterModal] = useState(false);
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
+
+  useEffect(() => {
+    pushBackGuard();
+  }, [step, addSubjectModal, editSubjectModal, addChapterModal, editChapterModal]);
+
+  useBackHandler(() => {
+    if (addSubjectModal) { setAddSubjectModal(false); return true; }
+    if (editSubjectModal) { setEditSubjectModal(false); return true; }
+    if (addChapterModal) { setAddChapterModal(false); return true; }
+    if (editChapterModal) { setEditChapterModal(false); return true; }
+    if (step > 1) {
+      setStep(step - 1);
+      return true;
+    }
+    return false;
+  });
 
   const handleSaveNewSubject = async (e: React.FormEvent) => {
     e.preventDefault();

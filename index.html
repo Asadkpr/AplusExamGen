@@ -194,8 +194,8 @@
         pointer-events: none !important;
       }
       
-      /* BULLETPROOF FIX: Hide everything appended to body by external services (like Netlify) except our React App */
-      body > *:not(#root):not(script):not(style) {
+      /* BULLETPROOF FIX: Hide everything appended to body by external services (like Netlify) except our React App and PDF generator container */
+      body > *:not(#root):not(script):not(style):not(.html2pdf__container) {
         display: none !important;
         opacity: 0 !important;
         visibility: hidden !important;
@@ -204,6 +204,7 @@
         pointer-events: none !important;
       }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <link rel="stylesheet" href="/index.css">
 </head>
