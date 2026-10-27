@@ -91,25 +91,20 @@ const translateHeadingToUrdu = (heading: string) => {
   return '';
 };
 
-const PageBoundaryBanner: React.FC<{ endedPage: number; nextPage: number; isManual?: boolean }> = ({ endedPage, nextPage, isManual }) => (
-  <div className="page-boundary-marker my-3 select-none print:hidden col-span-full w-full" dir="ltr">
-    <div className="bg-red-50 border-t-2 border-x-2 border-dashed border-red-500 rounded-t-lg px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-red-700 text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
-      <span>▲ Page {endedPage} Ends Here (صفحہ {endedPage} یہاں تک ہے)</span>
-      <span className="bg-red-600 text-white px-2 py-0.5 rounded text-[9px] font-extrabold">
-        {isManual ? '✂ Manual Page Break' : `Print Page ${endedPage} End`}
-      </span>
-    </div>
-    <div className="h-3.5 bg-slate-900 border-y border-slate-700 flex items-center justify-center px-2">
-      <span className="text-[8px] sm:text-[9px] text-amber-400 font-black tracking-widest uppercase truncate">
-        ─── ✂ Page {endedPage} ختم • Page {nextPage} شروع (Adjust Space/Font above to fit questions) ✂ ───
-      </span>
-    </div>
-    <div className="bg-emerald-50 border-b-2 border-x-2 border-dashed border-emerald-600 rounded-b-lg px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-emerald-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-sm">
-      <span>▼ Page {nextPage} Starts Here (صفحہ {nextPage} یہاں سے شروع ہے)</span>
-      <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 normal-case">
-        Use <strong>Space (-/+)</strong> or <strong>Font (-/+)</strong> at top to adjust
-      </span>
-    </div>
+const formatPageEndLabel = (pageNum: number): string => {
+  if (pageNum === 1) return 'First Page End';
+  if (pageNum === 2) return '2nd Page End';
+  if (pageNum === 3) return '3rd Page End';
+  return `${pageNum}th Page End`;
+};
+
+const PageBoundaryBanner: React.FC<{ endedPage: number; nextPage: number; isManual?: boolean }> = ({ endedPage }) => (
+  <div className="page-boundary-marker my-2 select-none print:hidden col-span-full w-full flex items-center gap-2" dir="ltr">
+    <div className="flex-grow border-t-2 border-dashed border-red-500/70" />
+    <span className="px-3 py-0.5 bg-red-50 border border-red-400 text-red-700 rounded text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
+      {formatPageEndLabel(endedPage)}
+    </span>
+    <div className="flex-grow border-t-2 border-dashed border-red-500/70" />
   </div>
 );
 
@@ -479,14 +474,6 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         }}
         dir="ltr"
       >
-        {/* PAGE 1 START INDICATOR (Screen Only) */}
-        <div className="page-boundary-marker mb-2 px-3 py-1.5 bg-blue-50 border-2 border-dashed border-blue-400 rounded-lg flex flex-wrap items-center justify-between gap-2 text-blue-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider select-none print:hidden" dir="ltr">
-          <span>▼ Page 1 Starts Here (پہلا صفحہ یہاں سے شروع ہے)</span>
-          <span className="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold">
-            Total Print Pages: {pageSummary.totalPages} {pageSummary.totalPages === 1 ? 'Page' : 'Pages'} (کل صفحات: {pageSummary.totalPages})
-          </span>
-        </div>
-
         {/* HEADER BLOCK */}
         {headerStyle === 'sba' ? (
           <div className="border border-black p-1 mb-2 relative z-10" style={{ borderColor: '#000000' }} dir="ltr">
@@ -1049,11 +1036,12 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         </div>
 
         {/* END OF LAST PAGE INDICATOR (Screen Only) */}
-        <div className="page-boundary-marker mt-3 px-3 py-2 bg-amber-50 border-2 border-dashed border-amber-500 rounded-lg flex flex-wrap items-center justify-between gap-2 text-amber-900 text-[10px] sm:text-[11px] font-black uppercase tracking-wider select-none print:hidden" dir="ltr">
-          <span>▲ Page {pageSummary.totalPages} Ends Here (صفحہ {pageSummary.totalPages} یہاں تک ہے)</span>
-          <span className="bg-amber-600 text-white px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-extrabold">
-            Page {pageSummary.totalPages} Filled: ~{pageSummary.lastPageUsedPercent}% • Free Space: ~{Math.max(0, 100 - pageSummary.lastPageUsedPercent)}%
+        <div className="page-boundary-marker mt-2 select-none print:hidden w-full flex items-center gap-2" dir="ltr">
+          <div className="flex-grow border-t-2 border-dashed border-red-500/70" />
+          <span className="px-3 py-0.5 bg-red-50 border border-red-400 text-red-700 rounded text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
+            {formatPageEndLabel(pageSummary.totalPages)}
           </span>
+          <div className="flex-grow border-t-2 border-dashed border-red-500/70" />
         </div>
       </div>
     </div>
