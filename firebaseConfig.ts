@@ -1,7 +1,13 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, setLogLevel } from "firebase/firestore";
+
+// Suppress internal SDK console.error spam on transient backoff / quota limits
+// so service-level try/catch and local cache fallbacks handle it cleanly
+try {
+  setLogLevel('silent');
+} catch (_) {}
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -25,7 +31,8 @@ try {
   dbInstance = initializeFirestore(app, {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
-    })
+    }),
+    experimentalAutoDetectLongPolling: true,
   });
 } catch (e) {
   dbInstance = getFirestore(app);

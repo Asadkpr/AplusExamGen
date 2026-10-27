@@ -1,7 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { ViewState, User, PaperPattern, SavedPaper } from './types';
-import { subscribeToAuth, logoutUser, refreshUserProfile } from './services/authService';
+import { subscribeToAuth, logoutUser, refreshUserProfile, resetUserCache } from './services/authService';
+import { resetPaperCache } from './services/paperService';
+import { resetPatternCache } from './services/patternService';
+import { resetAnnouncementCache } from './services/announcementService';
+import { resetChapterCache } from './services/chapterService';
+import { resetSubjectCache } from './services/subjectService';
+import { resetQuestionCache } from './services/questionService';
+import { syncService } from './services/syncService';
 import { Login } from './components/Login';
 import { SignUp } from './components/SignUp';
 import { Dashboard } from './components/Dashboard';
@@ -20,9 +27,29 @@ import { ThemeProvider } from './context/ThemeContext';
 import { LOCAL_STORAGE_SESSION_KEY } from './constants';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<ViewState>('LOGIN');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch (_) {}
+    return null;
+  });
+  const [currentView, setCurrentView] = useState<ViewState>(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u) {
+          if (u.instituteProfile || u.email === 'admin@aplusexamgen.com' || u.email === 'admin' || u.id === 'local-admin') {
+            return 'DASHBOARD';
+          }
+          return 'INSTITUTE_SETUP';
+        }
+      }
+    } catch (_) {}
+    return 'LOGIN';
+  });
+  const [isInitializing, setIsInitializing] = useState(false);
   
   const [selectedPatternForGeneration, setSelectedPatternForGeneration] = useState<PaperPattern | undefined>(undefined);
   const [selectedPaperToOpen, setSelectedPaperToOpen] = useState<SavedPaper | undefined>(undefined);
@@ -75,13 +102,8 @@ const App: React.FC = () => {
       setIsInitializing(false);
     });
 
-    const timer = setTimeout(() => {
-      setIsInitializing(false);
-    }, 2000);
-
     return () => {
       unsubscribe();
-      clearTimeout(timer);
     }
   }, []);
 
@@ -94,29 +116,34 @@ const App: React.FC = () => {
     }
   }, [currentUser?.instituteProfile?.logoUrl]);
 
-  const handleLogout = async () => {
-    // 1. Instantly reset state in UI so user is logged out on the very first touch without delay
-    try {
-      localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
-      sessionStorage.removeItem('aplus_demo_seen');
-      sessionStorage.clear();
-    } catch (_) {}
+  const invalidateAppCaches = (userId?: string, isAdmin?: boolean) => {
+    resetUserCache();
+    resetPaperCache();
+    resetPatternCache();
+    resetAnnouncementCache();
+    resetChapterCache();
+    resetSubjectCache();
+    resetQuestionCache();
+    syncService.clearCache();
+    if (userId) {
+      syncService.refreshServerCounts(userId, isAdmin);
+    }
+  };
 
+  const handleLogout = async () => {
+    invalidateAppCaches();
+    await logoutUser();
+    sessionStorage.removeItem('aplus_demo_seen');
     setHasSeenDemoAlert(false);
     setCurrentUser(null);
     setCurrentView('LOGIN');
-
-    // 2. Perform Firebase Auth signOut in the background
-    try {
-      await logoutUser();
-    } catch (e) {
-      console.warn("Background signout warning:", e);
-    }
   };
 
   const handleAuthSuccess = async (user: User) => {
     sessionStorage.removeItem('aplus_demo_seen');
     setHasSeenDemoAlert(false);
+    const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
+    invalidateAppCaches(user.id, isAdmin);
     if (!user.instituteProfile) {
        try {
          const fresh = await refreshUserProfile(user.id);

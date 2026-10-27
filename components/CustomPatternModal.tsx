@@ -3,21 +3,23 @@ import { User, PaperPattern, PaperPatternSection, PaperPatternSectionPart, Chapt
 import { 
   PREDEFINED_TYPES, 
   ENGLISH_SPECIFIC_TYPES, 
+  ENGLISH_MCQ_SUBTYPES, 
+  ENGLISH_SUBTYPE_INSTRUCTIONS, 
   SECTION_HEADINGS, 
   isUrdu, 
   getAutoTitle, 
   getAutoUrduTitle, 
   generateId, 
   ChapterSelector,
-  sortSectionsByStandardSequence,
-  TYPE_TITLE_MAPPING
+  getSectionSortRank,
+  sortSectionsByStandardSequence
 } from './PaperPatterns';
 import { Button } from './Button';
 import { savePattern } from '../services/patternService';
 import { 
-  X, Plus, Trash2, Clock, Layers,
-  Eye, EyeOff, Hash, ListTree,
-  Sliders, ChevronRight, Check, BookmarkCheck, Edit, ListFilter
+  X, Plus, Trash2, Clock, Layers, BookOpen, 
+  Eye, EyeOff, Hash, ListTree, Sparkles, AlertTriangle, 
+  Sliders, ChevronRight, Check, BookmarkCheck
 } from 'lucide-react';
 
 interface CustomPatternModalProps {
@@ -30,11 +32,6 @@ interface CustomPatternModalProps {
   user?: User;
   initialPattern?: PaperPattern | null;
 }
-
-const isLongSection = (type: string) => {
-  const upper = (type || '').toUpperCase().trim();
-  return upper === 'LONG' || upper.includes('LONG') || upper.includes('THEORY') || type.includes('تفصیلی');
-};
 
 export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
   isOpen,
@@ -55,7 +52,6 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     initialPattern?.timeAllowed || '2:00 Hours'
   );
   const [sections, setSections] = useState<PaperPatternSection[]>([]);
-  const [customTitleModes, setCustomTitleModes] = useState<Record<string, boolean>>({});
   const [expandedSectionParts, setExpandedSectionParts] = useState<Record<string, boolean>>({});
   const [openChapterDropdownId, setOpenChapterDropdownId] = useState<string | null>(null);
   const [saveToLibrary, setSaveToLibrary] = useState(false);
@@ -73,18 +69,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
       setSections(sorted);
 
       const expanded: Record<string, boolean> = {};
-      const modes: Record<string, boolean> = {};
-      sorted.forEach((s, index) => {
-        if (isLongSection(s.type) && s.subParts && s.subParts.length > 0) {
+      sorted.forEach(s => {
+        if (s.subParts && s.subParts.length > 0) {
           expanded[s.id] = true;
-        }
-        const autoTitle = getAutoTitle(s.type, s.attemptCount, s.marksPerQuestion, index, isEnglishSubject);
-        if (s.title && s.title !== autoTitle) {
-          modes[s.id] = true;
         }
       });
       setExpandedSectionParts(expanded);
-      setCustomTitleModes(modes);
     } else {
       // Default standard exam sections: Q1 MCQs, Q2 Short, Q3 Long
       const sec1Id = generateId();
@@ -96,8 +86,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           id: sec1Id,
           type: 'MCQ',
           heading: isEnglishSubject ? 'OBJECTIVE PART' : 'SECTION – I',
-          title: getAutoTitle('MCQ', 10, 1, 0, isEnglishSubject) || 'Q1. Choose the correct option from the following.',
-          titleUrdu: getAutoUrduTitle('MCQ', 10, 1, 0) || 'سوال نمبر 1۔ تمام سوالات کے جوابات دیں۔',
+          title: '',
+          titleUrdu: '',
           titleFontSize: 10,
           hideSectionMarks: false,
           hideSubPartMarks: false,
@@ -110,8 +100,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           id: sec2Id,
           type: 'Short',
           heading: isEnglishSubject ? 'SECTION – I' : 'SECTION – II',
-          title: getAutoTitle('Short', 5, 2, 1, isEnglishSubject) || 'Q2. Write short answers to any 5 questions.',
-          titleUrdu: getAutoUrduTitle('Short', 5, 2, 1) || 'سوال نمبر 2۔ کوئی سے 5 مختصر سوالات کے جوابات دیں۔',
+          title: '',
+          titleUrdu: '',
           titleFontSize: 10,
           hideSectionMarks: false,
           hideSubPartMarks: false,
@@ -124,8 +114,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           id: sec3Id,
           type: 'Long',
           heading: isEnglishSubject ? 'SECTION – II' : 'None',
-          title: getAutoTitle('Long', 2, 5, 2, isEnglishSubject) || 'Q3. Attempt any 2 questions.',
-          titleUrdu: getAutoUrduTitle('Long', 2, 5, 2) || 'سوال نمبر 3۔ کوئی سے 2 تفصیلی سوالات کے جوابات دیں۔',
+          title: '',
+          titleUrdu: '',
           titleFontSize: 10,
           hideSectionMarks: false,
           hideSubPartMarks: false,
@@ -140,7 +130,6 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
       setTimeAllowed('2:00 Hours');
       setSections(defaultSections);
       setExpandedSectionParts({});
-      setCustomTitleModes({});
     }
   }, [isOpen, initialPattern, subject, isEnglishSubject]);
 
@@ -176,16 +165,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
       defaultHeading = isEnglishSubject ? 'SECTION – II' : 'None';
     }
 
-    const nextIndex = sections.length;
-    const autoTitle = getAutoTitle(type, defaultAttempt, defaultMarks, nextIndex, isEnglishSubject);
-    const autoUrduTitle = getAutoUrduTitle(type, defaultAttempt, defaultMarks, nextIndex);
-
     const newSection: PaperPatternSection = {
       id: sectionId,
       type: type,
       heading: defaultHeading,
-      title: autoTitle || `Q${nextIndex + 1}. Attempt all.`,
-      titleUrdu: autoUrduTitle || `سوال نمبر ${nextIndex + 1}۔ تمام سوالات کے جوابات دیں۔`,
+      title: '',
+      titleUrdu: '',
       titleFontSize: 10,
       hideSectionMarks: false,
       hideSubPartMarks: false,
@@ -214,31 +199,29 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
 
         let nextSection = { ...s, [field]: nextValue };
 
-        // If type changed and is not Long, clear subParts if any
-        if (field === 'type') {
-          const isNowLong = isLongSection(value);
-          if (!isNowLong) {
-            nextSection.subParts = undefined;
-          }
+        // Auto-detect summary type for English
+        if (field === 'type' && isEnglishSubject && value === 'Summary') {
+          nextSection.subParts = [
+            { id: generateId(), label: 'Write the summary of the poem.', marks: 5, type: 'Summary', specificChapters: [], questionCount: 1, attemptCount: 1 },
+            { id: generateId(), label: 'Paraphrase the following lines into simple English.', marks: 5, type: 'Paraphrase', specificChapters: [], questionCount: 1, attemptCount: 1, isAlternative: true }
+          ];
+          nextSection.questionCount = 1;
+          nextSection.attemptCount = 1;
+          nextSection.marksPerQuestion = 5;
+          setExpandedSectionParts(p => ({ ...p, [id]: true }));
         }
 
-        // Auto-update display title if not in custom title mode
-        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion' || field === 'heading') {
-          if (!customTitleModes[id]) {
-            const updatedType = field === 'type' ? value : nextSection.type;
-            const updatedCount = field === 'attemptCount' ? value : nextSection.attemptCount;
-            const updatedMarks = field === 'marksPerQuestion' ? value : nextSection.marksPerQuestion;
-
-            const autoTitle = getAutoTitle(updatedType, updatedCount, updatedMarks, idx, isEnglishSubject);
-            if (autoTitle) {
-              nextSection.title = autoTitle;
-            }
-
-            const autoUrduTitle = getAutoUrduTitle(updatedType, updatedCount, updatedMarks, idx);
-            if (autoUrduTitle) {
-              nextSection.titleUrdu = autoUrduTitle;
-            }
-          }
+        // Auto-detect letter type for English
+        if (field === 'type' && isEnglishSubject && value === 'Letter') {
+          nextSection.subParts = [
+            { id: generateId(), label: 'Write a Letter to your friend...', marks: 8, type: 'Letter', specificChapters: [], questionCount: 1, attemptCount: 1 },
+            { id: generateId(), label: 'Write a Story on...', marks: 8, type: 'Story', specificChapters: [], questionCount: 1, attemptCount: 1, isAlternative: true },
+            { id: generateId(), label: 'Write a Dialogue between...', marks: 8, type: 'Dialogue', specificChapters: [], questionCount: 1, attemptCount: 1, isAlternative: true }
+          ];
+          nextSection.questionCount = 1;
+          nextSection.attemptCount = 1;
+          nextSection.marksPerQuestion = 8;
+          setExpandedSectionParts(p => ({ ...p, [id]: true }));
         }
 
         return nextSection;
@@ -253,22 +236,6 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     });
   };
 
-  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, id: string, field: 'title' | 'titleUrdu') => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = e.currentTarget.selectionStart;
-      const end = e.currentTarget.selectionEnd;
-      const value = e.currentTarget.value;
-      const newValue = value.substring(0, start) + "\n" + value.substring(end);
-      handleUpdateSection(id, field, newValue);
-      
-      const target = e.currentTarget;
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = start + 1;
-      }, 0);
-    }
-  };
-
   const handleToggleParts = (id: string) => {
     setExpandedSectionParts(prev => ({ ...prev, [id]: !prev[id] }));
   };
@@ -278,17 +245,33 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
       if (s.id !== sectionId) return s;
       const parts = [...(s.subParts || [])];
       const nextLabelChar = String.fromCharCode(97 + parts.length);
+      const isMCQ = s.type.toUpperCase() === 'MCQ';
+
+      let partType = isMCQ && isEnglishSubject 
+        ? ENGLISH_MCQ_SUBTYPES[parts.length % ENGLISH_MCQ_SUBTYPES.length] 
+        : s.type;
 
       parts.push({
         id: generateId(),
-        label: `(${nextLabelChar})`,
-        marks: 0,
-        type: s.type,
+        label: isEnglishSubject && isMCQ ? (ENGLISH_SUBTYPE_INSTRUCTIONS[partType] || 'Choose the correct option') : `(${nextLabelChar})`,
+        marks: isMCQ ? 1 : 0,
+        type: partType,
         specificChapters: [],
-        questionCount: 1,
-        attemptCount: 1,
+        questionCount: isMCQ ? 5 : 1,
+        attemptCount: isMCQ ? 5 : 1,
         isAlternative: false
       });
+
+      if (isMCQ) {
+        const totalPartQuestions = parts.reduce((acc, p) => acc + (p.questionCount || 0), 0);
+        const totalPartAttempts = parts.reduce((acc, p) => acc + (p.attemptCount || 0), 0);
+        return {
+          ...s,
+          subParts: parts,
+          questionCount: totalPartQuestions,
+          attemptCount: totalPartAttempts
+        };
+      }
 
       return { ...s, subParts: parts };
     }));
@@ -297,6 +280,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
   const handleUpdatePart = (sectionId: string, partId: string, field: keyof PaperPatternSectionPart, value: any) => {
     setSections(prev => prev.map(s => {
       if (s.id !== sectionId) return s;
+      const isMCQ = s.type.toUpperCase() === 'MCQ';
 
       const parts = s.subParts?.map(p => {
         if (p.id !== partId) return p;
@@ -306,8 +290,26 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           nextValue = value.split(',').map(n => n.trim()).filter(Boolean);
         }
 
-        return { ...p, [field]: nextValue };
+        let updatedPart = { ...p, [field]: nextValue };
+
+        if (field === 'type' && isEnglishSubject && isMCQ) {
+          const instruction = ENGLISH_SUBTYPE_INSTRUCTIONS[value];
+          if (instruction) updatedPart.label = instruction;
+        }
+
+        return updatedPart;
       });
+
+      if (isMCQ && parts) {
+        const totalPartQuestions = parts.reduce((acc, p) => acc + (p.questionCount || 0), 0);
+        const totalPartAttempts = parts.reduce((acc, p) => acc + (p.attemptCount || 0), 0);
+        return {
+          ...s,
+          subParts: parts,
+          questionCount: totalPartQuestions,
+          attemptCount: totalPartAttempts
+        };
+      }
 
       const totalPartMarks = parts?.reduce((acc, p) => acc + (p.marks || 0), 0) || s.marksPerQuestion;
       return { ...s, subParts: parts, marksPerQuestion: totalPartMarks };
@@ -318,6 +320,19 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     setSections(prev => prev.map(s => {
       if (s.id !== sectionId) return s;
       const parts = s.subParts?.filter(p => p.id !== partId);
+      const isMCQ = s.type.toUpperCase() === 'MCQ';
+
+      if (isMCQ && parts) {
+        const totalPartQuestions = parts.reduce((acc, p) => acc + (p.questionCount || 0), 0);
+        const totalPartAttempts = parts.reduce((acc, p) => acc + (p.attemptCount || 0), 0);
+        return {
+          ...s,
+          subParts: parts,
+          questionCount: totalPartQuestions,
+          attemptCount: totalPartAttempts
+        };
+      }
+
       const totalPartMarks = parts?.reduce((acc, p) => acc + (p.marks || 0), 0) || s.marksPerQuestion;
       return { ...s, subParts: parts, marksPerQuestion: totalPartMarks };
     }));
@@ -332,11 +347,6 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     setSections(prev => {
       const filtered = prev.filter(s => s.id !== id);
       return sortSectionsByStandardSequence(filtered, isEnglishSubject);
-    });
-    setCustomTitleModes(prev => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
     });
   };
 
@@ -398,7 +408,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-gray-800 border-2 border-gold-500/40 rounded-2xl max-w-6xl w-full p-4 sm:p-6 shadow-2xl relative my-auto max-h-[94vh] flex flex-col text-theme-text-main animate-scaleIn">
+      <div className="bg-gray-800 border-2 border-gold-500/40 rounded-2xl max-w-5xl w-full p-4 sm:p-6 shadow-2xl relative my-auto max-h-[94vh] flex flex-col text-theme-text-main animate-scaleIn">
         
         {/* HEADER */}
         <div className="flex items-start justify-between pb-4 border-b border-gray-700 shrink-0">
@@ -485,16 +495,15 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           </Button>
         </div>
 
-        {/* TABLE COLUMN LABELS */}
+        {/* TABLE COLUMN LABELS (Display Titles column removed) */}
         <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-theme-text-sub px-2 uppercase tracking-widest shrink-0">
-          <div className="col-span-1 text-center">Heading</div>
-          <div className="col-span-1 text-center">Type</div>
-          <div className="col-span-3 text-center">Display Titles (Eng & Urdu)</div>
+          <div className="col-span-2 text-center">Heading</div>
+          <div className="col-span-2 text-center">Type</div>
           <div className="col-span-1 text-center">Marks Vis.</div>
           <div className="col-span-1 text-center">Total Qs</div>
           <div className="col-span-1 text-center">Attempt</div>
           <div className="col-span-1 text-center">Marks/Q</div>
-          <div className="col-span-2 text-center">Chapters</div>
+          <div className="col-span-3 text-center">Chapters</div>
           <div className="col-span-1 text-center">Actions</div>
         </div>
 
@@ -503,23 +512,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           {sections.map((s, idx) => {
             const isCustomType = !PREDEFINED_TYPES.includes(s.type) && !ENGLISH_SPECIFIC_TYPES.includes(s.type);
             const isExpanded = expandedSectionParts[s.id];
-            const isLong = isLongSection(s.type);
-            const isCustomTitleMode = customTitleModes[s.id] || isCustomType;
-
-            const rawSuggestions = TYPE_TITLE_MAPPING[s.type] || [];
-            const suggestions = rawSuggestions.map(rs => {
-              const isUrduType = isUrdu(s.type);
-              const clean = rs.replace('(?)', s.attemptCount.toString()).split(' (')[0];
-              
-              if (isUrduType) {
-                let urduBody = clean;
-                if (s.type.toUpperCase() === 'SHORT') urduBody = `کوئی سے ${s.attemptCount} مختصر سوالات کے جوابات دیں`;
-                if (s.type.toUpperCase() === 'LONG') urduBody = `کوئی سے ${s.attemptCount} تفصیلی سوالات کے جوابات دیں`;
-                if (s.type.toUpperCase() === 'MCQ') urduBody = "تمام سوالات کے جوابات دیں";
-                return `سوال نمبر ${idx + 1}. ${urduBody}`;
-              }
-              return `Q${idx + 1}. ${clean}`;
-            });
+            const isMCQ = s.type.toUpperCase() === 'MCQ';
 
             const typesToRender = isEnglishSubject ? ENGLISH_SPECIFIC_TYPES : PREDEFINED_TYPES;
 
@@ -527,13 +520,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
               <div key={s.id} className="space-y-2">
                 <div className="bg-gray-900/60 border border-gray-700 p-2.5 rounded-xl grid grid-cols-12 gap-2 items-center hover:border-gold-500/50 transition-colors">
                   
-                  {/* HEADING (1 col) */}
-                  <div className="col-span-1">
+                  {/* HEADING (2 cols) */}
+                  <div className="col-span-2">
                     <select
                       value={s.heading || 'None'}
                       onChange={e => handleUpdateSection(s.id, 'heading', e.target.value)}
-                      className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold truncate"
-                      title={s.heading || 'None'}
+                      className="w-full bg-gray-800 text-theme-text-main text-[11px] p-2 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold"
                     >
                       {SECTION_HEADINGS.map(h => (
                         <option key={h} value={h} className="bg-gray-800">{h}</option>
@@ -541,21 +533,20 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     </select>
                   </div>
 
-                  {/* TYPE (1 col) */}
-                  <div className="col-span-1">
+                  {/* TYPE (2 cols) */}
+                  <div className="col-span-2">
                     {isCustomType ? (
                       <div className="flex gap-1">
                         <input
                           value={s.type}
                           onChange={e => handleUpdateSection(s.id, 'type', e.target.value)}
-                          className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-lg border border-gold-500/50 outline-none font-urdu"
+                          className="w-full bg-gray-800 text-theme-text-main text-[11px] p-2 rounded-lg border border-gold-500/50 outline-none font-urdu"
                           placeholder="Type..."
                           autoFocus
                         />
                         <button 
-                          type="button"
                           onClick={() => handleUpdateSection(s.id, 'type', 'MCQ')} 
-                          className="p-1 text-gold-500 hover:text-theme-text-main" 
+                          className="p-1.5 text-gold-500 hover:text-theme-text-main" 
                           title="Reset to list"
                         >
                           <X size={12} />
@@ -565,7 +556,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                       <select
                         value={s.type}
                         onChange={e => handleUpdateSection(s.id, 'type', e.target.value === 'OTHER' ? '' : e.target.value)}
-                        className={`w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold truncate ${isUrdu(s.type) ? 'font-urdu' : ''}`}
+                        className={`w-full bg-gray-800 text-theme-text-main text-[11px] p-2 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold ${isUrdu(s.type) ? 'font-urdu' : ''}`}
                       >
                         {typesToRender.map(t => (
                           <option key={t} value={t} className={`bg-gray-800 ${isUrdu(t) ? 'font-urdu' : ''}`}>
@@ -575,63 +566,6 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                         <option value="OTHER" className="bg-gray-800">Other...</option>
                       </select>
                     )}
-                  </div>
-
-                  {/* DISPLAY TITLES (ENG & URDU) (3 cols) */}
-                  <div className="col-span-3">
-                    <div className="flex flex-col gap-1">
-                      {/* English / Main Title Input */}
-                      <div className="flex gap-1 items-center">
-                        {isCustomTitleMode ? (
-                          <textarea
-                            value={s.title}
-                            onChange={e => handleUpdateSection(s.id, 'title', e.target.value)}
-                            onKeyDown={e => handleTitleKeyDown(e, s.id, 'title')}
-                            className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-md border border-gray-600 outline-none resize-none overflow-hidden min-h-[28px]"
-                            placeholder="English Heading (e.g. Write short answers to any 5 questions)"
-                            rows={1}
-                          />
-                        ) : (
-                          <select
-                            value={s.title}
-                            onChange={e => {
-                              if (e.target.value === 'OTHER_TITLE') {
-                                setCustomTitleModes(prev => ({ ...prev, [s.id]: true }));
-                              } else {
-                                handleUpdateSection(s.id, 'title', e.target.value);
-                              }
-                            }}
-                            className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-md border border-gray-700 outline-none font-medium truncate"
-                          >
-                            {suggestions.map(title => (
-                              <option key={title} value={title} className="bg-gray-800">{title}</option>
-                            ))}
-                            {!suggestions.includes(s.title) && s.title && (
-                              <option value={s.title} className="bg-gray-800">{s.title}</option>
-                            )}
-                            <option value="OTHER_TITLE" className="bg-gray-800">Manual Entry...</option>
-                          </select>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setCustomTitleModes(prev => ({ ...prev, [s.id]: !isCustomTitleMode }))}
-                          className="p-1 text-theme-text-muted hover:text-gold-500 transition-colors shrink-0"
-                          title={isCustomTitleMode ? "Switch to suggested presets" : "Enter custom title"}
-                        >
-                          {isCustomTitleMode ? <ListFilter size={12} /> : <Edit size={12} />}
-                        </button>
-                      </div>
-                      {/* Urdu Title Input */}
-                      <textarea
-                        value={s.titleUrdu || ''}
-                        onChange={e => handleUpdateSection(s.id, 'titleUrdu', e.target.value)}
-                        onKeyDown={e => handleTitleKeyDown(e, s.id, 'titleUrdu')}
-                        className="w-full bg-gray-800 text-gold-500 text-[10px] p-1.5 rounded-md border border-gray-700 outline-none font-urdu text-right resize-none overflow-hidden min-h-[28px]"
-                        placeholder="اردو عنوان (مثلاً: کوئی سے 5 سوالات کے جوابات دیں)"
-                        dir="rtl"
-                        rows={1}
-                      />
-                    </div>
                   </div>
 
                   {/* MARKS VISIBILITY (1 col) */}
@@ -662,9 +596,10 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                       type="number"
                       min="1"
                       max="100"
+                      disabled={isMCQ && !!(s.subParts && s.subParts.length > 0)}
                       value={s.questionCount}
                       onChange={e => handleUpdateSection(s.id, 'questionCount', Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full bg-gray-800 text-theme-text-main text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500 font-bold"
+                      className={`w-full bg-gray-800 text-theme-text-main text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500 font-bold ${isMCQ && s.subParts && s.subParts.length > 0 ? 'opacity-50' : ''}`}
                     />
                   </div>
 
@@ -674,9 +609,10 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                       type="number"
                       min="1"
                       max={s.questionCount}
+                      disabled={isMCQ && !!(s.subParts && s.subParts.length > 0)}
                       value={s.attemptCount}
                       onChange={e => handleUpdateSection(s.id, 'attemptCount', Math.min(s.questionCount, Math.max(1, parseInt(e.target.value) || 1)))}
-                      className="w-full bg-gray-800 text-gold-500 font-bold text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500"
+                      className={`w-full bg-gray-800 text-gold-500 font-bold text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500 ${isMCQ && s.subParts && s.subParts.length > 0 ? 'opacity-50' : ''}`}
                     />
                   </div>
 
@@ -686,15 +622,15 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                       type="number"
                       min="1"
                       max="50"
-                      disabled={isLong && !!(s.subParts && s.subParts.length > 0)}
+                      disabled={!!(s.subParts && s.subParts.length > 0)}
                       value={s.marksPerQuestion}
                       onChange={e => handleUpdateSection(s.id, 'marksPerQuestion', Math.max(1, parseInt(e.target.value) || 1))}
-                      className={`w-full bg-gray-800 text-theme-text-main text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500 font-bold ${isLong && s.subParts && s.subParts.length > 0 ? 'opacity-50 cursor-not-allowed bg-gray-950' : ''}`}
+                      className={`w-full bg-gray-800 text-theme-text-main text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500 font-bold ${s.subParts && s.subParts.length > 0 ? 'opacity-50 cursor-not-allowed bg-gray-950' : ''}`}
                     />
                   </div>
 
-                  {/* MANDATORY CHAPTERS (2 cols) */}
-                  <div className="col-span-2">
+                  {/* MANDATORY CHAPTERS (3 cols) */}
+                  <div className="col-span-3">
                     <ChapterSelector
                       id={s.id}
                       selectedChapters={s.specificChapters || []}
@@ -707,17 +643,14 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
 
                   {/* ACTIONS (1 col) */}
                   <div className="col-span-1 flex justify-center items-center gap-1">
-                    {/* PARTS BUTTON IS ONLY SHOWN FOR LONG QUESTIONS */}
-                    {isLong && (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleParts(s.id)}
-                        className={`p-1.5 rounded transition-all ${isExpanded ? 'bg-gold-500 text-black' : 'text-gold-500 hover:bg-gold-500/10'}`}
-                        title="Configure Sub-parts (a, b) or Alternatives (OR)"
-                      >
-                        <ListTree size={15} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleParts(s.id)}
+                      className={`p-1.5 rounded transition-all ${isExpanded ? 'bg-gold-500 text-black' : 'text-gold-500 hover:bg-gold-500/10'}`}
+                      title="Configure Sub-parts (a, b) or Alternatives (OR)"
+                    >
+                      <ListTree size={15} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleRemoveSection(s.id)}
@@ -729,12 +662,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                   </div>
                 </div>
 
-                {/* EXPANDED SUB-PARTS (ONLY SHOWN FOR LONG QUESTIONS) */}
-                {isLong && isExpanded && (
+                {/* EXPANDED SUB-PARTS */}
+                {isExpanded && (
                   <div className="ml-6 p-3 bg-gray-850/80 border border-gold-500/30 rounded-xl animate-fadeIn space-y-2">
                     <div className="flex justify-between items-center mb-1 text-[10px] font-black uppercase tracking-widest text-gold-500">
                       <div className="flex items-center gap-2">
-                        <span>Manage Sub-parts for Part {idx + 1} (Long Question)</span>
+                        <span>Manage Sub-parts for Part {idx + 1}</span>
                       </div>
                       <button
                         type="button"
@@ -748,15 +681,19 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     <div className="space-y-1.5">
                       <div className="grid grid-cols-12 gap-2 text-[8px] font-black uppercase text-theme-text-sub tracking-tighter px-1">
                         <div className="col-span-2 text-center">Type</div>
-                        <div className="col-span-3">Label / Instructions</div>
+                        <div className="col-span-2">Instructions</div>
                         <div className="col-span-1 text-center">Marks</div>
-                        <div className="col-span-3 text-center">Chapters</div>
+                        <div className="col-span-1 text-center">Total Qs</div>
+                        <div className="col-span-1 text-center">Attempt</div>
+                        <div className="col-span-2 text-center">Chapters</div>
                         <div className="col-span-2 text-center">Alternative?</div>
                         <div className="col-span-1 text-center">Action</div>
                       </div>
 
                       {s.subParts?.map((part, pIdx) => {
-                        const partTypes = isEnglishSubject ? ENGLISH_SPECIFIC_TYPES : PREDEFINED_TYPES;
+                        const partTypes = isEnglishSubject 
+                          ? (isMCQ ? ENGLISH_MCQ_SUBTYPES : ENGLISH_SPECIFIC_TYPES) 
+                          : PREDEFINED_TYPES;
 
                         return (
                           <div key={part.id} className="grid grid-cols-12 gap-2 items-center bg-gray-950/40 p-2 rounded-lg border border-gray-700/50">
@@ -772,12 +709,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               </select>
                             </div>
 
-                            <div className="col-span-3">
+                            <div className="col-span-2">
                               <input
                                 value={part.label}
                                 onChange={e => handleUpdatePart(s.id, part.id, 'label', e.target.value)}
                                 className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-[10px] text-theme-text-main outline-none focus:border-gold-500"
-                                placeholder="e.g. (a) or (b)"
+                                placeholder="Instruction Text"
                               />
                             </div>
 
@@ -790,7 +727,25 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               />
                             </div>
 
-                            <div className="col-span-3">
+                            <div className="col-span-1">
+                              <input
+                                type="number"
+                                value={part.questionCount || 0}
+                                onChange={e => handleUpdatePart(s.id, part.id, 'questionCount', parseInt(e.target.value) || 0)}
+                                className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-[10px] text-theme-text-main font-bold text-center outline-none focus:border-gold-500"
+                              />
+                            </div>
+
+                            <div className="col-span-1">
+                              <input
+                                type="number"
+                                value={part.attemptCount || 0}
+                                onChange={e => handleUpdatePart(s.id, part.id, 'attemptCount', parseInt(e.target.value) || 0)}
+                                className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-[10px] text-gold-500 font-bold text-center outline-none focus:border-gold-500"
+                              />
+                            </div>
+
+                            <div className="col-span-2">
                               <ChapterSelector
                                 id={part.id}
                                 selectedChapters={part.specificChapters || []}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, PaperPattern, PaperPatternSection, PaperPatternSectionPart, Chapter } from '../types';
-import { getPatterns, savePattern, deletePattern } from '../services/patternService';
+import { getPatterns, savePattern, deletePattern, subscribeToPatterns } from '../services/patternService';
 import { getSubjects } from '../services/subjectService';
 import { getChapters } from '../services/chapterService';
 import { Button } from './Button';
@@ -215,30 +215,13 @@ export const sortSectionsByStandardSequence = (
     let nextTitle = sec.title || '';
     let nextTitleUrdu = sec.titleUrdu || '';
 
-    // Update title with question index while preserving custom text
+    // Only update title with question index if the section originally has a title
     if (sec.title && sec.title.trim()) {
-      const cleanTitle = sec.title.replace(/^Q\d+\.\s*/i, '').replace(/^سوال نمبر \d+[۔\.]\s*/, '').trim();
-      const isUrduType = isUrdu(sec.type) || isUrdu(sec.title);
-      if (cleanTitle) {
-        nextTitle = isUrduType ? `سوال نمبر ${newIdx + 1}۔ ${cleanTitle}` : `Q${newIdx + 1}. ${cleanTitle}`;
-      } else {
-        const autoTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject);
-        if (autoTitle) nextTitle = autoTitle;
-      }
-    } else {
       const autoTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject);
       if (autoTitle) nextTitle = autoTitle;
     }
 
     if (sec.titleUrdu && sec.titleUrdu.trim()) {
-      const cleanUrdu = sec.titleUrdu.replace(/^سوال نمبر \d+[۔\.]\s*/, '').trim();
-      if (cleanUrdu) {
-        nextTitleUrdu = `سوال نمبر ${newIdx + 1}۔ ${cleanUrdu}`;
-      } else {
-        const autoUrduTitle = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx);
-        if (autoUrduTitle) nextTitleUrdu = autoUrduTitle;
-      }
-    } else {
       const autoUrduTitle = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx);
       if (autoUrduTitle) nextTitleUrdu = autoUrduTitle;
     }
@@ -447,13 +430,20 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
   };
 
   useEffect(() => {
-    loadData();
+    const unsub = subscribeToPatterns((livePatterns) => {
+      setPatterns(livePatterns);
+      setIsLoading(false);
+    });
+    getSubjects(true).then(sMap => setSubjectsMap(sMap)).catch(console.warn);
+    return () => {
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
     if (view === 'CREATE' && formData.classLevel && (editingPattern?.subject || selectedSubject)) {
       const fetchChapters = async () => {
-        const chapters = await getChapters(editingPattern?.subject || selectedSubject, formData.classLevel, false);
+        const chapters = await getChapters(editingPattern?.subject || selectedSubject, formData.classLevel, false, true);
         setAvailableChapters(chapters);
       };
       fetchChapters();
@@ -819,8 +809,8 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
 
   const handleDeletePattern = async (id: string) => {
     if (confirm("Are you sure you want to delete this pattern? This will permanently remove it for ALL users.")) {
+      setPatterns(prev => prev.filter(p => p.id !== id));
       await deletePattern(id);
-      await loadData();
     }
   };
 

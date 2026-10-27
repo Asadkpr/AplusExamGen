@@ -7,10 +7,13 @@ import {
   doc, 
   query, 
   orderBy,
-  limit
+  limit,
+  onSnapshot,
+  Unsubscribe
 } from 'firebase/firestore';
 import { Announcement } from '../types';
 import { executeAsAdmin } from './authService';
+import { syncService } from './syncService';
 
 const COLLECTION = 'announcements';
 const LOCAL_STORAGE_KEY = 'aplus_announcements_cache_v1';
@@ -31,6 +34,11 @@ export const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
 let cachedAnnouncements: Announcement[] | null = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+export const resetAnnouncementCache = () => {
+  cachedAnnouncements = null;
+  lastFetchTime = 0;
+};
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
@@ -159,6 +167,7 @@ export const saveAnnouncement = async (announcement: Omit<Announcement, 'id' | '
   lastFetchTime = Date.now();
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+    syncService.optimisticAnnouncementAdded();
   } catch (_) {}
 
   // 2. Save to Firestore (Primary Cloud) with Admin fallback
@@ -177,7 +186,6 @@ export const saveAnnouncement = async (announcement: Omit<Announcement, 'id' | '
       return true;
     } catch (adminErr: any) {
       console.error("Admin fallback save also failed:", adminErr?.code, adminErr?.message);
-      // Return true because local cache is already saved, user won't lose it
       return true;
     }
   }
@@ -223,6 +231,7 @@ export const deleteAnnouncement = async (id: string): Promise<boolean> => {
   lastFetchTime = Date.now();
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cachedAnnouncements));
+    syncService.optimisticAnnouncementDeleted();
   } catch (_) {}
 
   const deleteOp = async () => {
@@ -244,3 +253,27 @@ export const deleteAnnouncement = async (id: string): Promise<boolean> => {
     }
   }
 };
+
+/**
+ * Real-time subscription for Announcements
+ */
+export const subscribeToAnnouncements = (
+  callback: (announcements: Announcement[]) => void
+): Unsubscribe => {
+  let isCancelled = false;
+
+  // 1. Immediately emit current local/cached data
+  callback(getCachedAnnouncementsSync());
+
+  // 2. Fetch fresh announcements using quota-safe cached getAnnouncements
+  getAnnouncements(false).then((list) => {
+    if (!isCancelled && list && list.length > 0) {
+      callback(list);
+    }
+  }).catch(() => {});
+
+  return () => {
+    isCancelled = true;
+  };
+};
+

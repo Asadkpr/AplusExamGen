@@ -132,3 +132,18 @@ export const generateMockQuestions = (subject: string, chapters: Chapter[], sele
   // This function is kept only if we need it for demos, but for the actual app logic we are bypassing it.
   return [];
 };
+
+export const checkIsAdmin = (user?: { email?: string; id?: string; role?: string } | null): boolean => {
+  if (!user) return false;
+  const email = (user.email || '').trim().toLowerCase();
+  const id = (user.id || '').trim();
+  const role = (user.role || '').trim().toLowerCase();
+  return (
+    email === 'admin' ||
+    email === 'admin@aplusexamgen.com' ||
+    email === 'maserp89@gmail.com' ||
+    id === 'local-admin' ||
+    id === '9OpmJqoSigTY3kpnSSpg927cKKa2' ||
+    role === 'admin'
+  );
+};

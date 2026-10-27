@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Announcement } from '../types';
-import { getAnnouncements, getCachedAnnouncementsSync, saveAnnouncement, deleteAnnouncement, updateAnnouncement } from '../services/announcementService';
+import { getAnnouncements, getCachedAnnouncementsSync, saveAnnouncement, deleteAnnouncement, updateAnnouncement, subscribeToAnnouncements } from '../services/announcementService';
 import { ArrowLeft, Bell, Plus, Trash2, Edit, Save, X, Megaphone, Info, AlertTriangle, RefreshCw, Calendar, User as UserIcon } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -27,13 +27,13 @@ export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBa
 
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
 
-  const loadData = async () => {
-    const data = await getAnnouncements(true);
-    if (data.length > 0) setAnnouncements(data);
-  };
-
   useEffect(() => {
-    loadData();
+    const unsub = subscribeToAnnouncements((data) => {
+      if (data && data.length > 0) setAnnouncements(data);
+    });
+    return () => {
+      unsub();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,7 +56,6 @@ export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBa
     }
 
     if (success) {
-      await loadData();
       setShowModal(false);
       setEditingAnnouncement(null);
       setFormData({ title: '', content: '', type: 'general' });

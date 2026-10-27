@@ -117,7 +117,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   };
 
   const loadChaptersAndVisibility = async (subject: string) => {
-    const chs = await getChapters(subject, selectedClass, false);
+    const chs = await getChapters(subject, selectedClass, false, true);
     const vis = await getVisibilitySettings();
     setChapters(chs);
     setVisibility(vis);
@@ -128,9 +128,9 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
     setSearchTerm('');
     setSelectedQuestionIds([]);
     try {
-        const chaptersList = await getChapters(subject, selectedClass, false);
+        const chaptersList = await getChapters(subject, selectedClass, false, true);
         const chapterIds = chaptersList.map(c => c.id);
-        const questions = await getQuestionsForChapters(subject, chaptersList, chapterIds, false);
+        const questions = await getQuestionsForChapters(subject, chaptersList, chapterIds, true);
         setAllQuestions(questions);
         setFilteredQuestions(questions);
         setVisibleCount(20);

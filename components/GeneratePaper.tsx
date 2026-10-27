@@ -4,7 +4,7 @@ import { Input } from './Input';
 import { CLASSES, SUBJECTS_BY_CLASS, CARD_COLORS } from '../constants';
 import { getSubjects } from '../services/subjectService';
 import { getChapters } from '../services/chapterService';
-import { getPatterns } from '../services/patternService';
+import { getPatterns, getPatternsByClassAndSubject } from '../services/patternService';
 import { getQuestionsForChapters } from '../services/questionService';
 import { Chapter, QuestionType, Question, PaperPatternSection, User, PaperPattern, Subtopic, SavedPaper, PaperPatternSectionPart } from '../types';
 import { savePaper, updatePaper } from '../services/paperService';
@@ -172,6 +172,20 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const [mandatoryChapterIds, setMandatoryChapterIds] = useState<string[]>([]);
+  const [saveStatusMessage, setSaveStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [savedPaperId, setSavedPaperId] = useState<string | null>(initialPaper?.id || null);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const actionsMenuRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setIsActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   const [swappingSlot, setSwappingSlot] = useState<{ 
     sectionId: string; 
@@ -185,14 +199,12 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const isUrduPaper = isUrduStyleSubject(selectedSubject);
   const isEnglish = isEnglishSubject(selectedSubject);
 
-  // 🔹 Pre-fetch all subjects on mount for instant loading
+  // 🔹 Pre-fetch all subjects on mount for instant loading (quota-safe cached fetch)
   useEffect(() => {
     const preFetchSubjects = async () => {
       try {
-        const allSubjects = await getSubjects(true);
+        const allSubjects = await getSubjects(false);
         setSubjectsMap(allSubjects);
-        // Eagerly fetch patterns to cache them for faster Step 3 loading
-        await getPatterns(true);
       } finally {
         setIsInitialLoad(false);
       }
@@ -299,19 +311,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         }
 
         try {
-          const allPatterns = await getPatterns();
-          const filtered = allPatterns.filter(p => {
-            const patternSubject = p.subject?.trim().toLowerCase() || "";
-            const targetSubject = selectedSubject?.trim().toLowerCase() || "";
-            const subjectMatches = !patternSubject || patternSubject === targetSubject;
-
-            const patternClass = p.classLevel?.trim().toLowerCase() || "";
-            const targetClass = selectedClass?.trim().toLowerCase() || "";
-            const classMatches = !patternClass || patternClass === targetClass;
-
-            return subjectMatches && classMatches;
-          });
-          
+          const filtered = await getPatternsByClassAndSubject(selectedClass, selectedSubject);
           setAvailablePatterns(filtered);
         } catch (e) {
           console.error(e);
@@ -717,81 +717,102 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     setSelectedSubtopics(prev => prev.includes(subtopicId) ? prev.filter(id => id !== subtopicId) : [...prev, subtopicId]);
   };
 
-  const handleSaveOrUpdate = async () => {
-    if (isSavingPaper) return;
+  const executeSave = async (showNotification: boolean = true, customSuccessMsg?: string): Promise<boolean> => {
+    if (isSavingPaper) return false;
     setIsSavingPaper(true);
     try {
+      const questions = getSelectedQuestions();
+      const totalMarks = effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0);
       const paperData = {
         title: `${selectedClass} - ${selectedSubject}`,
         classLevel: selectedClass,
         subject: selectedSubject,
-        totalMarks: effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0),
+        totalMarks: totalMarks,
         sections: effectiveSections,
-        questions: getSelectedQuestions(),
-        instituteProfile: user.instituteProfile,
-        userId: user.id,
-        createdBy: user.name,
-        selectedChapterIds: selectedChapters,
-        selectedSubtopicIds: selectedSubtopics,
-        formattedChapters: getChaptersDisplay(),
-        medium: selectedMedium,
-        fontSize: fontSize,
-        lineSpacing: lineSpacing,
-        timeAllowed: paperTime,
-        paperCode: paperCode,
-        pageBreakAfterMCQ: pageBreakAfterMCQ
+        questions: questions,
+        instituteProfile: user.instituteProfile || undefined,
+        userId: user.id || 'admin',
+        createdBy: user.name || 'User',
+        selectedChapterIds: selectedChapters || [],
+        selectedSubtopicIds: selectedSubtopics || [],
+        formattedChapters: getChaptersDisplay() || '',
+        medium: selectedMedium || 'English',
+        fontSize: fontSize || 13,
+        lineSpacing: lineSpacing ?? 2,
+        timeAllowed: paperTime || '2:00 Hours',
+        paperCode: paperCode || '',
+        pageBreakAfterMCQ: Boolean(pageBreakAfterMCQ)
       };
-      if (initialPaper?.id) {
-         const result = await updatePaper(initialPaper.id, paperData);
-         alert(result.message || (result.success ? "Updated Successfully!" : "Update Failed"));
+
+      const targetId = savedPaperId || initialPaper?.id;
+      let isSuccess = false;
+      let msg = '';
+
+      if (targetId) {
+        const result = await updatePaper(targetId, paperData);
+        isSuccess = result.success;
+        msg = result.success ? (customSuccessMsg || "Paper updated successfully! پیپر کامیابی سے اپڈیٹ ہو گیا ہے۔") : (result.message || "Failed to update paper");
       } else {
-         const result = await savePaper(paperData);
-         alert(result.message || (result.success ? "Saved Successfully!" : "Save Failed"));
+        const result = await savePaper(paperData);
+        isSuccess = result.success;
+        if (result.id) {
+          setSavedPaperId(result.id);
+        }
+        msg = result.success ? (customSuccessMsg || "Paper saved successfully! پیپر کامیابی سے محفوظ ہو گیا ہے۔") : (result.message || "Failed to save paper");
       }
+
+      if (showNotification) {
+        setSaveStatusMessage({
+          type: isSuccess ? 'success' : 'error',
+          text: msg
+        });
+        setTimeout(() => {
+          setSaveStatusMessage(null);
+        }, 4500);
+      }
+      return isSuccess;
     } catch (e: any) {
       console.error("Save paper error:", e);
-      alert("Error saving paper: " + (e?.message || "Unknown error"));
+      if (showNotification) {
+        setSaveStatusMessage({
+          type: 'error',
+          text: "Error saving paper: " + (e?.message || "Unknown error")
+        });
+        setTimeout(() => setSaveStatusMessage(null), 5000);
+      }
+      return false;
     } finally {
       setIsSavingPaper(false);
     }
   };
 
-  const handleDownloadWord = () => {
-    const finalQuestions = getSelectedQuestions();
-    const institute = user.instituteProfile;
-    let questionsHtml = '';
-    effectiveSections.forEach(section => {
-      const sectionQuestions = finalQuestions.filter(q => q.targetSectionId === section.id);
-      if (!sectionQuestions.length) return;
-      questionsHtml += `<h3>${section.title}</h3>`;
-      const partsPerQuestion = (section.subParts && section.subParts.length > 0) ? section.subParts.length : 1;
-      for (let i = 0; i < sectionQuestions.length; i += partsPerQuestion) {
-        const qMain = sectionQuestions[i];
-        questionsHtml += `<p><b>${(i / partsPerQuestion) + 1}.</b> ${qMain.text}</p>`;
-        if (section.subParts && section.subParts.length > 0) {
-          for (let pIdx = 0; pIdx < section.subParts.length; pIdx++) {
-            const qPart = sectionQuestions[i + pIdx];
-            if (qPart) questionsHtml += `<p style="padding-left: 20px">(${String.fromCharCode(97 + pIdx)}) ${qPart.text}</p>`;
-          }
-        } else if (qMain.type === 'MCQ' && qMain.options) {
-          questionsHtml += `<p>${qMain.options.map((o, oi) => `(${String.fromCharCode(97 + oi)}) ${o}`).join(' &nbsp; ')}</p>`;
-        }
-      }
-      questionsHtml += `<br/>`;
-    });
-    const html = `<html><head><meta charset="utf-8" /></head><body><h1 style="text-align:center">${institute?.instituteName || 'Institute'}</h1><h2 style="text-align:center">${selectedClass} - ${selectedSubject}</h2><hr />${questionsHtml}</body></html>`;
-    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${selectedSubject}_Paper.doc`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handlePrint = async () => {
+    // 1. Auto-save paper first so user work is 100% saved in DB
+    await executeSave(true, "Paper saved successfully! Opening print dialog... (پیپر محفوظ ہو گیا، پرنٹ ڈائیلاگ کھل رہا ہے)");
+    setIsActionsMenuOpen(false);
+    const originalTitle = document.title;
+    const cleanFileName = `${selectedClass}_${selectedSubject}_Exam_Paper`.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
+    document.title = cleanFileName;
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => { document.title = originalTitle; }, 2000);
+    }, 400);
   };
 
-  const handlePrint = () => { setTimeout(() => { window.print(); }, 100); };
+  const handleDownloadPdf = async () => {
+    // 1. Auto-save paper first
+    await executeSave(true, "Paper saved! In destination, select 'Save as PDF' to download. (پی ڈی ایف کے لیے Save as PDF منتخب کریں)");
+    setIsActionsMenuOpen(false);
+    const originalTitle = document.title;
+    const cleanFileName = `${selectedClass}_${selectedSubject}_Exam_Paper`.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
+    document.title = cleanFileName;
+    setTimeout(() => {
+      window.print();
+      setTimeout(() => { document.title = originalTitle; }, 2000);
+    }, 400);
+  };
+
+  const handleSaveOrUpdate = () => executeSave(true);
   const getClassIcon = (cls: string) => <GraduationCap size={32} />;
   const activeSection = originalSections.find(s => s.id === activeTabId);
 
@@ -1017,40 +1038,106 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                           </select>
                        </div>
                     </div>
-                    {/* Page Break Toggle Button */}
+                    {/* Direct Save Button */}
                     <Button 
-                      onClick={() => setPageBreakAfterMCQ(!pageBreakAfterMCQ)} 
-                      variant={pageBreakAfterMCQ ? 'primary' : 'secondary'} 
-                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black whitespace-nowrap"
-                      title="Page Break: Print MCQs on Page 1, Short & Long questions on Page 2"
+                      onClick={() => executeSave(true)} 
+                      disabled={isSavingPaper}
+                      variant="primary" 
+                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2.5 sm:!px-4 !text-[8px] sm:!text-[11px] flex items-center font-black shadow-lg whitespace-nowrap bg-gold-500 hover:bg-gold-400 text-black border-none"
+                      title="Save this exam paper to database"
                     >
-                      <Scissors size={11} className={`mr-1 sm:mr-1.5 sm:w-3.5 sm:h-3.5 ${pageBreakAfterMCQ ? 'text-black' : 'text-gold-500'}`} /> 
-                      <span>{pageBreakAfterMCQ ? 'Break: ON' : 'Page Break'}</span>
+                      <Save size={13} className={`mr-1 sm:mr-1.5 sm:w-3.5 sm:h-3.5 ${isSavingPaper ? 'animate-spin' : ''}`} /> 
+                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update' : 'Save Paper')}</span>
                     </Button>
+
+                    {/* Direct Print Button (Auto-saves first) */}
                     <Button 
-                      onClick={() => setShowAnswerKey(!showAnswerKey)} 
-                      variant={showAnswerKey ? 'primary' : 'secondary'} 
-                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black whitespace-nowrap"
+                      onClick={handlePrint} 
+                      disabled={isSavingPaper}
+                      variant="secondary" 
+                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600"
+                      title="Auto-saves and opens print dialog"
                     >
-                      <Key size={11} className="mr-1 sm:mr-1.5 text-gold-500 sm:w-3.5 sm:h-3.5" /> 
-                      <span>{showAnswerKey ? 'Hide Key' : 'Key'}</span>
+                      <Printer size={12} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
+                      <span className="hidden xs:inline">Print</span>
                     </Button>
-                    <div className="relative group">
+
+                    {/* Direct PDF Download Button (Auto-saves first) */}
+                    <Button 
+                      onClick={handleDownloadPdf} 
+                      disabled={isSavingPaper}
+                      variant="secondary" 
+                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600"
+                      title="Auto-saves and downloads as PDF"
+                    >
+                      <FileDown size={12} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
+                      <span>Download PDF</span>
+                    </Button>
+
+                    {/* More Actions Toggle Dropdown */}
+                    <div className="relative" ref={actionsMenuRef}>
                       <Button 
-                        variant="primary" 
-                        className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2.5 sm:!px-5 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap"
+                        onClick={() => setIsActionsMenuOpen(prev => !prev)}
+                        variant="secondary" 
+                        className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap bg-surface-800 hover:bg-surface-700 border-surface-600"
+                        title="More paper options"
                       >
-                        <Settings size={11} className="mr-1 sm:mr-2 sm:w-3.5 sm:h-3.5" /> 
-                        <span>Actions</span> 
-                        <ChevronDown size={9} className="ml-0.5 sm:ml-2 opacity-50 sm:w-3 sm:h-3" />
+                        <Settings size={11} className="mr-1 sm:mr-1.5 text-gold-500 sm:w-3.5 sm:h-3.5" /> 
+                        <span className="hidden md:inline">Options</span> 
+                        <ChevronDown size={9} className={`ml-0.5 sm:ml-1 opacity-70 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
                       </Button>
-                      <div className="absolute right-0 top-full pt-2 w-48 hidden group-hover:block z-[110] animate-fadeIn">
-                        <div className="bg-surface-800 border border-surface-700 rounded-xl shadow-2xl overflow-hidden">
-                          <button onClick={handleSaveOrUpdate} disabled={isSavingPaper} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-surface-700 font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed"><Save size={16} className="text-gold-500 group-hover:text-black" /> {isSavingPaper ? 'Saving...' : (initialPaper ? 'Update Paper' : 'Save Paper')}</button>
-                          <button onClick={() => window.print()} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors border-b border-surface-700 font-black uppercase"><FileDown size={16} className="text-gold-500 group-hover:text-black" /> PDF Download</button>
-                          <button onClick={handlePrint} className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase"><Printer size={16} className="text-gold-500 group-hover:text-black" /> Print Paper</button>
+                      {isActionsMenuOpen && (
+                        <div className="absolute right-0 top-full pt-2 w-52 z-[150] animate-fadeIn">
+                          <div className="bg-surface-800 border border-surface-700 rounded-xl shadow-2xl overflow-hidden divide-y divide-surface-700">
+                            <button 
+                              onClick={() => { setIsActionsMenuOpen(false); executeSave(true); }} 
+                              disabled={isSavingPaper} 
+                              className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase disabled:opacity-50"
+                            >
+                              <Save size={15} className="text-gold-500" /> 
+                              {isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update Paper' : 'Save Paper')}
+                            </button>
+                            <button 
+                              onClick={handleDownloadPdf} 
+                              className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase"
+                            >
+                              <FileDown size={15} className="text-gold-500" /> 
+                              Download PDF
+                            </button>
+                            <button 
+                              onClick={handlePrint} 
+                              className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase"
+                            >
+                              <Printer size={15} className="text-gold-500" /> 
+                              Print Paper
+                            </button>
+                            <button 
+                              onClick={() => { setPageBreakAfterMCQ(!pageBreakAfterMCQ); setIsActionsMenuOpen(false); }} 
+                              className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center justify-between transition-colors font-black uppercase"
+                            >
+                              <span className="flex items-center gap-3">
+                                <Scissors size={15} className="text-gold-500" /> 
+                                Page Break
+                              </span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${pageBreakAfterMCQ ? 'bg-gold-500 text-black' : 'bg-surface-700 text-theme-text-muted'}`}>
+                                {pageBreakAfterMCQ ? 'ON' : 'OFF'}
+                              </span>
+                            </button>
+                            <button 
+                              onClick={() => { setShowAnswerKey(!showAnswerKey); setIsActionsMenuOpen(false); }} 
+                              className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center justify-between transition-colors font-black uppercase"
+                            >
+                              <span className="flex items-center gap-3">
+                                <Key size={15} className="text-gold-500" /> 
+                                Answer Key
+                              </span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${showAnswerKey ? 'bg-gold-500 text-black' : 'bg-surface-700 text-theme-text-muted'}`}>
+                                {showAnswerKey ? 'VISIBLE' : 'HIDDEN'}
+                              </span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1611,7 +1698,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           )}
 
           {step === 7 && (
-            <div className="animate-fadeIn space-y-4 h-full flex flex-col relative">
+            <div className="animate-fadeIn space-y-4 h-full flex flex-col relative pb-20 sm:pb-24">
                <div className="bg-surface-800 p-1 sm:p-8 rounded-xl overflow-x-auto border border-surface-700 flex-grow print:p-0 print:bg-white print:border-none">
                   <div className="mx-auto shadow-2xl print:shadow-none w-full max-w-[210mm] transition-all relative group/paper" style={{ minHeight: '297mm', color: '#000000', backgroundColor: '#ffffff' }}>
                      <PrintablePaper 
@@ -1624,9 +1711,77 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                      />
                   </div>
                </div>
+
+               {/* Step 7 Floating Bottom Action Toolbar */}
+               <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[100] print:hidden w-auto max-w-[95vw]">
+                  <div className="bg-surface-800/95 backdrop-blur-md border border-gold-500/40 rounded-full shadow-[0_10px_35px_rgba(0,0,0,0.6)] px-3 py-2 flex items-center gap-2 sm:gap-3">
+                    <Button
+                      onClick={() => executeSave(true)}
+                      disabled={isSavingPaper}
+                      variant="primary"
+                      className="!w-auto !h-9 sm:!h-10 !py-1 sm:!py-2 !px-3 sm:!px-5 text-[10px] sm:text-xs font-black shadow-lg flex items-center gap-1.5 sm:gap-2 bg-gold-500 hover:bg-gold-400 text-black border-none rounded-full"
+                      title="Save exam paper"
+                    >
+                      <Save size={15} className={isSavingPaper ? "animate-spin" : ""} />
+                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update Paper' : 'Save Paper')}</span>
+                    </Button>
+
+                    <Button
+                      onClick={handlePrint}
+                      disabled={isSavingPaper}
+                      variant="secondary"
+                      className="!w-auto !h-9 sm:!h-10 !py-1 sm:!py-2 !px-3 sm:!px-4 text-[10px] sm:text-xs font-bold flex items-center gap-1.5 sm:gap-2 bg-surface-700 hover:bg-surface-600 text-theme-text-main border border-surface-600 rounded-full"
+                      title="Auto-saves and opens print dialog"
+                    >
+                      <Printer size={15} className="text-gold-400" />
+                      <span>Print</span>
+                    </Button>
+
+                    <Button
+                      onClick={handleDownloadPdf}
+                      disabled={isSavingPaper}
+                      variant="secondary"
+                      className="!w-auto !h-9 sm:!h-10 !py-1 sm:!py-2 !px-3 sm:!px-5 text-[10px] sm:text-xs font-bold flex items-center gap-1.5 sm:gap-2 bg-surface-700 hover:bg-surface-600 text-theme-text-main border border-surface-600 rounded-full"
+                      title="Auto-saves and downloads as PDF"
+                    >
+                      <FileDown size={15} className="text-gold-400" />
+                      <span>Download PDF</span>
+                    </Button>
+                  </div>
+               </div>
             </div>
           )}
       </main>
+
+      {/* Save / Action Toast Notification */}
+      {saveStatusMessage && (
+        <div className="fixed top-20 sm:top-24 left-1/2 -translate-x-1/2 z-[250] animate-fadeIn max-w-lg w-full px-4 print:hidden">
+          <div className={`p-4 rounded-2xl shadow-[0_15px_40px_rgba(0,0,0,0.6)] border flex items-center gap-3 backdrop-blur-xl transition-all ${
+            saveStatusMessage.type === 'success' 
+              ? 'bg-emerald-950/95 border-emerald-500 text-emerald-100 shadow-[0_0_30px_rgba(16,185,129,0.35)]' 
+              : 'bg-red-950/95 border-red-500 text-red-100 shadow-[0_0_30px_rgba(239,68,68,0.35)]'
+          }`}>
+            {saveStatusMessage.type === 'success' ? (
+              <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/40">
+                <Check size={20} strokeWidth={3} />
+              </div>
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 border border-red-500/40">
+                <AlertCircle size={20} strokeWidth={2.5} />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-extrabold text-sm leading-snug">{saveStatusMessage.text}</p>
+            </div>
+            <button 
+              onClick={() => setSaveStatusMessage(null)}
+              className="text-theme-text-muted hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

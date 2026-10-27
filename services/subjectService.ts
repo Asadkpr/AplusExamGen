@@ -24,6 +24,11 @@ let cachedSubjects: Record<string, string[]> | null = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 60 * 1000; // 1 minute cache for fast cross-device sync
 
+export const resetSubjectCache = () => {
+  cachedSubjects = null;
+  lastFetchTime = 0;
+};
+
 interface CustomSubject {
   id?: string;
   classLevel: string;

@@ -80,9 +80,16 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
   };
 
   useEffect(() => {
-    loadUsers();
-    // Non-blocking prefetch in background so search is ready immediately across all schools
-    fetchAllSchools();
+    let timer: any;
+    loadUsers().then(() => {
+      // Non-blocking prefetch in background after initial 50 schools render
+      timer = setTimeout(() => {
+        fetchAllSchools();
+      }, 800);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const handleRefresh = async () => {

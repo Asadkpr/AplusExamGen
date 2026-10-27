@@ -1,13 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from '../types';
-import { getAllUsers, getUserCount, getCachedUserCountSync } from '../services/authService';
-import { getAnnouncements, getCachedAnnouncementsSync } from '../services/announcementService';
-import { getPaperCount, getCachedPaperCountSync } from '../services/paperService';
-import { getPatternCount, getCachedPatternCountSync } from '../services/patternService';
+import { getAllUsers, getUserCount, getCachedUserCountSync, resetUserCache } from '../services/authService';
+import { getAnnouncements, getCachedAnnouncementsSync, subscribeToAnnouncements, resetAnnouncementCache } from '../services/announcementService';
+import { getPaperCount, getCachedPaperCountSync, resetPaperCache, getSavedPapers } from '../services/paperService';
+import { getPatternCount, getCachedPatternCountSync, resetPatternCache, getPatterns } from '../services/patternService';
+import { resetChapterCache } from '../services/chapterService';
+import { resetSubjectCache } from '../services/subjectService';
+import { resetQuestionCache } from '../services/questionService';
+import { syncService, DashboardStats } from '../services/syncService';
 import { APP_NAME, COPYRIGHT_TEXT } from '../constants';
 import { useTheme } from '../context/ThemeContext';
-import { FilePlus2, FolderOpen, UserCog, HelpCircle, LogOut, Menu, X, ChevronRight, UploadCloud, Users, School, Mail, Phone, Layout, Moon, Sun, Info, Wifi, WifiOff, AlertTriangle, Database, Megaphone, ExternalLink, Sparkles } from 'lucide-react';
+import { FilePlus2, FolderOpen, UserCog, HelpCircle, LogOut, Menu, X, ChevronRight, UploadCloud, Users, School, Mail, Phone, Layout, Moon, Sun, Info, Wifi, WifiOff, AlertTriangle, Database, Megaphone, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -45,33 +49,75 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return cached.length > 0 ? cached[0].title : null;
   });
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isSyncingCounts, setIsSyncingCounts] = useState(false);
   const { isDarkMode, toggleTheme } = useTheme();
 
+  const hydrateFallbackCounts = async (force: boolean = false) => {
+    try {
+      const papers = await getSavedPapers(user.id, isAdmin, force);
+      if (papers.length > 0) {
+        setPaperCount(papers.length);
+        syncService.setExactPaperCount(papers.length, user.id, isAdmin);
+      }
+    } catch (_) {}
+
+    if (isAdmin) {
+      try {
+        const users = await getAllUsers(force);
+        if (users.length > 0) {
+          setUserCount(users.length);
+          syncService.optimisticUserCountUpdated(users.length);
+        }
+      } catch (_) {}
+
+      try {
+        const patterns = await getPatterns(force);
+        if (patterns.length > 0) {
+          setPatternCount(patterns.length);
+          syncService.setExactPatternCount(patterns.length);
+        }
+      } catch (_) {}
+    }
+  };
+
+  const handleManualSyncCounts = async () => {
+    setIsSyncingCounts(true);
+    try {
+      resetUserCache();
+      resetPaperCache();
+      resetPatternCache();
+      resetAnnouncementCache();
+      resetChapterCache();
+      resetSubjectCache();
+      resetQuestionCache();
+      await syncService.refreshServerCounts(user.id, isAdmin, true);
+    } catch (_) {}
+    setIsSyncingCounts(false);
+  };
+
   useEffect(() => {
-    // 1. Fetch Announcements using cache first
-    getAnnouncements(false).then(news => {
+    // 1. Subscribe to real-time live dashboard stats (Papers, Patterns, Schools)
+    // Automatically fetches 1-read cloud metadata (`visibility_settings/dashboard_stats`) on cold domains!
+    const unsubStats = syncService.subscribe(user.id, isAdmin, (stats: DashboardStats) => {
+      setPaperCount(stats.papersCount);
+      setPatternCount(stats.patternsCount);
+      if (isAdmin) {
+        setUserCount(stats.schoolsCount);
+      }
+    });
+
+    // 2. Subscribe to real-time live announcements
+    const unsubNews = subscribeToAnnouncements((news) => {
       if (news && news.length > 0) {
         setNewsList(news);
         setLatestAnnouncement(news[0].title);
       }
-    }).catch(e => console.warn('Announcement fetch error:', e));
+    });
 
-    // 2. Fetch Paper Count (Instant server aggregation: 1 read only, always 100% live on refresh)
-    getPaperCount(isAdmin ? undefined : user.id, true).then(pc => {
-      setPaperCount(pc);
-    }).catch(e => console.warn('Paper count error:', e));
-
-    // 3. Fetch Pattern Count (Instant server aggregation: 1 read only, always 100% live on refresh)
-    getPatternCount(true).then(patc => {
-      setPatternCount(patc);
-    }).catch(e => console.warn('Pattern count error:', e));
-
-    // 4. Fetch User Count for Admin (Instant server aggregation: 1 read only, always 100% live on refresh)
-    if (isAdmin) {
-      getUserCount(true).then(uc => {
-        setUserCount(uc);
-      }).catch(e => console.warn('User count error:', e));
-    }
+    return () => {
+      unsubStats();
+      unsubNews();
+    };
   }, [isAdmin, user.id]);
 
   const sidebarItems = [
@@ -111,114 +157,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="min-h-screen bg-gray-900 flex text-theme-text-main font-sans selection:bg-gold-500 selection:text-black transition-colors duration-300">
       <div className="lg:hidden fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50 px-4 py-3 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3">
-          <button 
-            type="button"
-            onClick={() => setIsSidebarOpen(true)} 
-            className="text-gold-500 p-1 -ml-1 rounded-lg active:bg-gray-700 transition-colors"
-            aria-label="Open menu"
-          >
-            <Menu size={24} />
-          </button>
-          <span className="font-bold text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span>
-        </div>
-
-        {/* Mobile Top Bar Logout Button - Instantly visible & accessible on mobile */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onLogout();
-          }}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black text-white bg-red-600 hover:bg-red-500 active:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-950/40 border border-red-500/80 cursor-pointer"
-          title="Log Out"
-        >
-          <LogOut size={14} className="text-white" />
-          <span>Log Out</span>
-        </button>
+        <div className="flex items-center gap-3"><button onClick={() => setIsSidebarOpen(true)} className="text-gold-500"><Menu size={24} /></button><span className="font-bold text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span></div>
       </div>
 
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm transition-opacity" 
-          onClick={() => setIsSidebarOpen(false)} 
-        />
-      )}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
 
-      <aside 
-        className={`fixed lg:sticky top-0 left-0 h-[100dvh] max-h-[100dvh] w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-      >
-        <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50 shrink-0">
-          <h1 className="text-lg font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1>
-          <div className="flex items-center gap-2">
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsSidebarOpen(false);
-                onLogout();
-              }}
-              className="lg:hidden flex items-center gap-1 px-2.5 py-1 text-[11px] font-black text-white bg-red-600 hover:bg-red-500 rounded-lg active:scale-95 transition-all shadow border border-red-500"
-              title="Log Out"
-            >
-              <LogOut size={12} />
-              <span>Log Out</span>
-            </button>
-            <button 
-              type="button"
-              onClick={() => setIsSidebarOpen(false)} 
-              className="lg:hidden text-theme-text-muted hover:text-white p-1"
-              aria-label="Close menu"
-            >
-              <X size={22} />
-            </button>
-          </div>
-        </div>
-        <div className="p-4 border-b border-gray-700 bg-gray-800 transition-colors shrink-0">
-           <div className="flex items-center gap-3">
-             <div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500 font-bold border border-gold-500/30 shrink-0">{user.name.charAt(0)}</div>
-             <div className="overflow-hidden">
-               <p className="text-sm font-bold text-theme-text-main truncate w-32">{isAdmin ? "Admin Access" : user.name}</p>
-               <p className="text-xs text-gold-500">{isAdmin ? "System Admin" : "Teacher"}</p>
-             </div>
-           </div>
-           <div className={`mt-3 flex items-center justify-center gap-2 px-2 py-1 rounded text-[10px] font-bold uppercase border bg-green-500/10 border-green-500/30 text-green-400`}><Wifi size={12} />Cloud Connected</div>
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900/50"><h1 className="text-xl font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1><button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-theme-text-muted"><X size={24} /></button></div>
+        <div className="p-5 border-b border-gray-700 bg-gray-800 transition-colors">
+           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500 font-bold border border-gold-500/30">{user.name.charAt(0)}</div><div className="overflow-hidden">
+             <p className="text-sm font-bold text-theme-text-main truncate w-32">{isAdmin ? "Admin Access" : user.name}</p>
+             <p className="text-xs text-gold-500">{isAdmin ? "System Admin" : "Teacher"}</p>
+           </div></div>
+           <div className="mt-3 flex items-center justify-center gap-2 px-2 py-1.5 rounded text-[10px] font-bold uppercase border bg-green-500/10 border-green-500/30 text-green-400"><Wifi size={12} />Cloud Connected</div>
+           <button 
+             onClick={handleManualSyncCounts}
+             disabled={isSyncingCounts}
+             title="Sync live count directly from DB"
+             className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase border bg-gold-500/10 border-gold-500/30 text-gold-400 hover:bg-gold-500/20 transition-all cursor-pointer"
+           >
+             <RefreshCw size={11} className={isSyncingCounts ? "animate-spin" : ""} />
+             <span>{isSyncingCounts ? "Syncing..." : "Sync DB Counts"}</span>
+           </button>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
            {sidebarItems.map(item => (
-             <button 
-               key={item.id} 
-               type="button"
-               onClick={() => handleNavClick(item.id)} 
-               className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-theme-text-muted hover:bg-gray-750 hover:text-gold-500 transition-all group"
-             >
-               <span className="group-hover:scale-110 transition-transform">{item.icon}</span>
-               {item.label}
-               <ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100" />
-             </button>
+             <button key={item.id} onClick={() => handleNavClick(item.id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-theme-text-muted hover:bg-gray-750 hover:text-gold-500 transition-all group"><span className="group-hover:scale-110 transition-transform">{item.icon}</span>{item.label}<ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100" /></button>
            ))}
         </nav>
-        <div className="p-4 border-t border-gray-700 bg-gray-900/60 space-y-2.5 pb-6 shrink-0">
-          <button 
-            type="button"
-            onClick={toggleTheme} 
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-theme-text-muted hover:text-theme-text-main bg-gray-800 rounded-xl transition-colors border border-gray-700 active:scale-98"
-          >
-            {isDarkMode ? <Sun size={15} className="text-gold-400" /> : <Moon size={15} className="text-indigo-400" />}
-            {isDarkMode ? "Light Mode" : "Dark Mode"}
-          </button>
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsSidebarOpen(false);
-              onLogout();
-            }} 
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-black text-white bg-red-600 hover:bg-red-500 active:bg-red-700 rounded-xl transition-all shadow-lg shadow-red-950/50 border border-red-500 cursor-pointer active:scale-98"
-          >
-            <LogOut size={18} className="text-white" />
-            <span>Log Out</span>
-          </button>
+        <div className="p-4 border-t border-gray-700 bg-gray-900/30 space-y-3">
+          <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-main bg-gray-900/50 rounded-lg transition-colors border border-gray-700">{isDarkMode ? <Sun size={16} className="text-gold-400" /> : <Moon size={16} className="text-indigo-400" />}{isDarkMode ? "Light Mode" : "Dark Mode"}</button>
+          <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"><LogOut size={16} />Log Out</button>
         </div>
       </aside>
 
@@ -268,41 +237,60 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      <span>{user.instituteProfile.instituteName}</span>
                   </div>
                 )}
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${
+                    isAdmin 
+                      ? 'bg-gold-500/10 text-gold-400 border-gold-500/30' 
+                      : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                  }`}>
+                    {isAdmin ? "Global Admin • All Papers" : "Teacher Account • My Papers"}
+                  </span>
+                  
+                  <button 
+                    onClick={handleManualSyncCounts}
+                    disabled={isSyncingCounts}
+                    title="Click to refresh live database counts"
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-gray-300 hover:text-gold-400 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full border border-white/10 transition-all cursor-pointer"
+                  >
+                    <RefreshCw size={11} className={isSyncingCounts ? "animate-spin text-gold-400" : "text-gray-400"} />
+                    <span>{isSyncingCounts ? "Syncing DB..." : "Live DB Sync"}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Stats inside Banner (Right Side) */}
             <div className="grid grid-cols-2 gap-3 z-10 w-full lg:w-[55%] xl:w-[50%]">
               {isAdmin && (
-                <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+                <div onClick={() => onNavigate('TEACHERS_DIRECTORY')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                   <div className="bg-gold-500/10 p-2 md:p-2.5 rounded-full text-gold-500 shrink-0 group-hover:scale-110 transition-transform"><Users size={16} /></div>
                   <div>
-                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5">{userCount !== null ? userCount : '...'}</h3>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider">Schools</p>
+                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{userCount !== null ? userCount : 0}</h3>
+                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Schools <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
                   </div>
                 </div>
               )}
-              <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+              <div onClick={() => onNavigate('SAVED_PAPERS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                 <div className="bg-blue-500/10 p-2 md:p-2.5 rounded-full text-blue-400 shrink-0 group-hover:scale-110 transition-transform"><FolderOpen size={16} /></div>
                 <div>
-                  <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5">{paperCount !== null ? paperCount : '...'}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider">Papers</p>
+                  <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{paperCount !== null ? paperCount : 0}</h3>
+                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">{isAdmin ? "All Papers" : "My Papers"} <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
                 </div>
               </div>
               {isAdmin && (
-                <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+                <div onClick={() => onNavigate('PAPER_PATTERNS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                   <div className="bg-emerald-500/10 p-2 md:p-2.5 rounded-full text-emerald-400 shrink-0 group-hover:scale-110 transition-transform"><Layout size={16} /></div>
                   <div>
-                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5">{patternCount !== null ? patternCount : '...'}</h3>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider">Patterns</p>
+                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{patternCount !== null ? patternCount : 0}</h3>
+                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Patterns <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
                   </div>
                 </div>
               )}
-              <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group">
+              <div onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
                 <div className="bg-purple-500/10 p-2 md:p-2.5 rounded-full text-purple-400 shrink-0 group-hover:scale-110 transition-transform"><Megaphone size={16} /></div>
                 <div>
-                  <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5">{newsList.length > 0 ? newsList.length : (latestAnnouncement ? '1' : '1')}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider">Updates</p>
+                  <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{newsList.length > 0 ? newsList.length : (latestAnnouncement ? '1' : '1')}</h3>
+                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Updates <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live updates"></span></p>
                 </div>
               </div>
             </div>
@@ -374,22 +362,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                      <p className="text-gray-400 text-xs mt-0.5">FAQs and contact information.</p>
                    </div>
                    <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
-                </div>
-
-                <div 
-                  onClick={onLogout} 
-                  className="bg-gray-800 border border-red-500/40 hover:border-red-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all hover:bg-red-500/5 active:scale-[0.99]"
-                >
-                   <div className="bg-red-600 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0 shadow-md shadow-red-900/40">
-                     <LogOut size={20} />
-                   </div>
-                   <div className="flex-grow">
-                     <h3 className="text-sm md:text-base font-bold text-red-400 group-hover:text-red-300">Log Out</h3>
-                     <p className="text-gray-400 text-xs mt-0.5">Sign out of your session on this device.</p>
-                   </div>
-                   <div className="bg-gray-700 text-red-400 rounded-full p-1.5 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                     <ChevronRight size={16} />
-                   </div>
                 </div>
 
 

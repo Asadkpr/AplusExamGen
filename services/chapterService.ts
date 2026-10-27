@@ -38,7 +38,14 @@ let cachedVisibility: VisibilityState | null = null;
 let lastVisibilityFetchTime = 0;
 let cachedChapters: Record<string, Chapter[]> = {};
 let lastChaptersFetchTime: Record<string, number> = {};
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 45 * 1000; // 45 seconds for rapid multi-admin synchronization
+
+export const resetChapterCache = () => {
+  cachedVisibility = null;
+  lastVisibilityFetchTime = 0;
+  cachedChapters = {};
+  lastChaptersFetchTime = {};
+};
 
 export interface VisibilityState {
   hiddenChapterIds: string[];
@@ -47,7 +54,7 @@ export interface VisibilityState {
   renamedChapterMap?: Record<string, string>; // Maps ID -> New Name
 }
 
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 2500): Promise<T> => {
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 6000): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Network/Quota timeout')), timeoutMs))
@@ -62,7 +69,7 @@ export const getVisibilitySettings = async (forceRefresh: boolean = false): Prom
 
   try {
     const docRef = doc(db, VISIBILITY_COLLECTION, VISIBILITY_DOC);
-    const docSnap = await withTimeout(getDoc(docRef), 2000);
+    const docSnap = await withTimeout(getDoc(docRef), 6000);
     if (docSnap.exists()) {
       const data = docSnap.data() as VisibilityState;
       const result = {

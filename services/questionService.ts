@@ -5,10 +5,12 @@ import {
   doc, 
   setDoc, 
   getDoc, 
+  getDocFromCache,
   collection, 
   query, 
   where, 
   getDocs, 
+  getDocsFromCache,
   updateDoc,
   deleteDoc
 } from 'firebase/firestore';
@@ -20,7 +22,12 @@ const CONTENT_CACHE_KEY = 'aplus_content_cache_v2';
 // 🔹 Memory Cache
 let memoryContentCache: Record<string, UploadedContent> = {};
 let lastFetchTime: Record<string, number> = {};
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 45 * 1000; // 45 seconds for rapid multi-admin synchronization
+
+export const resetQuestionCache = () => {
+  memoryContentCache = {};
+  lastFetchTime = {};
+};
 
 interface UploadedContent {
   chapterId: string;
@@ -32,7 +39,7 @@ interface UploadedContent {
 }
 
 // Helper timeout
-const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 3000): Promise<T> => {
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Network/Quota timeout')), timeoutMs))
@@ -53,7 +60,7 @@ export const getAllClassUploadedContent = async (classLevel: string, forceRefres
       collection(db, COLLECTION), 
       where("classLevel", "==", cleanClass)
     );
-    const snapshot = await withTimeout(getDocs(q), 3000);
+    const snapshot = await withTimeout(getDocs(q), 8000);
     return snapshot.docs.map(doc => doc.data() as UploadedContent);
   };
 
@@ -62,7 +69,13 @@ export const getAllClassUploadedContent = async (classLevel: string, forceRefres
     try {
       data = await fetchOp();
     } catch (e: any) {
-      console.warn("getAllClassUploadedContent fetch failed (quota or offline):", e?.message || e);
+      try {
+        const q = query(collection(db, COLLECTION), where("classLevel", "==", cleanClass));
+        const cacheSnap = await getDocsFromCache(q);
+        if (!cacheSnap.empty) {
+          data = cacheSnap.docs.map(doc => doc.data() as UploadedContent);
+        }
+      } catch (_) {}
     }
 
     try {
@@ -198,14 +211,30 @@ export const getQuestionsForChapters = async (
   const missingIds = selectedChapterIds.filter(id => !processedChapterIds.has(id));
 
   if (missingIds.length > 0) {
-    const fetchOp = async () => {
-      const promises = missingIds.map(id => getDoc(doc(db, COLLECTION, id)));
-      const docs = await Promise.all(promises);
-      return docs.map(d => d.exists() ? d.data() as UploadedContent : null);
+    const fetchSingleChapter = async (id: string): Promise<UploadedContent | null> => {
+      const ref = doc(db, COLLECTION, id);
+      try {
+        const snap = await withTimeout(getDoc(ref), 5000);
+        if (snap.exists()) return snap.data() as UploadedContent;
+      } catch (_) {
+        try {
+          const cacheSnap = await getDocFromCache(ref);
+          if (cacheSnap.exists()) return cacheSnap.data() as UploadedContent;
+        } catch (_) {}
+      }
+      if (memoryContentCache[id]) return memoryContentCache[id];
+      try {
+        const stored = localStorage.getItem(CONTENT_CACHE_KEY);
+        if (stored) {
+          const cache = JSON.parse(stored);
+          if (cache[id]) return cache[id];
+        }
+      } catch (_) {}
+      return null;
     };
 
     try {
-      let results = await fetchOp();
+      const results = await Promise.all(missingIds.map(id => fetchSingleChapter(id)));
       results.forEach(data => {
         if (data && data.questions) {
           finalQuestions = [...finalQuestions, ...data.questions];
@@ -259,29 +288,32 @@ export const getUploadedSubtopicsMap = async (subject: string, classLevel: strin
   }
 
   // 2.5 Try Local Storage content cache (instant)
-  try {
-    const stored = localStorage.getItem(CONTENT_CACHE_KEY);
-    if (stored) {
-      const cache = JSON.parse(stored);
-      Object.values(cache).forEach((item: any) => {
-        if (item && item.subject === cleanSubject && item.classLevel === cleanClass && item.subtopics && item.subtopics.length > 0) {
-          map[item.chapterId] = item.subtopics;
+  if (!forceRefresh) {
+    try {
+      const stored = localStorage.getItem(CONTENT_CACHE_KEY);
+      if (stored) {
+        const cache = JSON.parse(stored);
+        Object.values(cache).forEach((item: any) => {
+          if (item && item.subject === cleanSubject && item.classLevel === cleanClass && item.subtopics && item.subtopics.length > 0) {
+            map[item.chapterId] = item.subtopics;
+          }
+        });
+        if (Object.keys(map).length > 0) {
+          lastFetchTime[cacheKey] = Date.now();
+          return map;
         }
-      });
-      if (Object.keys(map).length > 0) {
-        lastFetchTime[cacheKey] = Date.now();
       }
-    }
-  } catch(e) {}
+    } catch(e) {}
+  }
 
-  // 3. Fallback: Slow Fetch (Fetch all content for this subject/class)
+  // 3. Fallback: Fetch content for this subject/class
+  const q = query(
+    collection(db, COLLECTION), 
+    where("subject", "==", cleanSubject), 
+    where("classLevel", "==", cleanClass)
+  );
   const fetchOp = async () => {
-    const q = query(
-      collection(db, COLLECTION), 
-      where("subject", "==", cleanSubject), 
-      where("classLevel", "==", cleanClass)
-    );
-    const snapshot = await withTimeout(getDocs(q), 3000);
+    const snapshot = await withTimeout(getDocs(q), 12000);
     return snapshot.docs.map(doc => doc.data() as UploadedContent);
   };
 
@@ -290,7 +322,13 @@ export const getUploadedSubtopicsMap = async (subject: string, classLevel: strin
     try {
       data = await fetchOp();
     } catch (err: any) {
-      console.warn("fetchOp failed (quota or offline):", err?.message || err);
+      console.warn("fetchOp failed (quota or offline), trying IndexedDB cache:", err?.message || err);
+      try {
+        const cacheSnap = await getDocsFromCache(q);
+        if (!cacheSnap.empty) {
+          data = cacheSnap.docs.map(doc => doc.data() as UploadedContent);
+        }
+      } catch (_) {}
     }
 
     data.forEach(item => {
