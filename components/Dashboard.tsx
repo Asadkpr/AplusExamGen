@@ -156,14 +156,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-900 flex text-theme-text-main font-sans selection:bg-gold-500 selection:text-black transition-colors duration-300">
-      <div className="lg:hidden fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50 px-4 py-3 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3"><button onClick={() => setIsSidebarOpen(true)} className="text-gold-500"><Menu size={24} /></button><span className="font-bold text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span></div>
+      <div className="lg:hidden fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50 px-4 py-2.5 flex items-center justify-between shadow-md">
+        <div className="flex items-center gap-2.5">
+          <button type="button" onClick={() => setIsSidebarOpen(true)} className="text-gold-500 p-1">
+            <Menu size={24} />
+          </button>
+          <span className="font-bold text-base sm:text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setIsSidebarOpen(false);
+            onLogout();
+          }}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 active:scale-95 transition-all"
+          title="Log Out"
+        >
+          <LogOut size={14} />
+          <span>Logout</span>
+        </button>
       </div>
 
       {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
 
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900/50"><h1 className="text-xl font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1><button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-theme-text-muted"><X size={24} /></button></div>
+      <aside className={`fixed lg:sticky top-0 left-0 h-[100dvh] lg:h-screen w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900/50"><h1 className="text-xl font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1><button type="button" onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-theme-text-muted"><X size={24} /></button></div>
         <div className="p-5 border-b border-gray-700 bg-gray-800 transition-colors">
            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500 font-bold border border-gold-500/30">{user.name.charAt(0)}</div><div className="overflow-hidden">
              <p className="text-sm font-bold text-theme-text-main truncate w-32">{isAdmin ? "Admin Access" : user.name}</p>
@@ -185,9 +202,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
              <button key={item.id} onClick={() => handleNavClick(item.id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-theme-text-muted hover:bg-gray-750 hover:text-gold-500 transition-all group"><span className="group-hover:scale-110 transition-transform">{item.icon}</span>{item.label}<ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100" /></button>
            ))}
         </nav>
-        <div className="p-4 border-t border-gray-700 bg-gray-900/30 space-y-3">
-          <button onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-main bg-gray-900/50 rounded-lg transition-colors border border-gray-700">{isDarkMode ? <Sun size={16} className="text-gold-400" /> : <Moon size={16} className="text-indigo-400" />}{isDarkMode ? "Light Mode" : "Dark Mode"}</button>
-          <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"><LogOut size={16} />Log Out</button>
+        <div className="p-4 pb-6 lg:pb-4 border-t border-gray-700 bg-gray-900/30 space-y-3 shrink-0">
+          <button type="button" onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-main bg-gray-900/50 rounded-lg transition-colors border border-gray-700">{isDarkMode ? <Sun size={16} className="text-gold-400" /> : <Moon size={16} className="text-indigo-400" />}{isDarkMode ? "Light Mode" : "Dark Mode"}</button>
+          <button type="button" onClick={() => { setIsSidebarOpen(false); onLogout(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors cursor-pointer"><LogOut size={16} />Log Out</button>
         </div>
       </aside>
 
@@ -404,6 +421,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 )}
              </div>
           </div>
+
+          <footer className="mt-auto pt-8 pb-4 text-center text-xs text-theme-text-sub border-t border-gray-800/60">
+            <p className="text-[11px] font-semibold tracking-wide">
+              Powered by <span className="text-gold-500 font-bold">primeTech.AI</span>
+            </p>
+          </footer>
         </div>
       </main>
 

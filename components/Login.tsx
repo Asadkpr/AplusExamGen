@@ -281,8 +281,11 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
 
       {view === 'LOGIN' ? renderLoginForm() : renderForgotForm()}
 
-      <footer className="mt-8 text-center text-xs text-theme-text-muted pb-4">
+      <footer className="mt-8 text-center text-xs text-theme-text-muted pb-4 space-y-1">
         <p>{COPYRIGHT_TEXT}</p>
+        <p className="text-[11px] font-semibold tracking-wide text-theme-text-sub">
+          Powered by <span className="text-gold-500 font-bold">primeTech.AI</span>
+        </p>
       </footer>
     </div>
   );

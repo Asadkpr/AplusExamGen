@@ -137,9 +137,12 @@ export const AboutUs: React.FC<AboutUsProps> = ({ onBack }) => {
              </div>
           </div>
 
-          <div className="text-center text-xs text-theme-text-sub pb-8">
+          <div className="text-center text-xs text-theme-text-sub pb-8 space-y-1">
              <p className="font-bold">{APP_NAME}</p>
              <p>{COPYRIGHT_TEXT}</p>
+             <p className="text-[11px] font-semibold tracking-wide pt-1">
+               Powered by <span className="text-gold-500 font-bold">primeTech.AI</span>
+             </p>
           </div>
 
         </div>

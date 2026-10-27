@@ -132,12 +132,13 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    invalidateAppCaches();
-    await logoutUser();
+    localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
     sessionStorage.removeItem('aplus_demo_seen');
     setHasSeenDemoAlert(false);
     setCurrentUser(null);
     setCurrentView('LOGIN');
+    invalidateAppCaches();
+    await logoutUser();
   };
 
   const handleAuthSuccess = async (user: User) => {
@@ -317,6 +318,27 @@ const App: React.FC = () => {
             onBack={() => setCurrentView('DASHBOARD')}
           />
         )}
+
+        {/* Global Page Footer for Inner Views */}
+        {!['LOGIN', 'SIGNUP', 'DASHBOARD', 'ABOUT_US', 'HELP_SUPPORT'].includes(currentView) && (
+          <footer className="print-hidden bg-gray-900 border-t border-gray-800/80 py-3 px-4 text-center text-xs text-theme-text-sub">
+            <p className="text-[11px] font-semibold tracking-wide">
+              Powered by <span className="text-gold-500 font-bold">primeTech.AI</span>
+            </p>
+          </footer>
+        )}
+
+        {/* Hidden SEO & Crawler Attribution (Not visible on UI, indexed by search engines) */}
+        {/* Developed by Muhammad Asad Akmal - CEO & Lead Developer at primeTech.AI (Prime Tech) */}
+        <div className="sr-only print-hidden" aria-hidden="true" itemScope itemType="https://schema.org/Organization">
+          <span itemProp="name">primeTech.AI</span>
+          <span itemProp="alternateName">Prime Tech</span>
+          <div itemProp="founder" itemScope itemType="https://schema.org/Person">
+            <span itemProp="name">Muhammad Asad Akmal</span>
+            <span itemProp="jobTitle">CEO &amp; Developer</span>
+          </div>
+          <p>Developed by Muhammad Asad Akmal, CEO and Developer of primeTech.AI.</p>
+        </div>
 
         {/* Global Floating WhatsApp Support Button */}
         <WhatsAppButton />
