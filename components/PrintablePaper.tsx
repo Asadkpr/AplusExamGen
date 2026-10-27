@@ -77,11 +77,11 @@ const toRoman = (num: number): string => {
 // Translate common section headings to Urdu
 const translateHeadingToUrdu = (heading: string) => {
   if (!heading) return '';
-  const h = heading.toUpperCase().trim();
-  if (h.includes('SECTION - I') || h.includes('SECTION I')) return 'حصہ اول';
-  if (h.includes('SECTION - II') || h.includes('SECTION II')) return 'حصہ دوم';
-  if (h.includes('SECTION - III') || h.includes('SECTION III')) return 'حصہ سوم';
+  const h = heading.toUpperCase().replace(/–/g, '-').trim();
   if (h.includes('SECTION - IV') || h.includes('SECTION IV')) return 'حصہ چہارم';
+  if (h.includes('SECTION - III') || h.includes('SECTION III')) return 'حصہ سوم';
+  if (h.includes('SECTION - II') || h.includes('SECTION II')) return 'حصہ دوم';
+  if (h.includes('SECTION - I') || h.includes('SECTION I')) return 'حصہ اول';
   if (h.includes('SECTION A') || h.includes('SECTION - A') || h === 'PART I' || h === 'PART A') return 'حصہ الف';
   if (h.includes('SECTION B') || h.includes('SECTION - B') || h === 'PART II' || h === 'PART B') return 'حصہ ب';
   if (h.includes('SECTION C') || h.includes('SECTION - C') || h === 'PART III' || h === 'PART C') return 'حصہ ج';

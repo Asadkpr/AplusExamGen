@@ -168,7 +168,17 @@ const App: React.FC = () => {
     setCurrentView('DASHBOARD');
   };
 
+  const isAdminUser = (u: User | null | undefined): boolean => {
+    if (!u) return false;
+    return u.email === 'admin' || u.email === 'admin@aplusexamgen.com' || u.id === 'local-admin';
+  };
+
   const handleDashboardNavigate = (view: ViewState) => {
+    const adminOnlyViews: ViewState[] = ['UPLOAD_PAPER', 'MANAGE_CONTENT', 'PAPER_PATTERNS', 'TEACHERS_DIRECTORY'];
+    if (adminOnlyViews.includes(view) && !isAdminUser(currentUser)) {
+      setCurrentView('DASHBOARD');
+      return;
+    }
     if (view === 'PROFILE_SETTINGS') {
       setCurrentView('INSTITUTE_SETUP');
     } else {
@@ -237,13 +247,13 @@ const App: React.FC = () => {
             initialPaper={selectedPaperToOpen}
           />
         )}
-        {currentView === 'UPLOAD_PAPER' && currentUser && (
+        {currentView === 'UPLOAD_PAPER' && currentUser && isAdminUser(currentUser) && (
           <UploadPaper 
             user={currentUser}
             onBack={() => setCurrentView('DASHBOARD')}
           />
         )}
-        {currentView === 'MANAGE_CONTENT' && currentUser && (
+        {currentView === 'MANAGE_CONTENT' && currentUser && isAdminUser(currentUser) && (
           <ManageContent 
             user={currentUser}
             onBack={() => setCurrentView('DASHBOARD')}
@@ -256,24 +266,14 @@ const App: React.FC = () => {
             onOpenPaper={handleOpenPaper}
           />
         )}
-        {currentView === 'PAPER_PATTERNS' && currentUser && (
-          (currentUser.email === 'admin' || currentUser.email === 'admin@aplusexamgen.com' || currentUser.id === 'local-admin') ? (
-            <PaperPatterns 
-              user={currentUser}
-              onBack={() => setCurrentView('DASHBOARD')}
-              onUsePattern={handleUsePattern}
-            />
-          ) : (
-            <Dashboard 
-              user={currentUser} 
-              onLogout={handleLogout}
-              onNavigate={handleDashboardNavigate}
-              showDemoAlert={!hasSeenDemoAlert}
-              onCloseDemoAlert={handleDismissDemoAlert}
-            />
-          )
+        {currentView === 'PAPER_PATTERNS' && currentUser && isAdminUser(currentUser) && (
+          <PaperPatterns 
+            user={currentUser}
+            onBack={() => setCurrentView('DASHBOARD')}
+            onUsePattern={handleUsePattern}
+          />
         )}
-        {currentView === 'TEACHERS_DIRECTORY' && currentUser && (
+        {currentView === 'TEACHERS_DIRECTORY' && currentUser && isAdminUser(currentUser) && (
           <TeachersDirectory 
             user={currentUser}
             onBack={() => setCurrentView('DASHBOARD')}

@@ -12,6 +12,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  increment,
   Unsubscribe 
 } from 'firebase/firestore';
 
@@ -415,17 +416,23 @@ class SyncService {
     this.notify();
   }
 
+  private incrementCloudStatsField(field: keyof DashboardStats, delta: number) {
+    try {
+      const ref = doc(db, STATS_COLLECTION, STATS_DOC);
+      setDoc(ref, { [field]: increment(delta), updatedAt: Date.now() }, { merge: true }).catch(() => {});
+    } catch (_) {}
+  }
+
   // --- Optimistic Instant Mutators ---
   public optimisticPaperAdded(userId?: string) {
     this.stats.papersCount += 1;
     const key = this.currentIsAdmin ? 'admin' : (userId || this.currentUserId || 'admin');
     localStorage.setItem(`total_papers_count_${key}`, this.stats.papersCount.toString());
     const adminStored = parseInt(localStorage.getItem('total_papers_count_admin') || '0', 10);
-    if (adminStored > 0) {
-      this.persistCloudStatsMetadata({ papersCount: adminStored });
-    } else if (this.currentIsAdmin && this.stats.papersCount > 0) {
-      this.persistCloudStatsMetadata({ papersCount: this.stats.papersCount });
+    if (adminStored > 0 && !this.currentIsAdmin) {
+      localStorage.setItem('total_papers_count_admin', (adminStored + 1).toString());
     }
+    this.incrementCloudStatsField('papersCount', 1);
     this.notify();
   }
 
@@ -434,41 +441,50 @@ class SyncService {
     const key = this.currentIsAdmin ? 'admin' : (userId || this.currentUserId || 'admin');
     localStorage.setItem(`total_papers_count_${key}`, this.stats.papersCount.toString());
     const adminStored = parseInt(localStorage.getItem('total_papers_count_admin') || '0', 10);
-    if (adminStored > 0) {
-      this.persistCloudStatsMetadata({ papersCount: adminStored });
-    } else if (this.currentIsAdmin && this.stats.papersCount > 0) {
-      this.persistCloudStatsMetadata({ papersCount: this.stats.papersCount });
+    if (adminStored > 0 && !this.currentIsAdmin) {
+      localStorage.setItem('total_papers_count_admin', Math.max(0, adminStored - 1).toString());
     }
+    this.incrementCloudStatsField('papersCount', -1);
     this.notify();
   }
 
   public optimisticPatternAdded() {
     this.stats.patternsCount += 1;
     localStorage.setItem('total_patterns_count', this.stats.patternsCount.toString());
-    if (this.stats.patternsCount > 0) {
-      this.persistCloudStatsMetadata({ patternsCount: this.stats.patternsCount });
-    }
+    this.incrementCloudStatsField('patternsCount', 1);
     this.notify();
   }
 
   public optimisticPatternDeleted() {
     this.stats.patternsCount = Math.max(0, this.stats.patternsCount - 1);
     localStorage.setItem('total_patterns_count', this.stats.patternsCount.toString());
-    if (this.stats.patternsCount > 0) {
-      this.persistCloudStatsMetadata({ patternsCount: this.stats.patternsCount });
-    }
+    this.incrementCloudStatsField('patternsCount', -1);
     this.notify();
   }
 
   public optimisticAnnouncementAdded() {
     this.stats.announcementsCount += 1;
-    this.persistCloudStatsMetadata({ announcementsCount: this.stats.announcementsCount });
+    this.incrementCloudStatsField('announcementsCount', 1);
     this.notify();
   }
 
   public optimisticAnnouncementDeleted() {
     this.stats.announcementsCount = Math.max(1, this.stats.announcementsCount - 1);
-    this.persistCloudStatsMetadata({ announcementsCount: this.stats.announcementsCount });
+    this.incrementCloudStatsField('announcementsCount', -1);
+    this.notify();
+  }
+
+  public optimisticSchoolAdded() {
+    this.stats.schoolsCount += 1;
+    localStorage.setItem('total_users_count', this.stats.schoolsCount.toString());
+    this.incrementCloudStatsField('schoolsCount', 1);
+    this.notify();
+  }
+
+  public optimisticSchoolDeleted() {
+    this.stats.schoolsCount = Math.max(0, this.stats.schoolsCount - 1);
+    localStorage.setItem('total_users_count', this.stats.schoolsCount.toString());
+    this.incrementCloudStatsField('schoolsCount', -1);
     this.notify();
   }
 

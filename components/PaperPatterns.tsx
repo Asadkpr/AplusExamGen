@@ -41,7 +41,15 @@ export const ENGLISH_SUBTYPE_INSTRUCTIONS: Record<string, string> = {
   'Grammar': 'Choose the correct option according to grammar and fill up the bubbles.'
 };
 
-export const SECTION_HEADINGS = ['None', 'SECTION – I', 'SECTION – II', 'OBJECTIVE PART', 'SUBJECTIVE PART'];
+export const SECTION_HEADINGS = ['None', 'SECTION – I', 'SECTION – II', 'SECTION – III', 'OBJECTIVE PART', 'SUBJECTIVE PART'];
+
+export const getAutoSectionHeading = (type: string): string => {
+  const upper = (type || '').toUpperCase().trim();
+  if (upper === 'MCQ') return 'SECTION – I';
+  if (upper === 'SHORT') return 'SECTION – II';
+  if (upper === 'LONG') return 'SECTION – III';
+  return 'None';
+};
 
 export const isUrdu = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
@@ -215,15 +223,23 @@ export const sortSectionsByStandardSequence = (
     let nextTitle = sec.title || '';
     let nextTitleUrdu = sec.titleUrdu || '';
 
-    // Only update title with question index if the section originally has a title
-    if (sec.title && sec.title.trim()) {
-      const autoTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject);
-      if (autoTitle) nextTitle = autoTitle;
+    // Preserve user/admin custom title text, only updating Q# prefix or generating if empty
+    if (nextTitle.trim()) {
+      if (/^Q\d+\.\s*/i.test(nextTitle)) {
+        nextTitle = nextTitle.replace(/^Q\d+\.\s*/i, `Q${newIdx + 1}. `);
+      } else if (/^سوال نمبر\s*\d+[.۔]\s*/.test(nextTitle)) {
+        nextTitle = nextTitle.replace(/^سوال نمبر\s*\d+[.۔]\s*/, `سوال نمبر ${newIdx + 1}. `);
+      }
+    } else {
+      nextTitle = getAutoTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx, isEnglishSubject) || '';
     }
 
-    if (sec.titleUrdu && sec.titleUrdu.trim()) {
-      const autoUrduTitle = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx);
-      if (autoUrduTitle) nextTitleUrdu = autoUrduTitle;
+    if (nextTitleUrdu.trim()) {
+      if (/^سوال نمبر\s*\d+[.۔]\s*/.test(nextTitleUrdu)) {
+        nextTitleUrdu = nextTitleUrdu.replace(/^سوال نمبر\s*\d+[.۔]\s*/, `سوال نمبر ${newIdx + 1}۔ `);
+      }
+    } else {
+      nextTitleUrdu = getAutoUrduTitle(sec.type, sec.attemptCount, sec.marksPerQuestion, newIdx) || '';
     }
 
     return {

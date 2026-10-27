@@ -1,5 +1,6 @@
 
 import { auth, db } from '../firebaseConfig';
+import { syncService } from './syncService';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -107,15 +108,7 @@ export const deleteUserPermanently = async (userId: string): Promise<boolean> =>
   // Clear cache
   cachedUsers = null;
   cachedUserCount = null;
-  try {
-    const current = localStorage.getItem('total_users_count');
-    if (current !== null) {
-      const prev = parseInt(current, 10);
-      if (!isNaN(prev)) {
-        localStorage.setItem('total_users_count', Math.max(0, prev - 1).toString());
-      }
-    }
-  } catch (_) {}
+  syncService.optimisticSchoolDeleted();
 
   const operation = async () => {
     await deleteDoc(doc(db, "users", userId));
@@ -205,6 +198,10 @@ export const refreshUserProfile = async (userId: string): Promise<User | null> =
 
 export const registerUser = async (userData: Omit<User, 'id' | 'createdAt' | 'passwordHash'> & { password: string }): Promise<{ success: boolean; message: string; user?: User }> => {
   try {
+    const normalizedEmail = userData.email.trim().toLowerCase();
+    if (normalizedEmail === 'admin' || normalizedEmail === ADMIN_EMAIL.toLowerCase()) {
+      return { success: false, message: "This email is reserved for System Admin." };
+    }
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
     const firebaseUser = userCredential.user;
 
@@ -230,15 +227,7 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt' | 'pa
     }
     
     // Update user count cache & invalidate users cache
-    try {
-      const current = localStorage.getItem('total_users_count');
-      if (current !== null) {
-        const prev = parseInt(current, 10);
-        if (!isNaN(prev)) {
-          localStorage.setItem('total_users_count', (prev + 1).toString());
-        }
-      }
-    } catch (_) {}
+    syncService.optimisticSchoolAdded();
     cachedUserCount = null;
     cachedUsers = null;
 
@@ -932,6 +921,32 @@ export const subscribeToAuth = (callback: (user: User | null) => void) => {
       }
 
       const isMasterAdmin = firebaseUser.email === ADMIN_EMAIL;
+
+      // SECURITY GUARD: If Firebase Auth has ADMIN_EMAIL (e.g. from a background executeAsAdmin call),
+      // verify that localStorage actually has an active Master Admin session.
+      // Never allow a regular teacher or logged-out visitor to inherit the Master Admin session!
+      if (isMasterAdmin) {
+        const storedCheck = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
+        let isExplicitAdminSession = false;
+        if (storedCheck) {
+          try {
+            const parsed = JSON.parse(storedCheck);
+            if (parsed?.email === 'admin' || parsed?.email === ADMIN_EMAIL || parsed?.id === 'local-admin') {
+              isExplicitAdminSession = true;
+            }
+          } catch (_) {}
+        }
+        if (!isExplicitAdminSession) {
+          // Leftover background admin auth: sign out silently and preserve current user/guest state
+          try { await signOut(auth); } catch (_) {}
+          if (storedCheck) {
+            try { callback(JSON.parse(storedCheck)); return; } catch (_) {}
+          }
+          callback(null);
+          return;
+        }
+      }
+
       const docRef = doc(db, "users", firebaseUser.uid);
       try {
         const docSnap = await Promise.race([
