@@ -406,23 +406,23 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-gray-800 border-2 border-gold-500/40 rounded-2xl max-w-6xl w-full p-4 sm:p-6 shadow-2xl relative my-auto max-h-[94vh] flex flex-col text-theme-text-main animate-scaleIn">
+      <div className="bg-gray-800 border-2 border-gold-500/40 rounded-2xl max-w-6xl w-full p-3 sm:p-6 shadow-2xl relative my-auto max-h-[92dvh] lg:max-h-[94vh] flex flex-col overflow-hidden text-theme-text-main animate-scaleIn">
         
         {/* HEADER */}
-        <div className="flex items-start justify-between pb-4 border-b border-gray-700 shrink-0">
+        <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-gray-700 shrink-0">
           <div>
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-gold-500/10 border border-gold-500/30 rounded-xl text-gold-500">
+              <div className="p-2 bg-gold-500/10 border border-gold-500/30 rounded-xl text-gold-500 shrink-0">
                 <Sliders size={20} />
               </div>
               <div>
-                <h2 className="text-xl font-black text-theme-text-main uppercase tracking-tight flex items-center gap-2">
+                <h2 className="text-base sm:text-xl font-black text-theme-text-main uppercase tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
                   Custom Paper Pattern Builder
                   <span className="text-[10px] bg-gold-500 text-black px-2 py-0.5 rounded-full font-bold">
                     {subject} • {classLevel}
                   </span>
                 </h2>
-                <p className="text-xs text-theme-text-muted mt-0.5">
+                <p className="text-[11px] sm:text-xs text-theme-text-muted mt-0.5">
                   Configure MCQs (Section I), Short Questions (Section II), Long Questions (Section III) & Titles.
                 </p>
               </div>
@@ -432,82 +432,84 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           <button 
             type="button"
             onClick={onClose} 
-            className="p-1.5 rounded-lg text-theme-text-muted hover:text-white hover:bg-gray-700/60 transition-colors"
+            className="p-1.5 rounded-lg text-theme-text-muted hover:text-white hover:bg-gray-700/60 transition-colors shrink-0"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* TOP CONFIG BAR: Pattern Name, Time, Total Marks Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 my-3 bg-gray-900/80 rounded-xl border border-gray-700/80 shrink-0 items-center">
-          <div className="md:col-span-5">
-            <label className="text-[10px] font-black uppercase text-theme-text-muted tracking-wider block mb-1">
-              Pattern Title
-            </label>
-            <input
-              type="text"
-              value={patternName}
-              onChange={e => setPatternName(e.target.value)}
-              placeholder="e.g. Mid Term Exam Pattern"
-              className="w-full bg-gray-800 text-theme-text-main text-xs font-bold px-3 py-2 rounded-lg border border-gray-700 outline-none focus:border-gold-500 transition-colors"
-            />
-          </div>
-
-          <div className="md:col-span-3">
-            <label className="text-[10px] font-black uppercase text-theme-text-muted tracking-wider block mb-1 flex items-center gap-1">
-              <Clock size={12} className="text-gold-500" /> Time Allowed
-            </label>
-            <input
-              type="text"
-              value={timeAllowed}
-              onChange={e => setTimeAllowed(e.target.value)}
-              placeholder="e.g. 2:00 Hours"
-              className="w-full bg-gray-800 text-theme-text-main text-xs px-3 py-2 rounded-lg border border-gray-700 outline-none focus:border-gold-500 transition-colors"
-            />
-          </div>
-
-          <div className="md:col-span-4 flex items-center justify-end gap-3 pl-2 border-t md:border-t-0 md:border-l border-gray-700">
-            <div className="text-right">
-              <span className="text-[9px] uppercase font-black tracking-widest text-theme-text-muted block">Total Questions</span>
-              <span className="text-lg font-black text-white">{totalQuestionsCount}</span>
+        {/* SCROLLABLE BODY (Unified smooth scroll on Mobile; fixed top bars + scrollable sections on Desktop) */}
+        <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden lg:flex lg:flex-col overscroll-contain pr-0.5 lg:pr-0 custom-scrollbar">
+          {/* TOP CONFIG BAR: Pattern Name, Time, Total Marks Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-12 gap-2.5 sm:gap-3 p-3 my-2.5 sm:my-3 bg-gray-900/80 rounded-xl border border-gray-700/80 lg:shrink-0 items-center">
+            <div className="col-span-2 md:col-span-5">
+              <label className="text-[10px] font-black uppercase text-theme-text-muted tracking-wider block mb-1">
+                Pattern Title
+              </label>
+              <input
+                type="text"
+                value={patternName}
+                onChange={e => setPatternName(e.target.value)}
+                placeholder="e.g. Mid Term Exam Pattern"
+                className="w-full bg-gray-800 text-theme-text-main text-xs font-bold px-3 py-2 rounded-lg border border-gray-700 outline-none focus:border-gold-500 transition-colors"
+              />
             </div>
-            <div className="h-8 w-px bg-gray-700" />
-            <div className="text-right">
-              <span className="text-[9px] uppercase font-black tracking-widest text-gold-500 block">Total Marks</span>
-              <span className="text-2xl font-black text-gold-500 leading-none">{totalCalculatedMarks}</span>
+
+            <div className="col-span-1 md:col-span-3">
+              <label className="text-[10px] font-black uppercase text-theme-text-muted tracking-wider block mb-1 flex items-center gap-1">
+                <Clock size={12} className="text-gold-500" /> Time Allowed
+              </label>
+              <input
+                type="text"
+                value={timeAllowed}
+                onChange={e => setTimeAllowed(e.target.value)}
+                placeholder="e.g. 2:00 Hours"
+                className="w-full bg-gray-800 text-theme-text-main text-xs px-3 py-2 rounded-lg border border-gray-700 outline-none focus:border-gold-500 transition-colors"
+              />
+            </div>
+
+            <div className="col-span-1 md:col-span-4 flex items-center justify-end gap-2.5 sm:gap-3 pl-2 md:border-l border-gray-700">
+              <div className="text-right">
+                <span className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest text-theme-text-muted block">Total Qs</span>
+                <span className="text-base sm:text-lg font-black text-white">{totalQuestionsCount}</span>
+              </div>
+              <div className="h-7 sm:h-8 w-px bg-gray-700" />
+              <div className="text-right">
+                <span className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest text-gold-500 block">Total Marks</span>
+                <span className="text-xl sm:text-2xl font-black text-gold-500 leading-none">{totalCalculatedMarks}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* SECTION CONFIGURATION TITLE & ADD BUTTON */}
-        <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700/60 shrink-0">
-          <h3 className="text-sm font-bold text-theme-text-main uppercase tracking-widest flex items-center gap-2">
-            <Layers className="text-gold-500" size={16} /> Part Configuration
-          </h3>
-          <Button 
-            onClick={handleAddSection} 
-            variant="secondary" 
-            className="!w-auto text-[11px] py-1 px-3 font-black"
-          >
-            <Plus size={14} className="mr-1" /> Add New Part
-          </Button>
-        </div>
+          {/* SECTION CONFIGURATION TITLE & ADD BUTTON */}
+          <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700/60 lg:shrink-0">
+            <h3 className="text-xs sm:text-sm font-bold text-theme-text-main uppercase tracking-widest flex items-center gap-2">
+              <Layers className="text-gold-500" size={16} /> Part Configuration
+            </h3>
+            <Button 
+              onClick={handleAddSection} 
+              variant="secondary" 
+              className="!w-auto text-[11px] py-1 px-3 font-black"
+            >
+              <Plus size={14} className="mr-1" /> Add New Part
+            </Button>
+          </div>
 
-        {/* TABLE COLUMN LABELS */}
-        <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-theme-text-sub px-2 uppercase tracking-widest shrink-0">
-          <div className="col-span-1 text-center">Heading</div>
-          <div className="col-span-1 text-center">Type</div>
-          <div className="col-span-3">Display Titles (Eng & Urdu)</div>
-          <div className="col-span-1 text-center">Marks Vis.</div>
-          <div className="col-span-1 text-center">Total Qs</div>
-          <div className="col-span-1 text-center">Attempt</div>
-          <div className="col-span-1 text-center">Marks/Q</div>
-          <div className="col-span-2 text-center">Chapters</div>
-          <div className="col-span-1 text-center">Actions</div>
-        </div>
+          {/* TABLE COLUMN LABELS (Desktop/Laptop only - Mobile shows inline labels per card) */}
+          <div className="hidden lg:grid lg:grid-cols-12 gap-2 text-[10px] font-black text-theme-text-sub px-2 uppercase tracking-widest lg:shrink-0">
+            <div className="col-span-1 text-center">Heading</div>
+            <div className="col-span-1 text-center">Type</div>
+            <div className="col-span-3">Display Titles (Eng & Urdu)</div>
+            <div className="col-span-1 text-center">Marks Vis.</div>
+            <div className="col-span-1 text-center">Total Qs</div>
+            <div className="col-span-1 text-center">Attempt</div>
+            <div className="col-span-1 text-center">Marks/Q</div>
+            <div className="col-span-2 text-center">Chapters</div>
+            <div className="col-span-1 text-center">Actions</div>
+          </div>
 
-        {/* SECTIONS LIST */}
-        <div className="overflow-y-auto space-y-3 pr-1 custom-scrollbar flex-grow my-1">
+          {/* SECTIONS LIST */}
+          <div className="space-y-3 my-1 pb-2 lg:pb-0 lg:overflow-y-auto lg:pr-1 custom-scrollbar lg:flex-1 lg:min-h-0">
           {sections.map((s, idx) => {
             const isCustomType = !PREDEFINED_TYPES.includes(s.type) && !ENGLISH_SPECIFIC_TYPES.includes(s.type);
             const isCustomTitleMode = customTitleModes[s.id] || isCustomType;
@@ -547,14 +549,17 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
 
             return (
               <div key={s.id} className="space-y-2">
-                <div className="bg-gray-900/60 border border-gray-700 p-2.5 rounded-xl grid grid-cols-12 gap-2 items-center hover:border-gold-500/50 transition-colors">
+                <div className="bg-gray-900/60 border border-gray-700 p-3 lg:p-2.5 rounded-xl grid grid-cols-12 gap-2.5 lg:gap-2 items-center hover:border-gold-500/50 transition-colors">
                   
-                  {/* HEADING (1 col) */}
-                  <div className="col-span-1">
+                  {/* HEADING (Mobile: 6 cols, Desktop: 1 col) */}
+                  <div className="col-span-6 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub mb-1">
+                      Heading
+                    </label>
                     <select
                       value={s.heading || 'None'}
                       onChange={e => handleUpdateSection(s.id, 'heading', e.target.value)}
-                      className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold"
+                      className="w-full bg-gray-800 text-theme-text-main text-[11px] lg:text-[10px] p-2 lg:p-1.5 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold"
                     >
                       {SECTION_HEADINGS.map(h => (
                         <option key={h} value={h} className="bg-gray-800">{h}</option>
@@ -562,14 +567,17 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     </select>
                   </div>
 
-                  {/* TYPE (1 col) */}
-                  <div className="col-span-1">
+                  {/* TYPE (Mobile: 6 cols, Desktop: 1 col) */}
+                  <div className="col-span-6 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub mb-1">
+                      Type
+                    </label>
                     {isCustomType ? (
                       <div className="flex gap-1">
                         <input
                           value={s.type}
                           onChange={e => handleUpdateSection(s.id, 'type', e.target.value)}
-                          className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-lg border border-gold-500/50 outline-none font-urdu"
+                          className="w-full bg-gray-800 text-theme-text-main text-[11px] lg:text-[10px] p-2 lg:p-1.5 rounded-lg border border-gold-500/50 outline-none font-urdu"
                           placeholder="Type..."
                           autoFocus
                         />
@@ -586,7 +594,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                       <select
                         value={s.type}
                         onChange={e => handleUpdateSection(s.id, 'type', e.target.value === 'OTHER' ? '' : e.target.value)}
-                        className={`w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold ${isUrdu(s.type) ? 'font-urdu' : ''}`}
+                        className={`w-full bg-gray-800 text-theme-text-main text-[11px] lg:text-[10px] p-2 lg:p-1.5 rounded-lg border border-gray-700 outline-none focus:border-gold-500 cursor-pointer font-bold ${isUrdu(s.type) ? 'font-urdu' : ''}`}
                       >
                         {typesToRender.map(t => (
                           <option key={t} value={t} className={`bg-gray-800 ${isUrdu(t) ? 'font-urdu' : ''}`}>
@@ -598,8 +606,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     )}
                   </div>
 
-                  {/* DISPLAY TITLES - ENG & URDU (3 cols) */}
-                  <div className="col-span-3">
+                  {/* DISPLAY TITLES - ENG & URDU (Mobile: 12 cols, Desktop: 3 cols) */}
+                  <div className="col-span-12 lg:col-span-3">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub mb-1">
+                      Display Titles (Eng & Urdu)
+                    </label>
                     <div className="flex flex-col gap-1.5">
                       {/* English Title Input */}
                       <div className="flex gap-1 items-center">
@@ -609,7 +620,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               value={s.title}
                               onChange={e => handleUpdateSection(s.id, 'title', e.target.value)}
                               onKeyDown={e => handleTitleKeyDown(e, s.id, 'title')}
-                              className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-md border border-gold-500/60 outline-none resize-none overflow-hidden min-h-[30px]"
+                              className="w-full bg-gray-800 text-theme-text-main text-[11px] lg:text-[10px] p-1.5 rounded-md border border-gold-500/60 outline-none resize-none overflow-hidden min-h-[32px] lg:min-h-[30px]"
                               placeholder="English Title (e.g. Q2. Attempt any 5 out of 8 questions)"
                               rows={1}
                             />
@@ -635,7 +646,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                                   handleUpdateSection(s.id, 'title', e.target.value);
                                 }
                               }}
-                              className="w-full bg-gray-800 text-theme-text-main text-[10px] p-1.5 rounded-md border border-gray-700 outline-none focus:border-gold-500"
+                              className="w-full bg-gray-800 text-theme-text-main text-[11px] lg:text-[10px] p-1.5 rounded-md border border-gray-700 outline-none focus:border-gold-500"
                             >
                               {suggestions.map(title => (
                                 <option key={title} value={title} className="bg-gray-800">{title}</option>
@@ -659,7 +670,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                         value={s.titleUrdu || ''}
                         onChange={e => handleUpdateSection(s.id, 'titleUrdu', e.target.value)}
                         onKeyDown={e => handleTitleKeyDown(e, s.id, 'titleUrdu')}
-                        className="w-full bg-gray-800 text-gold-500 text-[10px] p-1.5 rounded-md border border-gray-700 outline-none focus:border-gold-500 font-urdu text-right resize-none overflow-hidden min-h-[30px]"
+                        className="w-full bg-gray-800 text-gold-500 text-[11px] lg:text-[10px] p-1.5 rounded-md border border-gray-700 outline-none focus:border-gold-500 font-urdu text-right resize-none overflow-hidden min-h-[32px] lg:min-h-[30px]"
                         placeholder="اردو عنوان"
                         dir="rtl"
                         rows={1}
@@ -667,9 +678,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     </div>
                   </div>
 
-                  {/* MARKS VISIBILITY (1 col) */}
-                  <div className="col-span-1">
-                    <div className="flex items-center justify-center gap-1 bg-gray-800 p-1 rounded-lg border border-gray-700">
+                  {/* MARKS VISIBILITY (Mobile: 3 cols, Desktop: 1 col) */}
+                  <div className="col-span-3 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub text-center mb-1 truncate">
+                      Marks Vis.
+                    </label>
+                    <div className="flex items-center justify-center gap-1 bg-gray-800 p-1.5 lg:p-1 rounded-lg border border-gray-700">
                       <button
                         type="button"
                         onClick={() => handleUpdateSection(s.id, 'hideSectionMarks', !s.hideSectionMarks)}
@@ -689,8 +703,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     </div>
                   </div>
 
-                  {/* TOTAL QS (1 col) */}
-                  <div className="col-span-1">
+                  {/* TOTAL QS (Mobile: 3 cols, Desktop: 1 col) */}
+                  <div className="col-span-3 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub text-center mb-1 truncate">
+                      Total Qs
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -701,8 +718,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     />
                   </div>
 
-                  {/* ATTEMPT (1 col) */}
-                  <div className="col-span-1">
+                  {/* ATTEMPT (Mobile: 3 cols, Desktop: 1 col) */}
+                  <div className="col-span-3 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub text-center mb-1 truncate">
+                      Attempt
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -713,8 +733,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     />
                   </div>
 
-                  {/* MARKS / Q (1 col) */}
-                  <div className="col-span-1">
+                  {/* MARKS / Q (Mobile: 3 cols, Desktop: 1 col) */}
+                  <div className="col-span-3 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub text-center mb-1 truncate">
+                      Marks/Q
+                    </label>
                     <input
                       type="number"
                       min="1"
@@ -726,8 +749,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     />
                   </div>
 
-                  {/* MANDATORY CHAPTERS (2 cols) */}
-                  <div className="col-span-2">
+                  {/* MANDATORY CHAPTERS (Mobile: 8 cols, Desktop: 2 cols) */}
+                  <div className="col-span-8 lg:col-span-2">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub mb-1">
+                      Chapters
+                    </label>
                     <ChapterSelector
                       id={s.id}
                       selectedChapters={s.specificChapters || []}
@@ -738,32 +764,37 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     />
                   </div>
 
-                  {/* ACTIONS (1 col) - Sub-parts ONLY available for Long Questions */}
-                  <div className="col-span-1 flex justify-center items-center gap-1">
-                    {isLong && (
+                  {/* ACTIONS (Mobile: 4 cols, Desktop: 1 col) - Sub-parts ONLY available for Long Questions */}
+                  <div className="col-span-4 lg:col-span-1">
+                    <label className="block lg:hidden text-[9px] font-black uppercase tracking-wider text-theme-text-sub text-center mb-1">
+                      Actions
+                    </label>
+                    <div className="flex justify-center items-center gap-1 bg-gray-800/60 lg:bg-transparent p-1 lg:p-0 rounded-lg border border-gray-700/60 lg:border-0">
+                      {isLong && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleParts(s.id)}
+                          className={`p-1.5 rounded transition-all ${isExpanded ? 'bg-gold-500 text-black' : 'text-gold-500 hover:bg-gold-500/10'}`}
+                          title="Configure Long Question Sub-parts (a, b) or Alternatives (OR)"
+                        >
+                          <ListTree size={15} />
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => handleToggleParts(s.id)}
-                        className={`p-1.5 rounded transition-all ${isExpanded ? 'bg-gold-500 text-black' : 'text-gold-500 hover:bg-gold-500/10'}`}
-                        title="Configure Long Question Sub-parts (a, b) or Alternatives (OR)"
+                        onClick={() => handleRemoveSection(s.id)}
+                        className="text-red-400 p-1.5 hover:bg-red-500/10 rounded transition-all"
+                        title="Remove Part"
                       >
-                        <ListTree size={15} />
+                        <Trash2 size={15} />
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSection(s.id)}
-                      className="text-red-400 p-1.5 hover:bg-red-500/10 rounded transition-all"
-                      title="Remove Part"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* EXPANDED SUB-PARTS (ONLY FOR LONG QUESTIONS) */}
                 {isLong && isExpanded && (
-                  <div className="ml-6 p-3 bg-gray-850/80 border border-gold-500/30 rounded-xl animate-fadeIn space-y-2">
+                  <div className="ml-2 lg:ml-6 p-3 bg-gray-850/80 border border-gold-500/30 rounded-xl animate-fadeIn space-y-2">
                     <div className="flex justify-between items-center mb-1 text-[10px] font-black uppercase tracking-widest text-gold-500">
                       <div className="flex items-center gap-2">
                         <span>Manage Sub-parts (a, b) for Long Question {idx + 1}</span>
@@ -777,8 +808,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                       </button>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <div className="grid grid-cols-12 gap-2 text-[8px] font-black uppercase text-theme-text-sub tracking-tighter px-1">
+                    <div className="space-y-2 lg:space-y-1.5">
+                      <div className="hidden lg:grid lg:grid-cols-12 gap-2 text-[8px] font-black uppercase text-theme-text-sub tracking-tighter px-1">
                         <div className="col-span-2 text-center">Type</div>
                         <div className="col-span-2">Instructions</div>
                         <div className="col-span-1 text-center">Marks</div>
@@ -793,8 +824,9 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                         const partTypes = isEnglishSubject ? ENGLISH_SPECIFIC_TYPES : PREDEFINED_TYPES;
 
                         return (
-                          <div key={part.id} className="grid grid-cols-12 gap-2 items-center bg-gray-950/40 p-2 rounded-lg border border-gray-700/50">
-                            <div className="col-span-2">
+                          <div key={part.id} className="grid grid-cols-12 gap-2 items-center bg-gray-950/40 p-2.5 lg:p-2 rounded-lg border border-gray-700/50">
+                            <div className="col-span-6 lg:col-span-2">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub mb-0.5">Type</label>
                               <select
                                 value={part.type || s.type}
                                 onChange={e => handleUpdatePart(s.id, part.id, 'type', e.target.value)}
@@ -806,7 +838,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               </select>
                             </div>
 
-                            <div className="col-span-2">
+                            <div className="col-span-6 lg:col-span-2">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub mb-0.5">Instructions</label>
                               <input
                                 value={part.label}
                                 onChange={e => handleUpdatePart(s.id, part.id, 'label', e.target.value)}
@@ -815,7 +848,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               />
                             </div>
 
-                            <div className="col-span-1">
+                            <div className="col-span-4 lg:col-span-1">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub text-center mb-0.5">Marks</label>
                               <input
                                 type="number"
                                 value={part.marks}
@@ -824,7 +858,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               />
                             </div>
 
-                            <div className="col-span-1">
+                            <div className="col-span-4 lg:col-span-1">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub text-center mb-0.5">Total Qs</label>
                               <input
                                 type="number"
                                 value={part.questionCount || 0}
@@ -833,7 +868,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               />
                             </div>
 
-                            <div className="col-span-1">
+                            <div className="col-span-4 lg:col-span-1">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub text-center mb-0.5">Attempt</label>
                               <input
                                 type="number"
                                 value={part.attemptCount || 0}
@@ -842,7 +878,8 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               />
                             </div>
 
-                            <div className="col-span-2">
+                            <div className="col-span-6 lg:col-span-2">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub mb-0.5">Chapters</label>
                               <ChapterSelector
                                 id={part.id}
                                 selectedChapters={part.specificChapters || []}
@@ -853,8 +890,9 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               />
                             </div>
 
-                            <div className="col-span-2 flex justify-center">
-                              {pIdx > 0 && (
+                            <div className="col-span-4 lg:col-span-2 flex flex-col lg:flex-row justify-center items-center">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub mb-0.5">Alternative?</label>
+                              {pIdx > 0 ? (
                                 <button
                                   type="button"
                                   onClick={() => handleUpdatePart(s.id, part.id, 'isAlternative', !part.isAlternative)}
@@ -863,10 +901,13 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                                   {part.isAlternative ? <Check size={10} /> : null}
                                   {part.isAlternative ? 'OR (Alternative)' : 'Sequential'}
                                 </button>
+                              ) : (
+                                <span className="lg:hidden text-[9px] text-gray-500 font-bold">—</span>
                               )}
                             </div>
 
-                            <div className="col-span-1 flex justify-center">
+                            <div className="col-span-2 lg:col-span-1 flex flex-col lg:flex-row justify-center items-center">
+                              <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub mb-0.5">Action</label>
                               <button
                                 type="button"
                                 onClick={() => handleRemovePart(s.id, part.id)}
@@ -885,10 +926,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
               </div>
             );
           })}
+          </div>
         </div>
 
         {/* FOOTER ACTION BAR */}
-        <div className="pt-3 mt-2 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        <div className="pt-2.5 sm:pt-3 mt-1 sm:mt-2 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3 shrink-0">
           <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-theme-text-muted hover:text-theme-text-main">
             <input
               type="checkbox"
