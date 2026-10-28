@@ -12,6 +12,8 @@ import { PrintablePaper } from './PrintablePaper';
 import { CustomPatternModal } from './CustomPatternModal';
 import { sortSectionsByStandardSequence } from './PaperPatterns';
 import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { 
   ArrowLeft, CheckSquare, Square, ChevronRight, ChevronDown, CheckCircle, 
   Printer, RefreshCw, AlertCircle, Save, GraduationCap, 
@@ -178,6 +180,49 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = React.useRef<HTMLDivElement>(null);
+  const previewOuterRef = React.useRef<HTMLDivElement>(null);
+  const previewScalerRef = React.useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  const [scaledHeight, setScaledHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (step !== 7) return;
+    const A4_WIDTH_PX = 794;
+
+    const updateScale = () => {
+      const outer = previewOuterRef.current;
+      const scaler = previewScalerRef.current;
+      if (!outer || !scaler) return;
+
+      const availableWidth = outer.clientWidth;
+      if (availableWidth > 0 && availableWidth < A4_WIDTH_PX) {
+        const nextScale = availableWidth / A4_WIDTH_PX;
+        setPreviewScale(nextScale);
+        setScaledHeight(Math.ceil(scaler.scrollHeight * nextScale));
+      } else {
+        setPreviewScale(1);
+        setScaledHeight(null);
+      }
+    };
+
+    const t1 = setTimeout(updateScale, 30);
+    const t2 = setTimeout(updateScale, 250);
+    window.addEventListener('resize', updateScale);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(updateScale);
+      if (previewOuterRef.current) observer.observe(previewOuterRef.current);
+      if (previewScalerRef.current) observer.observe(previewScalerRef.current);
+    }
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('resize', updateScale);
+      if (observer) observer.disconnect();
+    };
+  }, [step, fontSize, lineSpacing, selectedMedium, showAnswerKey, headerStyle, pageBreakAfterMCQ, sectionSelections]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -828,46 +873,254 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     if (isDownloadingPdf) return;
     setIsActionsMenuOpen(false);
     const cleanFileName = `${selectedClass}_${selectedSubject}_Exam_Paper`.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
-    const element = document.getElementById('printable-section');
+    const sourceElement = document.getElementById('printable-section');
 
-    if (element && typeof (window as any).html2pdf === 'function') {
-      setIsDownloadingPdf(true);
-      try {
-        element.classList.add('pdf-exporting');
-        const opt = {
-          margin: [5, 5, 5, 5],
-          filename: `${cleanFileName}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            scrollY: 0,
-            backgroundColor: '#ffffff'
-          },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'], before: '.page-break-before', avoid: '.break-inside-avoid' }
-        };
-        await (window as any).html2pdf().set(opt).from(element).save();
-        setSaveStatusMessage({
-          type: 'success',
-          text: "PDF downloaded successfully! (پی ڈی ایف کامیابی سے ڈاؤن لوڈ ہو گئی ہے)"
-        });
-        setTimeout(() => setSaveStatusMessage(null), 4000);
-      } catch (err) {
-        console.error("PDF download error:", err);
-        window.print();
-      } finally {
-        element.classList.remove('pdf-exporting');
-        setIsDownloadingPdf(false);
+    if (!sourceElement) {
+      handlePrint();
+      return;
+    }
+
+    setIsDownloadingPdf(true);
+    const savedScrollX = window.scrollX;
+    const savedScrollY = window.scrollY;
+    let tempWrapper: HTMLDivElement | null = null;
+
+    try {
+      // Wait for web fonts (including Urdu Nastaleeq) to finish loading
+      if ((document as any).fonts && (document as any).fonts.ready) {
+        try {
+          await Promise.race([
+            (document as any).fonts.ready,
+            new Promise(resolve => setTimeout(resolve, 1500))
+          ]);
+        } catch {
+          // ignore font wait errors
+        }
       }
-    } else {
-      const originalTitle = document.title;
-      document.title = cleanFileName;
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => { document.title = originalTitle; }, 2000);
-      }, 150);
+
+      // Create an isolated A4-width render container at (0, 0) behind #root
+      const a4DomWidth = 794; // 210mm at 96 DPI
+      tempWrapper = document.createElement('div');
+      tempWrapper.id = 'pdf-render-sandbox';
+      tempWrapper.style.cssText = [
+        'position: absolute',
+        'top: 0px',
+        'left: 0px',
+        `width: ${a4DomWidth}px`,
+        'background-color: #ffffff',
+        'color: #000000',
+        'z-index: -10',
+        'opacity: 1',
+        'visibility: visible',
+        'display: block',
+        'pointer-events: none',
+        'overflow: visible',
+        'margin: 0',
+        'padding: 0',
+        'box-sizing: border-box'
+      ].join(';');
+
+      const clonedPaper = sourceElement.cloneNode(true) as HTMLElement;
+      clonedPaper.id = 'printable-section-pdf-clone';
+      clonedPaper.classList.add('pdf-exporting');
+      clonedPaper.style.width = `${a4DomWidth}px`;
+      clonedPaper.style.maxWidth = `${a4DomWidth}px`;
+      clonedPaper.style.backgroundColor = '#ffffff';
+      clonedPaper.style.color = '#000000';
+      clonedPaper.style.margin = '0';
+      clonedPaper.style.padding = '10px 12px';
+      clonedPaper.style.boxSizing = 'border-box';
+
+      // Remove screen-only page boundary banners and print:hidden elements from clone
+      clonedPaper.querySelectorAll('.page-boundary-marker, .print\\:hidden, .print-hidden').forEach(el => {
+        el.remove();
+      });
+
+      // Ensure images inside the cloned paper are ready or safely handled
+      const imgs = Array.from(clonedPaper.querySelectorAll('img'));
+      imgs.forEach(img => {
+        if (img.src && !img.src.startsWith('data:')) {
+          img.crossOrigin = 'anonymous';
+        }
+      });
+
+      tempWrapper.appendChild(clonedPaper);
+      document.body.appendChild(tempWrapper);
+
+      // Wait briefly for layout & images in the clone
+      await Promise.all(
+        imgs.map(
+          img =>
+            new Promise<void>(resolve => {
+              if (img.complete && img.naturalWidth > 0) {
+                resolve();
+                return;
+              }
+              const timer = setTimeout(resolve, 1200);
+              img.onload = () => {
+                clearTimeout(timer);
+                resolve();
+              };
+              img.onerror = () => {
+                clearTimeout(timer);
+                img.style.display = 'none';
+                resolve();
+              };
+            })
+        )
+      );
+
+      // Temporarily reset scroll so html2canvas bounding coordinates start at (0, 0)
+      window.scrollTo(0, 0);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      const paperRect = clonedPaper.getBoundingClientRect();
+      const domWidth = a4DomWidth;
+      const domHeight = Math.max(clonedPaper.scrollHeight, clonedPaper.offsetHeight, Math.ceil(paperRect.height));
+
+      const marginMm = 5;
+      const contentWidthMm = 210 - marginMm * 2; // 200mm
+      const contentHeightMm = 297 - marginMm * 2; // 287mm
+      const maxPageHeightDomPx = domWidth * (contentHeightMm / contentWidthMm);
+
+      // Measure manual page breaks (.page-break-before) and atomic question blocks
+      const manualBreakYs: number[] = [];
+      clonedPaper.querySelectorAll('.page-break-before').forEach(el => {
+        const r = (el as HTMLElement).getBoundingClientRect();
+        const relTop = Math.round(r.top - paperRect.top);
+        if (relTop > 20 && relTop < domHeight - 10) {
+          manualBreakYs.push(relTop);
+        }
+      });
+      manualBreakYs.sort((a, b) => a - b);
+
+      const atomicBlocks: { top: number; bottom: number }[] = [];
+      clonedPaper.querySelectorAll('[data-block-id], .break-inside-avoid').forEach(el => {
+        const r = (el as HTMLElement).getBoundingClientRect();
+        const top = Math.round(r.top - paperRect.top);
+        const bottom = Math.round(r.bottom - paperRect.top);
+        if (bottom > top && bottom - top < maxPageHeightDomPx * 0.85) {
+          atomicBlocks.push({ top, bottom });
+        }
+      });
+
+      const canvas = await html2canvas(clonedPaper, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: domWidth,
+        height: domHeight,
+        windowWidth: 1024,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        onclone: clonedDoc => {
+          const rootEl = clonedDoc.getElementById('root');
+          if (rootEl) rootEl.style.display = 'none';
+          clonedDoc.body.style.backgroundColor = '#ffffff';
+          clonedDoc.body.style.margin = '0';
+          clonedDoc.body.style.padding = '0';
+          const sandbox = clonedDoc.getElementById('pdf-render-sandbox');
+          if (sandbox) {
+            sandbox.style.zIndex = '99999';
+            sandbox.style.opacity = '1';
+            sandbox.style.visibility = 'visible';
+            sandbox.style.display = 'block';
+            sandbox.style.top = '0px';
+            sandbox.style.left = '0px';
+          }
+        }
+      });
+
+      // Restore scroll position immediately after canvas capture
+      window.scrollTo(savedScrollX, savedScrollY);
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const scaleFactor = canvas.width / domWidth;
+      const slices: { startY: number; endY: number }[] = [];
+      let currentY = 0;
+
+      while (currentY < domHeight - 5) {
+        let targetEndY = Math.min(domHeight, currentY + maxPageHeightDomPx);
+
+        // 1. Respect manual page break (.page-break-before)
+        const manualBreak = manualBreakYs.find(y => y > currentY + 20 && y <= targetEndY);
+        if (manualBreak !== undefined) {
+          targetEndY = manualBreak;
+        } else if (targetEndY < domHeight) {
+          // 2. Avoid slicing through a question block across pages
+          const straddling = atomicBlocks.filter(
+            b => b.top > currentY + 40 && b.top < targetEndY - 4 && b.bottom > targetEndY + 2
+          );
+          if (straddling.length > 0) {
+            const earliestTop = Math.min(...straddling.map(b => b.top));
+            if (earliestTop > currentY + 60) {
+              targetEndY = earliestTop - 2;
+            }
+          }
+        }
+
+        if (targetEndY <= currentY) {
+          targetEndY = Math.min(domHeight, currentY + maxPageHeightDomPx);
+        }
+
+        slices.push({ startY: currentY, endY: targetEndY });
+        currentY = targetEndY;
+      }
+
+      if (slices.length === 0) {
+        slices.push({ startY: 0, endY: domHeight });
+      }
+
+      slices.forEach((slice, idx) => {
+        const srcY = Math.max(0, Math.round(slice.startY * scaleFactor));
+        const srcH = Math.max(1, Math.min(canvas.height - srcY, Math.round((slice.endY - slice.startY) * scaleFactor)));
+
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = srcH;
+
+        const ctx = pageCanvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+          ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+        }
+
+        const imgData = pageCanvas.toDataURL('image/jpeg', 0.96);
+        const sliceHeightMm = ((slice.endY - slice.startY) / domWidth) * contentWidthMm;
+
+        if (idx > 0) {
+          pdf.addPage('a4', 'portrait');
+        }
+        pdf.addImage(imgData, 'JPEG', marginMm, marginMm, contentWidthMm, Math.min(contentHeightMm, sliceHeightMm));
+      });
+
+      pdf.save(`${cleanFileName}.pdf`);
+
+      setSaveStatusMessage({
+        type: 'success',
+        text: "PDF downloaded successfully! (پی ڈی ایف کامیابی سے ڈاؤن لوڈ ہو گئی ہے)"
+      });
+      setTimeout(() => setSaveStatusMessage(null), 4000);
+    } catch (err) {
+      console.error("PDF download error:", err);
+      window.scrollTo(savedScrollX, savedScrollY);
+      handlePrint();
+    } finally {
+      if (tempWrapper && tempWrapper.parentNode) {
+        tempWrapper.parentNode.removeChild(tempWrapper);
+      }
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -1758,16 +2011,36 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
 
           {step === 7 && (
             <div className="animate-fadeIn space-y-4 h-full flex flex-col relative pb-8">
-               <div className="bg-surface-800 p-1 sm:p-8 rounded-xl overflow-x-auto border border-surface-700 flex-grow print:p-0 print:bg-white print:border-none">
-                  <div className="mx-auto shadow-2xl print:shadow-none w-full max-w-[210mm] transition-all relative group/paper" style={{ minHeight: '297mm', color: '#000000', backgroundColor: '#ffffff' }}>
-                     <PrintablePaper 
-                       instituteProfile={user.instituteProfile} classLevel={selectedClass} subject={selectedSubject} 
-                       totalMarks={effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0)} 
-                       sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={1} medium={selectedMedium} showAnswerKey={showAnswerKey}
-                       baseFontSize={fontSize} lineSpacing={lineSpacing} timeAllowed={paperTime} paperCode={paperCode}
-                       chaptersDisplay={getChaptersDisplay()} headerStyle={headerStyle}
-                       pageBreakAfterMCQ={pageBreakAfterMCQ}
-                     />
+               <div className="bg-surface-800 p-1.5 sm:p-8 rounded-xl border border-surface-700 flex-grow print:p-0 print:bg-white print:border-none">
+                  <div
+                    ref={previewOuterRef}
+                    className="a4-preview-outer w-full mx-auto relative overflow-hidden print:overflow-visible"
+                    style={{
+                      maxWidth: '794px',
+                      height: scaledHeight ? `${scaledHeight}px` : 'auto'
+                    }}
+                  >
+                    <div
+                      ref={previewScalerRef}
+                      className="a4-preview-scaler mx-auto shadow-2xl print:shadow-none transition-transform relative group/paper"
+                      style={{
+                        width: '794px',
+                        minHeight: '1123px',
+                        color: '#000000',
+                        backgroundColor: '#ffffff',
+                        transform: previewScale < 1 ? `scale(${previewScale})` : 'none',
+                        transformOrigin: 'top left'
+                      }}
+                    >
+                       <PrintablePaper 
+                         instituteProfile={user.instituteProfile} classLevel={selectedClass} subject={selectedSubject} 
+                         totalMarks={effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0)} 
+                         sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={1} medium={selectedMedium} showAnswerKey={showAnswerKey}
+                         baseFontSize={fontSize} lineSpacing={lineSpacing} timeAllowed={paperTime} paperCode={paperCode}
+                         chaptersDisplay={getChaptersDisplay()} headerStyle={headerStyle}
+                         pageBreakAfterMCQ={pageBreakAfterMCQ}
+                       />
+                    </div>
                   </div>
                </div>
             </div>

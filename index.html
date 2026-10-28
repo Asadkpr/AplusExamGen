@@ -200,18 +200,34 @@
       /* PRINT OPTIMIZATION */
       @media print {
         @page {
-          size: A4;
-          margin: 0;
+          size: A4 portrait;
+          margin: 4mm;
         }
         html, body, #root, #root > div, main {
           display: block !important;
           background-color: white !important;
           color: black !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          max-width: none !important;
         }
         .print-hidden { display: none !important; }
         .page-break-before {
           page-break-before: always !important;
           break-before: page !important;
+        }
+        .a4-preview-outer {
+          width: 100% !important;
+          height: auto !important;
+          overflow: visible !important;
+        }
+        .a4-preview-scaler {
+          transform: none !important;
+          width: 100% !important;
+          max-width: 210mm !important;
+          height: auto !important;
+          margin: 0 auto !important;
         }
       }
 
@@ -246,14 +262,9 @@
         pointer-events: none !important;
       }
       
-      /* BULLETPROOF FIX: Hide everything appended to body by external services (like Netlify) except our React App and PDF generator container */
-      body > *:not(#root):not(script):not(style):not(.html2pdf__container) {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-        z-index: -9999 !important;
-        position: absolute !important;
-        pointer-events: none !important;
+      #root {
+        position: relative;
+        z-index: 1;
       }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>

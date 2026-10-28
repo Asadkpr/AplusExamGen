@@ -149,16 +149,18 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       const containerRect = container.getBoundingClientRect();
       if (containerRect.width === 0) return;
 
-      // Standard A4 printable height: 280mm out of 297mm height for 210mm width
-      const a4PageHeightPx = Math.max(960, (containerRect.width / 210) * 280);
+      // Scale-invariant A4 printable height (276mm printable height for 202mm printable width)
+      const scaleRatio = containerRect.width / (container.offsetWidth || 794);
+      const a4PageHeightPx = (containerRect.width / 202) * 276;
+      const minTopOffsetPx = 40 * scaleRatio;
 
       // Measure existing screen-only page boundary banners so we subtract their height
       const markers = Array.from(container.querySelectorAll('.page-boundary-marker')) as HTMLElement[];
       const markerRects = markers.map(m => {
         const r = m.getBoundingClientRect();
         const style = window.getComputedStyle(m);
-        const mt = parseFloat(style.marginTop || '0') || 0;
-        const mb = parseFloat(style.marginBottom || '0') || 0;
+        const mt = (parseFloat(style.marginTop || '0') || 0) * scaleRatio;
+        const mb = (parseFloat(style.marginBottom || '0') || 0) * scaleRatio;
         return {
           top: r.top - containerRect.top,
           totalHeight: r.height + mt + mb
@@ -203,7 +205,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           continue;
         }
 
-        if (vBottom - currentPageStartY > a4PageHeightPx && vTop - currentPageStartY > 40) {
+        if (vBottom - currentPageStartY > a4PageHeightPx && vTop - currentPageStartY > minTopOffsetPx) {
           newBreakMap[blockId] = {
             endedPage: currentPage,
             nextPage: currentPage + 1,
@@ -461,7 +463,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       <div 
         id="printable-section"
         ref={containerRef}
-        className="p-2 md:p-3 tex2jax_process relative overflow-visible" 
+        className="p-3 tex2jax_process relative overflow-visible" 
         style={{ 
           backgroundColor: '#ffffff', 
           color: '#000000',           
@@ -771,9 +773,9 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                   <div 
                     style={{ 
                       marginBottom: sectionMarginBottom,
-                      ...(isBreakSection ? { pageBreakBefore: 'always', breakBefore: 'page' } : {})
+                      ...((isBreakSection || secHeaderBreak) ? { pageBreakBefore: 'always', breakBefore: 'page' } : {})
                     }}
-                    className={isBreakSection ? 'page-break-before print:pt-4' : ''}
+                    className={(isBreakSection || secHeaderBreak) ? 'page-break-before print:pt-2' : ''}
                   >
                     <div
                       data-block-id={secHeaderBlockId}
@@ -847,7 +849,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                           isManual={qBreak.isManual}
                                         />
                                       )}
-                                      <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className="break-inside-avoid">
+                                      <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`}>
                                         <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
                                         {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
                                         <div 
@@ -882,7 +884,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                   isManual={qBreak.isManual}
                                 />
                               )}
-                              <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className="break-inside-avoid">
+                              <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: mcqPaddingBottom, marginBottom: mcqMarginBottom }} className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`}>
                                 <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
                                 {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
                                 <div 
@@ -927,7 +929,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                             )}
                             <div 
                               data-block-id={qBlockId}
-                              className="break-inside-avoid" 
+                              className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`} 
                               style={{ 
                                 paddingBottom: isGridSection ? '0px' : questionPaddingBottom, 
                                 marginBottom: isGridSection ? '0px' : questionMarginBottom 
@@ -1014,7 +1016,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         {showAnswerKey && hasQuestions && (
           <div className="mt-1 border-t border-dashed border-gray-400 pt-0.5 break-inside-avoid z-10 relative page-break-before text-black" dir="ltr">
             <div className="text-center mb-0.5"><h3 className="font-extrabold text-xs uppercase border-b inline-block px-2 text-black" style={{ borderColor: '#000000' }}>Key</h3></div>
-            <div className="grid grid-cols-6 sm:grid-cols-10 gap-1 text-[8px]">
+            <div className="grid grid-cols-10 gap-1 text-[8px]">
               {questions.map((q, qKeyIdx) => (
                 <div key={q.id} className="flex items-center justify-between border-b border-gray-100 py-0 px-0.5">
                   <span className="font-bold text-black">Q.{qKeyIdx + 1}</span>
