@@ -253,13 +253,28 @@
       }
 
       /* HIDE NETLIFY WIDGETS & BADGES COMPLETELY */
+      body > *:not(#root):not(script):not(style):not(link):not(#pdf-render-sandbox):not(.html2canvas-container):not(.html2pdf__container),
       #netlify-identity-widget,
       .netlify-identity-widget,
-      a[href*="netlify.com/v1/badges"] {
+      #netlify-badge,
+      .netlify-badge,
+      iframe[src*="netlify"],
+      iframe[title*="Netlify"],
+      iframe[title*="netlify"],
+      a[href*="netlify.com"] {
         display: none !important;
         opacity: 0 !important;
         visibility: hidden !important;
         pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        max-width: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        position: fixed !important;
+        bottom: -9999px !important;
+        right: -9999px !important;
+        z-index: -99999 !important;
       }
       
       #root {
@@ -275,29 +290,76 @@
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
     <script>
-      // Force hide Netlify injected badges dynamically
+      // Force hide and remove Netlify injected badges, drawers, and widgets dynamically
       const removeNetlifyElements = () => {
-        document.querySelectorAll('a').forEach(a => {
-          if (a.href.includes('netlify.com') && !a.href.includes('aplusexamgen')) {
-             a.style.setProperty('display', 'none', 'important');
-             if(a.parentElement && a.parentElement.tagName === 'DIV') {
-                 a.parentElement.style.setProperty('display', 'none', 'important');
-             }
+        if (!document.body) return;
+
+        // 1. Hide/remove any direct child of body that is not #root, #pdf-render-sandbox, .html2canvas-container, script, style, or link
+        Array.from(document.body.children).forEach(el => {
+          const tag = el.tagName;
+          const id = el.id || '';
+          const cls = typeof el.className === 'string' ? el.className : '';
+          if (
+            id === 'root' ||
+            id === 'pdf-render-sandbox' ||
+            cls.includes('html2canvas-container') ||
+            cls.includes('html2pdf__container') ||
+            tag === 'SCRIPT' ||
+            tag === 'STYLE' ||
+            tag === 'LINK'
+          ) {
+            return;
+          }
+          el.style.setProperty('display', 'none', 'important');
+          el.style.setProperty('visibility', 'hidden', 'important');
+          el.style.setProperty('opacity', '0', 'important');
+          el.style.setProperty('pointer-events', 'none', 'important');
+          el.style.setProperty('width', '0px', 'important');
+          el.style.setProperty('height', '0px', 'important');
+          el.style.setProperty('overflow', 'hidden', 'important');
+          try {
+            el.remove();
+          } catch (e) {}
+        });
+
+        // 2. Hide any anchor or element referencing netlify.com
+        document.querySelectorAll('a, iframe, div').forEach(el => {
+          if (el.closest('#root') || el.closest('#pdf-render-sandbox')) return;
+          const href = (el.getAttribute && el.getAttribute('href')) || '';
+          const src = (el.getAttribute && el.getAttribute('src')) || '';
+          const text = (el.textContent || '').toLowerCase();
+          if (
+            href.toLowerCase().includes('netlify') ||
+            src.toLowerCase().includes('netlify') ||
+            text.includes('powered by netlify') ||
+            text.includes('deployed on netlify')
+          ) {
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('opacity', '0', 'important');
+            try {
+              el.remove();
+            } catch (e) {}
           }
         });
-        
-        // Target specifically by common netlify injected IDs
+
+        // 3. Target specifically by common netlify injected IDs
         const idsToHide = ['netlify-identity-widget', 'netlify-badge'];
         idsToHide.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.setProperty('display', 'none', 'important');
+          const el = document.getElementById(id);
+          if (el) {
+            el.style.setProperty('display', 'none', 'important');
+            try {
+              el.remove();
+            } catch (e) {}
+          }
         });
       };
-      
+
       removeNetlifyElements();
-      setInterval(removeNetlifyElements, 1000); // Check repeatedly in case it loads late
+      setInterval(removeNetlifyElements, 500);
       const observer = new MutationObserver(removeNetlifyElements);
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
     </script>
   </body>
 </html>
