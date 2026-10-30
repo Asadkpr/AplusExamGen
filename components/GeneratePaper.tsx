@@ -1291,108 +1291,107 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                 <button onClick={onBack} title="Dashboard" className="hidden md:block text-theme-text-muted hover:text-gold-500 p-2 hover:bg-surface-700 rounded-lg transition-all"><Home size={18} /></button>
               </div>
 
-              <div className="flex-grow flex items-center justify-center">
+              <div className="flex-grow min-w-0 flex items-center justify-center">
                 {step === 7 ? (
-                  <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3 w-full animate-fadeIn">
-                    <h2 className="hidden xl:block text-xl font-black text-theme-text-main uppercase tracking-tighter mr-4">Paper Preview</h2>
-                    <div className="flex items-center gap-1 sm:gap-2">
-                       {/* Font Size Stepper (-) / (+) */}
-                       <div className="bg-surface-900/50 border border-surface-700 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner">
-                          <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Font:</span>
-                          <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
-                             <button
-                               type="button"
-                               onClick={() => setFontSize(prev => Math.max(8, prev - 1))}
-                               disabled={fontSize <= 8}
-                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
-                               title="Decrease Font Size (-)"
-                             >
-                               -
-                             </button>
-                             <span className="px-1 sm:px-2 text-[9px] sm:text-[11px] font-black text-theme-text-main min-w-[24px] sm:min-w-[34px] text-center select-none">
-                               {fontSize}px
-                             </span>
-                             <button
-                               type="button"
-                               onClick={() => setFontSize(prev => Math.min(20, prev + 1))}
-                               disabled={fontSize >= 20}
-                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
-                               title="Increase Font Size (+)"
-                             >
-                               +
-                             </button>
-                          </div>
-                       </div>
-
-                       {/* Line Spacing Stepper (-) / (+) */}
-                       <div className="bg-surface-900/50 border border-surface-700 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner">
-                          <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Space:</span>
-                          <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
-                             <button
-                               type="button"
-                               onClick={() => setLineSpacing(prev => Math.max(-10, prev - 1))}
-                               disabled={lineSpacing <= -10}
-                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
-                               title="Decrease Line Spacing (-)"
-                             >
-                               -
-                             </button>
-                             <span className="px-1 sm:px-2 text-[9px] sm:text-[11px] font-black text-theme-text-main min-w-[18px] sm:min-w-[28px] text-center select-none">
-                               {lineSpacing}
-                             </span>
-                             <button
-                               type="button"
-                               onClick={() => setLineSpacing(prev => Math.min(10, prev + 1))}
-                               disabled={lineSpacing >= 10}
-                               className="w-5 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
-                               title="Increase Line Spacing (+)"
-                             >
-                               +
-                             </button>
-                          </div>
-                       </div>
-
-                       {/* Header Style */}
-                       <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-2 shadow-inner hidden md:flex">
-                          <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Header:</span>
-                          <select value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value as any)} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer">
-                            <option value="default">Default</option>
-                            <option value="sba">SBA</option>
-                            <option value="layout3">Layout 3</option>
-                            <option value="layout4">Layout 4</option>
-                            <option value="layout5">Layout 5</option>
-                            <option value="layout6">Layout 6</option>
-                            <option value="layout7">Layout 7</option>
-                            <option value="layout8">Layout 8</option>
-                          </select>
-                       </div>
-
-                       {/* Bubble Sheet Placement */}
-                       <div className="bg-surface-900/50 border border-surface-700 pl-1.5 sm:pl-3 pr-1 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner">
-                          <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Bubble:</span>
-                          <select
-                            value={bubbleSheetPosition}
-                            onChange={(e) => setBubbleSheetPosition(e.target.value as BubbleSheetPosition)}
-                            className="bg-surface-800 border border-surface-700 text-theme-text-main text-[9px] sm:text-[11px] font-bold rounded-md sm:rounded-lg px-1.5 sm:px-2 py-0.5 sm:py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer"
-                            title="Select MCQ Bubble Sheet Position"
+                  <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2 w-full max-w-full animate-fadeIn">
+                    <h2 className="hidden xl:block text-xl font-black text-theme-text-main uppercase tracking-tighter mr-2">Paper Preview</h2>
+                    {/* Font Size Stepper (-) / (+) */}
+                    <div className="bg-surface-900/50 border border-surface-700 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap">Font:</span>
+                       <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setFontSize(prev => Math.max(8, prev - 1))}
+                            disabled={fontSize <= 8}
+                            className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                            title="Decrease Font Size (-)"
                           >
-                            <option value="above_mcq">Above MCQs</option>
-                            <option value="below_mcq">Below MCQs</option>
-                            <option value="paper_end">End of Paper</option>
-                            <option value="none">Off / Hide</option>
-                          </select>
+                            -
+                          </button>
+                          <span className="px-1 sm:px-2 text-[8px] sm:text-[11px] font-black text-theme-text-main min-w-[20px] sm:min-w-[34px] text-center select-none">
+                            {fontSize}px
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setFontSize(prev => Math.min(20, prev + 1))}
+                            disabled={fontSize >= 20}
+                            className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                            title="Increase Font Size (+)"
+                          >
+                            +
+                          </button>
                        </div>
                     </div>
+
+                    {/* Line Spacing Stepper (-) / (+) */}
+                    <div className="bg-surface-900/50 border border-surface-700 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap">Space:</span>
+                       <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setLineSpacing(prev => Math.max(-10, prev - 1))}
+                            disabled={lineSpacing <= -10}
+                            className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                            title="Decrease Line Spacing (-)"
+                          >
+                            -
+                          </button>
+                          <span className="px-1 sm:px-2 text-[8px] sm:text-[11px] font-black text-theme-text-main min-w-[16px] sm:min-w-[28px] text-center select-none">
+                            {lineSpacing}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setLineSpacing(prev => Math.min(10, prev + 1))}
+                            disabled={lineSpacing >= 10}
+                            className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                            title="Increase Line Spacing (+)"
+                          >
+                            +
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Header Style */}
+                    <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-2 shadow-inner hidden md:flex shrink-0">
+                       <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Header:</span>
+                       <select value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value as any)} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer">
+                         <option value="default">Default</option>
+                         <option value="sba">SBA</option>
+                         <option value="layout3">Layout 3</option>
+                         <option value="layout4">Layout 4</option>
+                         <option value="layout5">Layout 5</option>
+                         <option value="layout6">Layout 6</option>
+                         <option value="layout7">Layout 7</option>
+                         <option value="layout8">Layout 8</option>
+                       </select>
+                    </div>
+
+                    {/* Bubble Sheet Placement */}
+                    <div className="bg-surface-900/50 border border-surface-700 pl-1 sm:pl-3 pr-1 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap">Bubble:</span>
+                       <select
+                         value={bubbleSheetPosition}
+                         onChange={(e) => setBubbleSheetPosition(e.target.value as BubbleSheetPosition)}
+                         className="bg-surface-800 border border-surface-700 text-theme-text-main text-[8px] sm:text-[11px] font-bold rounded-md sm:rounded-lg px-1 sm:px-2 py-0.5 sm:py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer max-w-[78px] sm:max-w-none"
+                         title="Select MCQ Bubble Sheet Position"
+                       >
+                         <option value="above_mcq">Above MCQs</option>
+                         <option value="below_mcq">Below MCQs</option>
+                         <option value="paper_end">End of Paper</option>
+                         <option value="none">Off / Hide</option>
+                       </select>
+                    </div>
+
                     {/* Direct Save Button */}
                     <Button 
                       onClick={() => executeSave(true)} 
                       disabled={isSavingPaper}
                       variant="primary" 
-                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2.5 sm:!px-4 !text-[8px] sm:!text-[11px] flex items-center font-black shadow-lg whitespace-nowrap bg-gold-500 hover:bg-gold-400 text-black border-none"
+                      className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-4 !text-[8px] sm:!text-[11px] flex items-center font-black shadow-lg whitespace-nowrap bg-gold-500 hover:bg-gold-400 text-black border-none shrink-0"
                       title="Save this exam paper to database"
                     >
-                      <Save size={13} className={`mr-1 sm:mr-1.5 sm:w-3.5 sm:h-3.5 ${isSavingPaper ? 'animate-spin' : ''}`} /> 
-                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update Paper' : 'Save Paper')}</span>
+                      <Save size={11} className={`mr-1 sm:mr-1.5 sm:w-3.5 sm:h-3.5 ${isSavingPaper ? 'animate-spin' : ''}`} /> 
+                      <span>{isSavingPaper ? 'Saving...' : (savedPaperId || initialPaper ? 'Update' : 'Save')}</span>
                     </Button>
 
                     {/* Direct Print Button */}
@@ -1400,11 +1399,11 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                       onClick={handlePrint} 
                       disabled={isSavingPaper || isDownloadingPdf}
                       variant="secondary" 
-                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600"
+                      className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600 shrink-0"
                       title="Open print dialog"
                     >
-                      <Printer size={12} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
-                      <span className="hidden xs:inline">Print</span>
+                      <Printer size={11} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
+                      <span>Print</span>
                     </Button>
 
                     {/* Direct PDF Download Button */}
@@ -1412,27 +1411,27 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                       onClick={handleDownloadPdf} 
                       disabled={isDownloadingPdf || isSavingPaper}
                       variant="secondary" 
-                      className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600"
+                      className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600 shrink-0"
                       title="Download paper as PDF"
                     >
-                      <FileDown size={12} className={`mr-1 text-gold-400 sm:w-3.5 sm:h-3.5 ${isDownloadingPdf ? 'animate-bounce' : ''}`} /> 
-                      <span>{isDownloadingPdf ? 'Downloading...' : 'Download PDF'}</span>
+                      <FileDown size={11} className={`mr-1 text-gold-400 sm:w-3.5 sm:h-3.5 ${isDownloadingPdf ? 'animate-bounce' : ''}`} /> 
+                      <span>{isDownloadingPdf ? 'PDF...' : 'PDF'}</span>
                     </Button>
 
                     {/* More Actions Toggle Dropdown */}
-                    <div className="relative" ref={actionsMenuRef}>
+                    <div className="relative shrink-0" ref={actionsMenuRef}>
                       <Button 
                         onClick={() => setIsActionsMenuOpen(prev => !prev)}
                         variant="secondary" 
-                        className="!w-auto !h-7 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap bg-surface-800 hover:bg-surface-700 border-surface-600"
+                        className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-1.5 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap bg-surface-800 hover:bg-surface-700 border-surface-600"
                         title="More paper options"
                       >
-                        <Settings size={11} className="mr-1 sm:mr-1.5 text-gold-500 sm:w-3.5 sm:h-3.5" /> 
+                        <Settings size={11} className="mr-0.5 sm:mr-1.5 text-gold-500 sm:w-3.5 sm:h-3.5" /> 
                         <span className="hidden md:inline">Options</span> 
-                        <ChevronDown size={9} className={`ml-0.5 sm:ml-1 opacity-70 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown size={9} className={`ml-0.5 opacity-70 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
                       </Button>
                       {isActionsMenuOpen && (
-                        <div className="absolute right-0 top-full pt-2 w-52 z-[150] animate-fadeIn">
+                        <div className="absolute right-0 top-full pt-2 w-52 max-w-[calc(100vw-24px)] z-[150] animate-fadeIn">
                           <div className="bg-surface-800 border border-surface-700 rounded-xl shadow-2xl overflow-hidden divide-y divide-surface-700">
                             <button 
                               onClick={() => { setIsActionsMenuOpen(false); executeSave(true); }} 
@@ -1542,18 +1541,20 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                 )}
               </div>
 
-              <div className="min-w-[40px] sm:min-w-[120px] flex justify-end">
-                 { (step >= 3 && step <= 5) && (
-                   <Button onClick={handleNext} disabled={(step === 3 && selectedChapters.length === 0) || (step === 4 && !selectedPatternId) || (step === 5 && totalSelectedCount === 0)} className="!w-auto py-1.5 px-3 sm:px-5 flex items-center text-[10px] sm:text-xs h-8 sm:h-9">
-                     <span className="hidden sm:inline mr-1">Next</span> <ChevronRight size={14} />
-                   </Button>
-                 )}
-                 { step === 6 && (
-                    <Button onClick={handleNext} className="!w-auto py-1.5 px-3 sm:px-5 flex items-center text-[10px] sm:text-xs h-8 sm:h-9">
-                      Preview <ChevronRight size={14} className="ml-1" />
-                    </Button>
-                 )}
-              </div>
+              {step !== 7 && (
+                <div className="min-w-[40px] sm:min-w-[120px] flex justify-end">
+                   { (step >= 3 && step <= 5) && (
+                     <Button onClick={handleNext} disabled={(step === 3 && selectedChapters.length === 0) || (step === 4 && !selectedPatternId) || (step === 5 && totalSelectedCount === 0)} className="!w-auto py-1.5 px-3 sm:px-5 flex items-center text-[10px] sm:text-xs h-8 sm:h-9">
+                       <span className="hidden sm:inline mr-1">Next</span> <ChevronRight size={14} />
+                     </Button>
+                   )}
+                   { step === 6 && (
+                      <Button onClick={handleNext} className="!w-auto py-1.5 px-3 sm:px-5 flex items-center text-[10px] sm:text-xs h-8 sm:h-9">
+                        Preview <ChevronRight size={14} className="ml-1" />
+                      </Button>
+                   )}
+                </div>
+              )}
           </div>
       </header>
 

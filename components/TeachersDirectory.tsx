@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getUsersPaginated, getUserCount, getCachedUserCountSync, deleteUserPermanently, toggleUserBlock, adminResetPassword, updateUser, getAllUsers } from '../services/authService';
+import { getUserCount, getCachedUserCountSync, deleteUserPermanently, toggleUserBlock, adminResetPassword, updateUser, getAllUsers, getCorePhoneDigits } from '../services/authService';
 import { ArrowLeft, School, Mail, Phone, Users, Search, RefreshCw, Edit, Trash2, Ban, UserCheck, Key, X, Save } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Input';
-import { QueryDocumentSnapshot } from 'firebase/firestore';
 
 interface TeachersDirectoryProps {
   user: User;
@@ -14,15 +12,11 @@ interface TeachersDirectoryProps {
 
 export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBack }) => {
   const [registeredUsers, setRegisteredUsers] = useState<User[]>([]);
-  const [allUsers, setAllUsers] = useState<User[] | null>(null);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [visibleLimit, setVisibleLimit] = useState<number>(250);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [isSearchingAll, setIsSearchingAll] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [totalUsersCount, setTotalUsersCount] = useState<number>(() => getCachedUserCountSync() || 0);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
-  const [hasMore, setHasMore] = useState(true);
   
   // Modals state
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -30,87 +24,48 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
   const [newPassword, setNewPassword] = useState('');
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const loadUsers = async (isLoadMore = false) => {
-    if (!isLoadMore) setIsLoading(true);
-    else setIsFetchingMore(true);
-    
+  // Load ALL registered schools in a single go
+  const loadAllSchools = async (forceRefresh: boolean = false) => {
+    setIsLoading(true);
     try {
-        if (!isLoadMore) {
-            const count = await getUserCount(true);
-            setTotalUsersCount(count);
-        }
-
-        const { users, lastDoc: newLastDoc } = await getUsersPaginated(isLoadMore ? lastDoc : null, 50);
-        
-        const cleanUsers = users.filter((u: User) => u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com' && u.id !== 'local-admin');
-        
-        if (isLoadMore) {
-            setRegisteredUsers(prev => [...prev, ...cleanUsers]);
-        } else {
-            setRegisteredUsers(cleanUsers);
-        }
-        
-        setLastDoc(newLastDoc);
-        setHasMore(users.length === 50); // If we got 50, there might be more
-    } catch (e) {
-        console.error("Failed to load users:", e);
-    }
-    
-    setIsLoading(false);
-    setIsFetchingMore(false);
-  };
-
-  // Background prefetch all users so searching covers the ENTIRE database
-  const fetchAllSchools = async (force: boolean = false): Promise<User[]> => {
-    try {
-      setIsSearchingAll(true);
-      const all = await getAllUsers(force);
-      const cleanAll = all.filter(u => u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com' && u.id !== 'local-admin');
-      setAllUsers(cleanAll);
+      const all = await getAllUsers(forceRefresh);
+      const cleanAll = all.filter(
+        (u: User) => u && u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com' && u.id !== 'local-admin'
+      );
+      setRegisteredUsers(cleanAll);
+      setFilteredUsers(cleanAll);
       if (cleanAll.length > 0) {
         setTotalUsersCount(cleanAll.length);
+      } else {
+        const count = await getUserCount(forceRefresh);
+        setTotalUsersCount(count);
       }
-      setIsSearchingAll(false);
-      return cleanAll;
     } catch (e) {
-      console.warn("Background fetch of all schools failed:", e);
-      setIsSearchingAll(false);
-      return [];
+      console.error("Failed to load all schools:", e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    let timer: any;
-    loadUsers().then(() => {
-      // Non-blocking prefetch in background after initial 50 schools render
-      timer = setTimeout(() => {
-        fetchAllSchools();
-      }, 800);
-    });
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
+    loadAllSchools(false);
   }, []);
 
   const handleRefresh = async () => {
-    setAllUsers(null);
-    await Promise.all([
-      loadUsers(),
-      fetchAllSchools(true)
-    ]);
+    await loadAllSchools(true);
   };
 
   const matchUser = (u: User, term: string) => {
     const name = (u.name || "").toLowerCase();
     const email = (u.email || "").toLowerCase();
-    const mobile = (u.mobile || "");
-    const whatsapp = (u.whatsapp || "");
+    const mobile = (u.mobile || "").toLowerCase();
+    const whatsapp = (u.whatsapp || "").toLowerCase();
     const instName = (u.instituteProfile?.instituteName || "").toLowerCase();
     const city = (u.instituteProfile?.city || "").toLowerCase();
     const address = (u.instituteProfile?.address || "").toLowerCase();
-    const contact = (u.instituteProfile?.contactNumber || "");
+    const contact = (u.instituteProfile?.contactNumber || "").toLowerCase();
 
-    return (
+    if (
       name.includes(term) ||
       email.includes(term) ||
       mobile.includes(term) ||
@@ -119,7 +74,26 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
       city.includes(term) ||
       address.includes(term) ||
       contact.includes(term)
-    );
+    ) {
+      return true;
+    }
+
+    // Also match normalized phone digits (e.g. 0300 vs +92300 vs 300)
+    const termDigits = getCorePhoneDigits(term);
+    if (termDigits.length >= 4) {
+      const mDigits = getCorePhoneDigits(u.mobile);
+      const wDigits = getCorePhoneDigits(u.whatsapp);
+      const cDigits = getCorePhoneDigits(u.instituteProfile?.contactNumber);
+      if (
+        mDigits.includes(termDigits) ||
+        wDigits.includes(termDigits) ||
+        cDigits.includes(termDigits)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   useEffect(() => {
@@ -128,21 +102,25 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
       setFilteredUsers(registeredUsers);
       return;
     }
+    setFilteredUsers(registeredUsers.filter(u => matchUser(u, term)));
+  }, [searchTerm, registeredUsers]);
 
-    if (allUsers && allUsers.length > 0) {
-      // We have all users loaded: search across ALL schools in database
-      setFilteredUsers(allUsers.filter(u => matchUser(u, term)));
-    } else {
-      // Immediately filter current registered users so user sees instant feedback
-      setFilteredUsers(registeredUsers.filter(u => matchUser(u, term)));
-      // And fetch all schools to update search results with complete DB results
-      fetchAllSchools().then(all => {
-        if (all && all.length > 0) {
-          setFilteredUsers(all.filter(u => matchUser(u, term)));
-        }
-      });
+  // Progressive rendering so all schools render smoothly without freezing the browser tab
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      setVisibleLimit(filteredUsers.length || 250);
+      return;
     }
-  }, [searchTerm, registeredUsers, allUsers]);
+    setVisibleLimit(250);
+  }, [filteredUsers.length, searchTerm]);
+
+  useEffect(() => {
+    if (isLoading || visibleLimit >= filteredUsers.length) return;
+    const timer = setTimeout(() => {
+      setVisibleLimit(prev => Math.min(filteredUsers.length, prev + 350));
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [isLoading, visibleLimit, filteredUsers.length]);
 
   const handleDelete = async (u: User) => {
     if (!window.confirm(`Are you sure you want to delete ${u.name}'s account permanently? This action cannot be undone.`)) return;
@@ -150,7 +128,6 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
     const success = await deleteUserPermanently(u.id);
     if (success) {
       setRegisteredUsers(prev => prev.filter(item => item.id !== u.id));
-      setAllUsers(prev => prev ? prev.filter(item => item.id !== u.id) : null);
       setFilteredUsers(prev => prev.filter(item => item.id !== u.id));
       setTotalUsersCount(prev => Math.max(0, prev - 1));
       alert("User deleted successfully.");
@@ -169,7 +146,6 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
     const success = await toggleUserBlock(u.id, nextStatus);
     if (success) {
       setRegisteredUsers(prev => prev.map(item => item.id === u.id ? { ...item, isBlocked: nextStatus } : item));
-      setAllUsers(prev => prev ? prev.map(item => item.id === u.id ? { ...item, isBlocked: nextStatus } : item) : null);
       setFilteredUsers(prev => prev.map(item => item.id === u.id ? { ...item, isBlocked: nextStatus } : item));
       alert(`User ${actionLabel}ed successfully.`);
     } else {
@@ -203,7 +179,6 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
     try {
       await updateUser(editingUser);
       setRegisteredUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
-      setAllUsers(prev => prev ? prev.map(u => u.id === editingUser.id ? editingUser : u) : null);
       setFilteredUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
       alert("User profile updated.");
       setEditingUser(null);
@@ -258,24 +233,29 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
             <div className="text-xs text-theme-text-muted font-bold uppercase tracking-widest flex items-center gap-2">
               {searchTerm.trim() ? (
                 <span>
-                  <span className="text-gold-500 font-extrabold">{filteredUsers.length}</span> Found of {totalUsersCount} Total
+                  <span className="text-gold-500 font-extrabold">{filteredUsers.length}</span> Found of {registeredUsers.length || totalUsersCount} Total
                 </span>
               ) : (
-                <span>{totalUsersCount} Registered School{totalUsersCount === 1 ? '' : 's'} Found</span>
-              )}
-              {isSearchingAll && searchTerm.trim() && (
-                <span className="flex items-center gap-1 text-[10px] text-gold-400 font-semibold normal-case">
-                  <RefreshCw size={10} className="animate-spin" /> Searching all...
-                </span>
+                <span>{registeredUsers.length || totalUsersCount} Registered School{(registeredUsers.length || totalUsersCount) === 1 ? '' : 's'} Loaded</span>
               )}
             </div>
           </div>
         </div>
 
         {isLoading ? (
-          <div className="text-center py-20 flex flex-col items-center gap-4">
-            <RefreshCw className="animate-spin text-gold-500" size={32} />
-            <p className="text-theme-text-muted font-bold uppercase tracking-widest text-xs">Fetching School Directory...</p>
+          <div className="bg-gray-800/80 border border-gray-700 rounded-2xl text-center py-20 px-6 flex flex-col items-center gap-4 shadow-xl">
+            <div className="relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full border-4 border-gray-700 border-t-gold-500 animate-spin" />
+              <School className="absolute text-gold-500" size={24} />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-theme-text-main font-extrabold uppercase tracking-widest text-sm">
+                Loading All Registered Schools...
+              </p>
+              <p className="text-theme-text-muted text-xs">
+                Please wait 3–5 seconds while all schools are fetched for instant search.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="animate-fadeIn">
@@ -320,8 +300,8 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700">
-                      {filteredUsers.map((u) => (
-                        <tr key={u.id} className={`hover:bg-gray-750/30 transition-colors ${u.isBlocked ? 'bg-red-900/5' : ''}`}>
+                      {filteredUsers.slice(0, visibleLimit).map((u, idx) => (
+                        <tr key={u.id || idx} className={`hover:bg-gray-750/30 transition-colors ${u.isBlocked ? 'bg-red-900/5' : ''}`}>
                           <td className="px-6 py-4">
                             <div className={`font-bold text-theme-text-main text-base flex items-center gap-2 ${u.isBlocked ? 'text-gray-500 line-through' : ''}`}>
                               {u.name}
@@ -383,19 +363,6 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
                       ))}
                     </tbody>
                   </table>
-                  
-                  {hasMore && !searchTerm && (
-                    <div className="p-4 flex justify-center border-t border-gray-700 bg-gray-900/30">
-                      <button 
-                        onClick={() => loadUsers(true)}
-                        disabled={isFetchingMore}
-                        className="px-6 py-2 bg-gold-500 text-black font-bold rounded-lg hover:bg-gold-400 transition-colors uppercase tracking-widest text-xs shadow-lg shadow-gold-500/20 disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isFetchingMore ? <RefreshCw size={14} className="animate-spin" /> : null}
-                        {isFetchingMore ? "Loading..." : "Load More Users"}
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

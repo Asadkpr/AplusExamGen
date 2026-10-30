@@ -731,7 +731,7 @@ export const getUserCount = async (forceRefresh: boolean = false): Promise<numbe
 
 export const getAllUsers = async (forceRefresh: boolean = false): Promise<User[]> => {
   const now = Date.now();
-  if (!forceRefresh && cachedUsers && (now - lastUsersFetchTime < CACHE_DURATION)) {
+  if (!forceRefresh && cachedUsers && cachedUsers.length > 0 && (now - lastUsersFetchTime < CACHE_DURATION)) {
     return cachedUsers;
   }
 
@@ -747,19 +747,45 @@ export const getAllUsers = async (forceRefresh: boolean = false): Promise<User[]
     return [];
   };
 
+  // Helper to persist lightweight backup to localStorage without hitting 5MB quota on base64 logos
+  const saveLocalBackup = (users: User[]) => {
+    try {
+      localStorage.setItem('total_users_count', users.length.toString());
+      const lightUsers = users.map(u => {
+        if (u.instituteProfile?.logoUrl && u.instituteProfile.logoUrl.length > 500) {
+          const { logoUrl, ...restProfile } = u.instituteProfile;
+          return { ...u, instituteProfile: restProfile };
+        }
+        return u;
+      });
+      localStorage.setItem('aplus_all_users_backup', JSON.stringify(lightUsers));
+    } catch (_) {}
+  };
+
+  const normalizeAndSortUsers = (docs: any[]): User[] => {
+    return docs
+      .map((d: any) => {
+        const data = (typeof d.data === 'function' ? d.data() : d) as User;
+        if (!data) return null;
+        return {
+          ...data,
+          id: data.id || d.id || ''
+        } as User;
+      })
+      .filter((u): u is User => Boolean(u && u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com' && u.id !== 'local-admin'))
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  };
+
   try {
     const fetchAll = async () => {
-      // Fetch all users with sufficient timeout for 2,200+ user documents on cold cache
       const q = query(collection(db, "users"));
       const queryPromise = getDocs(q);
       const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Users fetch timeout/quota exceeded')), 25000)
+        setTimeout(() => reject(new Error('Users fetch timeout/quota exceeded')), 20000)
       );
       const querySnapshot = await Promise.race([queryPromise, timeoutPromise]) as any;
 
-      const users = querySnapshot.docs
-        .map((d: any) => d.data() as User)
-        .filter((u: any) => u && u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com' && u.id !== 'local-admin');
+      const users = normalizeAndSortUsers(querySnapshot.docs);
       
       // Update memory cache
       cachedUsers = users;
@@ -768,10 +794,7 @@ export const getAllUsers = async (forceRefresh: boolean = false): Promise<User[]
       lastUserCountFetchTime = Date.now();
       
       // Persist to local backup for offline/quota resiliency
-      try {
-        localStorage.setItem('aplus_all_users_backup', JSON.stringify(users));
-        localStorage.setItem('total_users_count', users.length.toString());
-      } catch (_) {}
+      saveLocalBackup(users);
 
       return users;
     };
@@ -788,17 +811,12 @@ export const getAllUsers = async (forceRefresh: boolean = false): Promise<User[]
     try {
       const cacheSnap = await getDocsFromCache(collection(db, "users"));
       if (!cacheSnap.empty) {
-        const users = cacheSnap.docs
-          .map((d: any) => d.data() as User)
-          .filter((u: any) => u && u.email !== 'admin' && u.email !== 'admin@aplusexamgen.com' && u.id !== 'local-admin');
+        const users = normalizeAndSortUsers(cacheSnap.docs);
         if (users.length > 0) {
           cachedUsers = users;
           lastUsersFetchTime = Date.now();
           cachedUserCount = users.length;
-          try {
-            localStorage.setItem('aplus_all_users_backup', JSON.stringify(users));
-            localStorage.setItem('total_users_count', users.length.toString());
-          } catch (_) {}
+          saveLocalBackup(users);
           return users;
         }
       }
