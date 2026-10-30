@@ -6,7 +6,7 @@ import { getSubjects } from '../services/subjectService';
 import { getChapters } from '../services/chapterService';
 import { getPatterns, getPatternsByClassAndSubject } from '../services/patternService';
 import { getQuestionsForChapters } from '../services/questionService';
-import { Chapter, QuestionType, Question, PaperPatternSection, User, PaperPattern, Subtopic, SavedPaper, PaperPatternSectionPart } from '../types';
+import { BubbleSheetPosition, Chapter, QuestionType, Question, PaperPatternSection, User, PaperPattern, Subtopic, SavedPaper, PaperPatternSectionPart } from '../types';
 import { savePaper, updatePaper } from '../services/paperService';
 import { PrintablePaper } from './PrintablePaper';
 import { CustomPatternModal } from './CustomPatternModal';
@@ -152,9 +152,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [selectedMedium, setSelectedMedium] = useState<'English' | 'Urdu' | 'Both'>('English');
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [fontSize, setFontSize] = useState(13);
-  const [lineSpacing, setLineSpacing] = useState(2); // 0-10 scale
+  const [lineSpacing, setLineSpacing] = useState(0); // -10 to 10 scale, 0 is compact default
   const [headerStyle, setHeaderStyle] = useState<'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8'>('default');
   const [pageBreakAfterMCQ, setPageBreakAfterMCQ] = useState(false);
+  const [bubbleSheetPosition, setBubbleSheetPosition] = useState<BubbleSheetPosition>('above_mcq');
   
   // 🔹 Custom Pattern Modal State
   const [showCustomPatternModal, setShowCustomPatternModal] = useState(false);
@@ -222,7 +223,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       window.removeEventListener('resize', updateScale);
       if (observer) observer.disconnect();
     };
-  }, [step, fontSize, lineSpacing, selectedMedium, showAnswerKey, headerStyle, pageBreakAfterMCQ, sectionSelections]);
+  }, [step, fontSize, lineSpacing, selectedMedium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, sectionSelections]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -295,10 +296,12 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setOriginalSections(paper.sections); 
       setSelectedMedium(paper.medium || 'English');
       setFontSize(Math.max(8, Math.min(paper.fontSize || 13, 20)));
-      setLineSpacing(paper.lineSpacing ?? 2);
+      setLineSpacing(paper.lineSpacing !== undefined && paper.lineSpacing !== 2 ? paper.lineSpacing : 0);
       setPaperTime(paper.timeAllowed || '2:00 Hours');
       setPaperCode(paper.paperCode || '');
       setPageBreakAfterMCQ(Boolean(paper.pageBreakAfterMCQ));
+      if (paper.headerStyle) setHeaderStyle(paper.headerStyle);
+      if (paper.bubbleSheetPosition) setBubbleSheetPosition(paper.bubbleSheetPosition);
       
       const selections: Record<string, string[]> = {};
       paper.questions.forEach(q => {
@@ -810,10 +813,12 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         formattedChapters: getChaptersDisplay() || '',
         medium: selectedMedium || 'English',
         fontSize: fontSize || 13,
-        lineSpacing: lineSpacing ?? 2,
+        lineSpacing: lineSpacing ?? 0,
         timeAllowed: paperTime || '2:00 Hours',
         paperCode: paperCode || '',
-        pageBreakAfterMCQ: Boolean(pageBreakAfterMCQ)
+        pageBreakAfterMCQ: Boolean(pageBreakAfterMCQ),
+        headerStyle: headerStyle || 'default',
+        bubbleSheetPosition: bubbleSheetPosition || 'above_mcq'
       };
 
       const targetId = savedPaperId || initialPaper?.id;
@@ -1023,6 +1028,18 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           clonedDoc.body.style.backgroundColor = '#ffffff';
           clonedDoc.body.style.margin = '0';
           clonedDoc.body.style.padding = '0';
+          const fixStyle = clonedDoc.createElement('style');
+          fixStyle.textContent = `
+            img[width="1"][height="1"],
+            body > div > img {
+              display: inline !important;
+              vertical-align: baseline !important;
+            }
+            mjx-assistive-mml {
+              display: none !important;
+            }
+          `;
+          clonedDoc.head.appendChild(fixStyle);
           const sandbox = clonedDoc.getElementById('pdf-render-sandbox');
           if (sandbox) {
             sandbox.style.zIndex = '99999';
@@ -1336,7 +1353,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        </div>
 
                        {/* Header Style */}
-                       <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-3 shadow-inner hidden md:flex">
+                       <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-2 shadow-inner hidden md:flex">
                           <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Header:</span>
                           <select value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value as any)} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer">
                             <option value="default">Default</option>
@@ -1347,6 +1364,22 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                             <option value="layout6">Layout 6</option>
                             <option value="layout7">Layout 7</option>
                             <option value="layout8">Layout 8</option>
+                          </select>
+                       </div>
+
+                       {/* Bubble Sheet Placement */}
+                       <div className="bg-surface-900/50 border border-surface-700 pl-1.5 sm:pl-3 pr-1 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner">
+                          <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Bubble:</span>
+                          <select
+                            value={bubbleSheetPosition}
+                            onChange={(e) => setBubbleSheetPosition(e.target.value as BubbleSheetPosition)}
+                            className="bg-surface-800 border border-surface-700 text-theme-text-main text-[9px] sm:text-[11px] font-bold rounded-md sm:rounded-lg px-1.5 sm:px-2 py-0.5 sm:py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer"
+                            title="Select MCQ Bubble Sheet Position"
+                          >
+                            <option value="above_mcq">Above MCQs</option>
+                            <option value="below_mcq">Below MCQs</option>
+                            <option value="paper_end">End of Paper</option>
+                            <option value="none">Off / Hide</option>
                           </select>
                        </div>
                     </div>
@@ -1423,6 +1456,42 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                               <Printer size={15} className="text-gold-500" /> 
                               Print Paper
                             </button>
+                            <div className="px-4 py-2.5 flex items-center justify-between gap-2 md:hidden">
+                              <span className="text-[10px] text-theme-text-muted font-black uppercase flex items-center gap-2">
+                                <Layout size={14} className="text-gold-500" />
+                                Header
+                              </span>
+                              <select
+                                value={headerStyle}
+                                onChange={(e) => setHeaderStyle(e.target.value as any)}
+                                className="bg-surface-900 border border-surface-700 text-theme-text-main text-[10px] font-bold rounded-lg px-2 py-1 outline-none"
+                              >
+                                <option value="default">Default</option>
+                                <option value="sba">SBA</option>
+                                <option value="layout3">Layout 3</option>
+                                <option value="layout4">Layout 4</option>
+                                <option value="layout5">Layout 5</option>
+                                <option value="layout6">Layout 6</option>
+                                <option value="layout7">Layout 7</option>
+                                <option value="layout8">Layout 8</option>
+                              </select>
+                            </div>
+                            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-theme-text-muted font-black uppercase flex items-center gap-2">
+                                <CheckCircle size={14} className="text-gold-500" />
+                                Bubble Sheet
+                              </span>
+                              <select
+                                value={bubbleSheetPosition}
+                                onChange={(e) => setBubbleSheetPosition(e.target.value as BubbleSheetPosition)}
+                                className="bg-surface-900 border border-surface-700 text-theme-text-main text-[10px] font-bold rounded-lg px-2 py-1 outline-none"
+                              >
+                                <option value="above_mcq">Above MCQs</option>
+                                <option value="below_mcq">Below MCQs</option>
+                                <option value="paper_end">End of Paper</option>
+                                <option value="none">Off / Hide</option>
+                              </select>
+                            </div>
                             <button 
                               onClick={() => { setPageBreakAfterMCQ(!pageBreakAfterMCQ); setIsActionsMenuOpen(false); }} 
                               className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center justify-between transition-colors font-black uppercase"
@@ -2039,6 +2108,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                          baseFontSize={fontSize} lineSpacing={lineSpacing} timeAllowed={paperTime} paperCode={paperCode}
                          chaptersDisplay={getChaptersDisplay()} headerStyle={headerStyle}
                          pageBreakAfterMCQ={pageBreakAfterMCQ}
+                         bubbleSheetPosition={bubbleSheetPosition}
                        />
                     </div>
                   </div>

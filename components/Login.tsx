@@ -56,8 +56,8 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
 
   const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetIdentifier || !securityAnswer || !newPassword || !confirmNewPassword) {
-      setError("All fields are required.");
+    if (!resetIdentifier || !newPassword || !confirmNewPassword) {
+      setError("Please enter your Email or Mobile Number and new password.");
       return;
     }
 
@@ -112,7 +112,8 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
           <Input 
             label="Email or Mobile Number"
             type="text"
-            placeholder="Enter your registered ID"
+            autoComplete="username"
+            placeholder="Enter Email or Mobile Number (e.g. 03001234567)"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
           />
@@ -121,6 +122,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
             <Input 
               label="Password"
               type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
               placeholder="Enter password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -147,7 +149,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
               <div className="text-sm">
                 <button 
                   type="button" 
-                  onClick={() => { setError(''); setSuccessMsg(''); setView('FORGOT_PASSWORD'); }} 
+                  onClick={() => { setError(''); setSuccessMsg(''); setResetIdentifier(identifier); setView('FORGOT_PASSWORD'); }} 
                   className="font-bold text-gold-600 hover:text-gold-500"
                 >
                   Forgot password?
@@ -186,7 +188,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
       <div className="bg-gray-800 py-8 px-4 shadow-xl border border-gray-700 sm:rounded-xl sm:px-10">
         <div className="mb-6 text-center">
            <h3 className="text-xl font-bold text-theme-text-main mb-2">Reset Password</h3>
-           <p className="text-sm text-theme-text-muted">Answer the security question to reset your password.</p>
+           <p className="text-sm text-theme-text-muted">Enter your registered Email or Mobile Number to set a new password.</p>
         </div>
 
         <form className="space-y-4" onSubmit={handleResetSubmit}>
@@ -204,40 +206,30 @@ export const Login: React.FC<LoginProps> = ({ onNavigateSignUp, onSuccess }) => 
           )}
 
           <Input 
-            label="Registered ID (Email or Mobile)"
+            label="Email or Mobile Number"
             type="text"
-            placeholder="e.g. 03001234567"
+            placeholder="e.g. teacher@gmail.com or 03001234567"
             value={resetIdentifier}
             onChange={(e) => setResetIdentifier(e.target.value)}
           />
 
-          <div className="relative">
-            <div className="absolute -top-6 right-0 text-[10px] text-gold-600 font-bold italic">
-               * Security Question
-            </div>
-            <Input 
-              label="Institute / School Name"
-              type="text"
-              placeholder="e.g. Government High School"
-              value={securityAnswer}
-              onChange={(e) => setSecurityAnswer(e.target.value)}
-              icon={<Building2 size={18} />}
-            />
-            <p className="text-[10px] text-theme-text-muted -mt-3 mb-3">Enter the exact name used in your profile setup.</p>
-          </div>
-
           <div className="border-t border-gray-700 pt-4 mt-2">
              <Input 
               label="New Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Min 6 characters"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              icon={
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="focus:outline-none">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              }
             />
             
             <Input 
               label="Confirm New Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Re-enter new password"
               value={confirmNewPassword}
               onChange={(e) => setConfirmNewPassword(e.target.value)}

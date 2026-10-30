@@ -112,6 +112,8 @@ export interface PaperPattern {
   timeAllowed?: string; // New: e.g. "2:00 Hours"
 }
 
+export type BubbleSheetPosition = 'none' | 'above_mcq' | 'below_mcq' | 'paper_end';
+
 export interface SavedPaper {
   id: string;
   title: string; // e.g., "9th Class Physics"
@@ -134,6 +136,8 @@ export interface SavedPaper {
   timeAllowed?: string; // New: stored from pattern
   paperCode?: string; // Automatic 4-digit code
   pageBreakAfterMCQ?: boolean; // Separate MCQs onto page 1, subjective on page 2
+  headerStyle?: 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8';
+  bubbleSheetPosition?: BubbleSheetPosition;
 }
 
 export type ViewState = 

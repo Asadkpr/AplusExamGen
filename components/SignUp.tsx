@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { APP_NAME, APP_TAGLINE, COPYRIGHT_TEXT } from '../constants';
-import { registerUser } from '../services/authService';
+import { registerUser, formatStandardPakPhone } from '../services/authService';
 import { Input } from './Input';
 import { Button } from './Button';
 import { Eye, EyeOff, UserPlus, ArrowLeft } from 'lucide-react';
@@ -54,10 +54,12 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
     const newErrors: Record<string, string> = {};
     if (formData.name.trim().length < 3) newErrors.name = "Teacher Name must be at least 3 characters";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) newErrors.email = "Invalid email format";
+    if (!emailRegex.test(formData.email.trim())) newErrors.email = "Invalid email format";
+    const normalizedMobile = formatStandardPakPhone(formData.mobile);
+    const normalizedWhatsapp = formatStandardPakPhone(formData.whatsapp);
     const phoneRegex = /^03\d{9}$/;
-    if (!phoneRegex.test(formData.mobile)) newErrors.mobile = "Must be 11 digits starting with 03";
-    if (!sameAsMobile && formData.whatsapp && !phoneRegex.test(formData.whatsapp)) {
+    if (!phoneRegex.test(normalizedMobile)) newErrors.mobile = "Enter a valid mobile number (e.g. 03001234567)";
+    if (!sameAsMobile && formData.whatsapp.trim() && !phoneRegex.test(normalizedWhatsapp)) {
        newErrors.whatsapp = "Invalid WhatsApp number format";
     }
     if (formData.password.length < 6) newErrors.password = "Password must be at least 6 characters";
@@ -75,11 +77,13 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
     e.preventDefault();
     if (!validate()) return;
     setIsLoading(true);
+    const cleanMobile = formatStandardPakPhone(formData.mobile);
+    const cleanWhatsapp = formatStandardPakPhone(formData.whatsapp || formData.mobile);
     const registerResult = await registerUser({
-      name: formData.name,
-      email: formData.email,
-      mobile: formData.mobile,
-      whatsapp: formData.whatsapp || formData.mobile,
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      mobile: cleanMobile,
+      whatsapp: cleanWhatsapp,
       password: formData.password
     });
 
@@ -120,7 +124,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onNavigateLogin, onSuccess }) =>
 
             <Input label="Teacher Name" name="name" type="text" placeholder="e.g. Muhammad Ali" value={formData.name} onChange={handleChange} error={errors.name} />
             <Input label="Email Address" name="email" type="email" placeholder="teacher@example.com" value={formData.email} onChange={handleChange} error={errors.email} />
-            <Input label="Mobile Number" name="mobile" type="tel" placeholder="03XXXXXXXXX" value={formData.mobile} onChange={handleChange} error={errors.mobile} maxLength={11} />
+            <Input label="Mobile Number" name="mobile" type="tel" placeholder="03XXXXXXXXX" value={formData.mobile} onChange={handleChange} error={errors.mobile} maxLength={15} />
 
             <div className="mb-4 bg-gray-900/30 p-3 rounded-lg border border-gray-700">
               <label className="flex items-center space-x-2 text-sm text-theme-text-main mb-2 cursor-pointer select-none font-bold uppercase tracking-tight">

@@ -194,7 +194,40 @@
       /* Global Urdu Typography */
       [dir="rtl"], .font-urdu {
         font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif !important;
-        line-height: 2 !important;
+      }
+      [dir="rtl"] [dir="ltr"] {
+        font-family: 'Times New Roman', serif !important;
+      }
+      #root [dir="rtl"]:not(#printable-section *):not(.print-container *),
+      #root .font-urdu:not(#printable-section *):not(.print-container *) {
+        line-height: 1.8;
+      }
+
+      /* CRITICAL FIX FOR HTML2CANVAS + TAILWIND PREFLIGHT:
+         html2canvas measures font baselines by appending an invisible <div> to document.body
+         containing a <span> and a 1x1 <img>. Tailwind's preflight sets `img { display: block; vertical-align: middle; }`
+         which pushes the 1x1 probe <img> to a new line and shifts all rendered PDF text ~14px upward into borders. */
+      img[width="1"][height="1"],
+      body > div[style*="visibility: hidden"] > img,
+      body > div[style*="visibility:hidden"] > img {
+        display: inline !important;
+        vertical-align: baseline !important;
+      }
+      body > div[style*="visibility: hidden"],
+      body > div[style*="visibility:hidden"] {
+        line-height: normal !important;
+      }
+
+      mjx-container {
+        display: inline-block !important;
+        direction: ltr !important;
+        unicode-bidi: isolate !important;
+        vertical-align: middle !important;
+        margin: 0 2px !important;
+        line-height: 1 !important;
+      }
+      mjx-assistive-mml {
+        display: none !important;
       }
 
       /* PRINT OPTIMIZATION */
@@ -212,7 +245,11 @@
           width: 100% !important;
           max-width: none !important;
         }
-        .print-hidden { display: none !important; }
+        .print-hidden,
+        .print\:hidden,
+        .page-boundary-marker {
+          display: none !important;
+        }
         .page-break-before {
           page-break-before: always !important;
           break-before: page !important;
@@ -252,12 +289,13 @@
         to { opacity: 1; transform: translateY(0); }
       }
 
-      /* HIDE NETLIFY WIDGETS & BADGES COMPLETELY */
-      body > *:not(#root):not(script):not(style):not(link):not(#pdf-render-sandbox):not(.html2canvas-container):not(.html2pdf__container),
+      /* HIDE NETLIFY WIDGETS & BADGES COMPLETELY WITHOUT AFFECTING HTML2CANVAS PROBES */
       #netlify-identity-widget,
       .netlify-identity-widget,
       #netlify-badge,
       .netlify-badge,
+      div[id*="netlify"],
+      div[class*="netlify"],
       iframe[src*="netlify"],
       iframe[title*="Netlify"],
       iframe[title*="netlify"],
@@ -294,43 +332,26 @@
       const removeNetlifyElements = () => {
         if (!document.body) return;
 
-        // 1. Hide/remove any direct child of body that is not #root, #pdf-render-sandbox, .html2canvas-container, script, style, or link
-        Array.from(document.body.children).forEach(el => {
-          const tag = el.tagName;
-          const id = el.id || '';
-          const cls = typeof el.className === 'string' ? el.className : '';
-          if (
-            id === 'root' ||
-            id === 'pdf-render-sandbox' ||
-            cls.includes('html2canvas-container') ||
-            cls.includes('html2pdf__container') ||
-            tag === 'SCRIPT' ||
-            tag === 'STYLE' ||
-            tag === 'LINK'
-          ) {
-            return;
-          }
-          el.style.setProperty('display', 'none', 'important');
-          el.style.setProperty('visibility', 'hidden', 'important');
-          el.style.setProperty('opacity', '0', 'important');
-          el.style.setProperty('pointer-events', 'none', 'important');
-          el.style.setProperty('width', '0px', 'important');
-          el.style.setProperty('height', '0px', 'important');
-          el.style.setProperty('overflow', 'hidden', 'important');
-          try {
-            el.remove();
-          } catch (e) {}
-        });
-
-        // 2. Hide any anchor or element referencing netlify.com
-        document.querySelectorAll('a, iframe, div').forEach(el => {
+        // 1. Hide any anchor, iframe, or badge outside #root referencing netlify.com
+        document.querySelectorAll('a, iframe, div, aside, footer').forEach(el => {
           if (el.closest('#root') || el.closest('#pdf-render-sandbox')) return;
-          const href = (el.getAttribute && el.getAttribute('href')) || '';
-          const src = (el.getAttribute && el.getAttribute('src')) || '';
+          // Never touch html2canvas font-metrics probe or container
+          const cls = typeof el.className === 'string' ? el.className : '';
+          if (cls.includes('html2canvas') || cls.includes('html2pdf')) return;
+          if (el.tagName === 'DIV' && el.children.length === 2 && el.querySelector('img[width="1"][height="1"]')) return;
+
+          const id = (el.id || '').toLowerCase();
+          const href = ((el.getAttribute && el.getAttribute('href')) || '').toLowerCase();
+          const src = ((el.getAttribute && el.getAttribute('src')) || '').toLowerCase();
+          const title = ((el.getAttribute && el.getAttribute('title')) || '').toLowerCase();
           const text = (el.textContent || '').toLowerCase();
+
           if (
-            href.toLowerCase().includes('netlify') ||
-            src.toLowerCase().includes('netlify') ||
+            id.includes('netlify') ||
+            cls.toLowerCase().includes('netlify') ||
+            href.includes('netlify') ||
+            src.includes('netlify') ||
+            title.includes('netlify') ||
             text.includes('powered by netlify') ||
             text.includes('deployed on netlify')
           ) {
@@ -343,7 +364,7 @@
           }
         });
 
-        // 3. Target specifically by common netlify injected IDs
+        // 2. Target specifically by common netlify injected IDs
         const idsToHide = ['netlify-identity-widget', 'netlify-badge'];
         idsToHide.forEach(id => {
           const el = document.getElementById(id);
@@ -357,9 +378,7 @@
       };
 
       removeNetlifyElements();
-      setInterval(removeNetlifyElements, 500);
-      const observer = new MutationObserver(removeNetlifyElements);
-      observer.observe(document.documentElement, { childList: true, subtree: true });
+      setInterval(removeNetlifyElements, 1000);
     </script>
   </body>
 </html>

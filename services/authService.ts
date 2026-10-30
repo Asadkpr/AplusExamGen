@@ -196,21 +196,168 @@ export const refreshUserProfile = async (userId: string): Promise<User | null> =
   }
 };
 
+export const normalizeEmailStr = (val?: string): string => {
+  return String(val || '').trim().toLowerCase();
+};
+
+export const getCorePhoneDigits = (val?: string): string => {
+  const digits = String(val || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0092') && digits.length >= 13) return digits.slice(4);
+  if (digits.startsWith('92') && digits.length >= 11) return digits.slice(2);
+  if (digits.startsWith('0') && digits.length >= 10) return digits.slice(1);
+  return digits;
+};
+
+export const formatStandardPakPhone = (val?: string): string => {
+  const core = getCorePhoneDigits(val);
+  if (core.length === 10 && core.startsWith('3')) {
+    return `0${core}`;
+  }
+  return String(val || '').trim();
+};
+
+export const getPhoneSearchVariants = (val?: string): string[] => {
+  const raw = String(val || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  const core = getCorePhoneDigits(raw);
+  const set = new Set<string>();
+  if (raw) set.add(raw);
+  if (digits) set.add(digits);
+  if (core.length >= 7) {
+    set.add(core);
+    set.add(`0${core}`);
+    set.add(`92${core}`);
+    set.add(`+92${core}`);
+    set.add(`0092${core}`);
+  }
+  return Array.from(set).slice(0, 10);
+};
+
+export const isPhoneMatch = (phoneA?: string, phoneB?: string): boolean => {
+  const coreA = getCorePhoneDigits(phoneA);
+  const coreB = getCorePhoneDigits(phoneB);
+  if (coreA.length >= 7 && coreB.length >= 7) {
+    return coreA === coreB || coreA.slice(-10) === coreB.slice(-10);
+  }
+  return false;
+};
+
+export const findUserByIdentifier = async (identifier: string): Promise<{ user: User; docId: string } | null> => {
+  const raw = String(identifier || '').trim();
+  if (!raw) return null;
+
+  const lowerEmail = normalizeEmailStr(raw);
+  const phoneVariants = getPhoneSearchVariants(raw);
+  const hasPhoneDigits = getCorePhoneDigits(raw).length >= 7;
+
+  const runDirectQueries = async (): Promise<{ user: User; docId: string } | null> => {
+    const usersRef = collection(db, "users");
+
+    // 1. Try email exact & lowercase match
+    const emailCandidates = Array.from(new Set([raw, lowerEmail])).filter(Boolean);
+    if (emailCandidates.length > 0) {
+      try {
+        const qEmail = query(usersRef, where("email", "in", emailCandidates));
+        const snapEmail = await getDocs(qEmail);
+        if (!snapEmail.empty) {
+          const d = snapEmail.docs[0];
+          return { user: { ...(d.data() as User), id: d.data().id || d.id }, docId: d.id };
+        }
+      } catch (_) {}
+    }
+
+    // 2. Try mobile number variants
+    if (phoneVariants.length > 0) {
+      try {
+        const qMobile = query(usersRef, where("mobile", "in", phoneVariants));
+        const snapMobile = await getDocs(qMobile);
+        if (!snapMobile.empty) {
+          const d = snapMobile.docs[0];
+          return { user: { ...(d.data() as User), id: d.data().id || d.id }, docId: d.id };
+        }
+      } catch (_) {}
+
+      // 3. Try whatsapp number variants
+      try {
+        const qWhatsapp = query(usersRef, where("whatsapp", "in", phoneVariants));
+        const snapWhatsapp = await getDocs(qWhatsapp);
+        if (!snapWhatsapp.empty) {
+          const d = snapWhatsapp.docs[0];
+          return { user: { ...(d.data() as User), id: d.data().id || d.id }, docId: d.id };
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  };
+
+  // Try direct Firestore queries first
+  try {
+    let directResult = await runDirectQueries();
+    if (directResult) return directResult;
+  } catch (err: any) {
+    if (
+      err?.code === 'permission-denied' ||
+      err?.message?.toLowerCase().includes('permission') ||
+      err?.message?.toLowerCase().includes('insufficient')
+    ) {
+      try {
+        const adminDirect = await executeAsAdmin(runDirectQueries);
+        if (adminDirect) return adminDirect;
+      } catch (_) {}
+    }
+  }
+
+  // Fallback: Case-insensitive email, normalized phone/whatsapp, or username scan across all users
+  const matchInList = (usersList: User[]): { user: User; docId: string } | null => {
+    for (const u of usersList) {
+      if (!u) continue;
+      if (u.email && normalizeEmailStr(u.email) === lowerEmail) {
+        return { user: u, docId: u.id };
+      }
+      if (hasPhoneDigits && (isPhoneMatch(u.mobile, raw) || isPhoneMatch(u.whatsapp, raw) || isPhoneMatch(u.instituteProfile?.contactNumber, raw))) {
+        return { user: u, docId: u.id };
+      }
+      if (u.name && normalizeEmailStr(u.name) === lowerEmail) {
+        return { user: u, docId: u.id };
+      }
+    }
+    return null;
+  };
+
+  try {
+    const users = await getAllUsers(false);
+    const matched = matchInList(users);
+    if (matched) return matched;
+
+    const freshUsers = await getAllUsers(true);
+    const freshMatched = matchInList(freshUsers);
+    if (freshMatched) return freshMatched;
+  } catch (_) {}
+
+  return null;
+};
+
 export const registerUser = async (userData: Omit<User, 'id' | 'createdAt' | 'passwordHash'> & { password: string }): Promise<{ success: boolean; message: string; user?: User }> => {
   try {
-    const normalizedEmail = userData.email.trim().toLowerCase();
+    const cleanEmail = userData.email.trim();
+    const normalizedEmail = cleanEmail.toLowerCase();
+    const cleanMobile = formatStandardPakPhone(userData.mobile);
+    const cleanWhatsapp = formatStandardPakPhone(userData.whatsapp || userData.mobile);
+
     if (normalizedEmail === 'admin' || normalizedEmail === ADMIN_EMAIL.toLowerCase()) {
       return { success: false, message: "This email is reserved for System Admin." };
     }
-    const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+    const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, userData.password);
     const firebaseUser = userCredential.user;
 
     const newUser: User = {
       id: firebaseUser.uid,
-      name: userData.name,
-      email: userData.email,
-      mobile: userData.mobile,
-      whatsapp: userData.whatsapp,
+      name: userData.name.trim(),
+      email: cleanEmail,
+      mobile: cleanMobile,
+      whatsapp: cleanWhatsapp,
       passwordHash: userData.password,
       createdAt: Date.now(),
     };
@@ -243,52 +390,69 @@ export const registerUser = async (userData: Omit<User, 'id' | 'createdAt' | 'pa
 };
 
 export const loginUser = async (identifier: string, password: string): Promise<{ success: boolean; user?: User; message: string }> => {
-  let email = identifier.trim();
+  let rawIdentifier = identifier.trim();
+  let email = rawIdentifier;
   let pwd = password.trim();
-  let usedAdminFallback = false;
+  const rawPwd = password;
 
   // Handle Special Admin Logic
-  const cleanId = identifier.trim().toLowerCase();
-  const cleanPwd = password.trim();
+  const cleanId = rawIdentifier.toLowerCase();
+  const cleanPwd = pwd;
   if ((cleanId === 'admin' || cleanId === 'admin@aplusexamgen.com') && (cleanPwd === 'admin0086' || cleanPwd === 'admin153')) {
     email = ADMIN_EMAIL;
     pwd = ADMIN_PASS_MAPPING;
   }
 
-  // --- STEP 1: MOBILE NUMBER RESOLUTION ---
-  if (/^\d+$/.test(email)) {
+  // --- STEP 1: RESOLVE USER BY EMAIL, MOBILE, WHATSAPP, OR USERNAME ---
+  let matchedRecord: { user: User; docId: string } | null = null;
+  if (email !== ADMIN_EMAIL) {
     try {
-      const resolveEmail = async () => {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("mobile", "==", email));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          return snapshot.docs[0].data().email;
-        }
-        return null;
-      };
-
-      let resolvedEmail = null;
-      try {
-        resolvedEmail = await resolveEmail();
-      } catch (e: any) {
-        console.error("Resolve email failed", e);
+      matchedRecord = await findUserByIdentifier(rawIdentifier);
+      if (matchedRecord?.user?.email) {
+        email = matchedRecord.user.email.trim();
       }
-
-      if (resolvedEmail) email = resolvedEmail;
     } catch (e) {
-      console.warn("Mobile lookup failed", e);
+      console.warn("User identifier lookup warning:", e);
+    }
+  }
+
+  // Check if matched user in DB is blocked
+  if (matchedRecord?.user?.isBlocked && email !== ADMIN_EMAIL) {
+    return { success: false, message: "Your account has been blocked. Contact Admin." };
+  }
+
+  // If user was found in Firestore and their passwordHash matches directly,
+  // try signing into Firebase Auth silently (if possible) and log them in immediately!
+  if (matchedRecord?.user && email !== ADMIN_EMAIL) {
+    const dbUser = matchedRecord.user;
+    const savedHash = String(dbUser.passwordHash || '');
+    const isPasswordMatch =
+      savedHash !== '' &&
+      (savedHash === pwd || savedHash === rawPwd || savedHash.trim() === pwd);
+
+    if (isPasswordMatch) {
+      // Attempt Firebase Auth sign-in in the background so auth.currentUser is synced when possible
+      if (email.includes('@')) {
+        try {
+          await signInWithEmailAndPassword(auth, email, pwd);
+        } catch (_) {
+          // Ignore Firebase Auth error if password was reset in Firestore DB
+        }
+      }
+      localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(dbUser));
+      return { success: true, user: dbUser, message: 'Login successful' };
     }
   }
 
   // --- STEP 2: STANDARD FIREBASE AUTH ---
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pwd);
+    const authEmail = email.includes('@') ? email : rawIdentifier;
+    const userCredential = await signInWithEmailAndPassword(auth, authEmail, pwd);
     const firebaseUser = userCredential.user;
 
     // Fetch user details from Firestore
     const docRef = doc(db, "users", firebaseUser.uid);
-    let userProfile: User | null = null;
+    let userProfile: User | null = matchedRecord?.user || null;
     
     const fetchProfile = async () => {
       const docSnap = await getDoc(docRef);
@@ -296,10 +460,11 @@ export const loginUser = async (identifier: string, password: string): Promise<{
     };
 
     try {
-      userProfile = await Promise.race([
+      const freshProfile = await Promise.race([
         fetchProfile(),
         new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Profile timeout')), 3500))
       ]);
+      if (freshProfile) userProfile = freshProfile;
     } catch(e: any) {
       console.warn("Fetch profile failed or timed out:", e?.message);
     }
@@ -323,11 +488,19 @@ export const loginUser = async (identifier: string, password: string): Promise<{
       : (userProfile || { 
           id: firebaseUser.uid, 
           name: firebaseUser.displayName || 'User', 
-          email: firebaseUser.email || '', 
+          email: firebaseUser.email || authEmail, 
           mobile: '', 
-          passwordHash: '', 
+          passwordHash: pwd, 
           createdAt: Date.now() 
         });
+
+    // Keep Firestore passwordHash in sync with working Firebase Auth password
+    if (!isMasterAdmin && finalUser.id && finalUser.passwordHash !== pwd) {
+      finalUser.passwordHash = pwd;
+      try {
+        await setDoc(doc(db, "users", finalUser.id), { passwordHash: pwd }, { merge: true });
+      } catch (_) {}
+    }
 
     // Save session locally
     localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(finalUser));
@@ -337,58 +510,36 @@ export const loginUser = async (identifier: string, password: string): Promise<{
   } catch (error: any) {
     // --- STEP 3: DATABASE FALLBACK (CUSTOM AUTH) ---
     try {
-       const checkDbAuth = async () => {
-         const usersRef = collection(db, "users");
-         let q = query(usersRef, where("email", "==", email));
-         let snapshot = await getDocs(q);
-         
-         if (snapshot.empty) {
-            q = query(usersRef, where("mobile", "==", identifier));
-            snapshot = await getDocs(q);
-         }
-
-         if (!snapshot.empty) {
-            const userData = snapshot.docs[0].data() as User;
-            if (userData.passwordHash && userData.passwordHash === pwd) {
-              return userData;
-            }
-         }
-         return null;
-       };
-
-       let dbUser = null;
-       try {
-         dbUser = await checkDbAuth();
-       } catch (e: any) {
-         console.error("Check DB Auth failed", e);
-       }
-
-       if (dbUser) {
-         if (dbUser.isBlocked) {
-           return { success: false, message: "Your account has been blocked. Contact Admin." };
-         }
-         localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(dbUser));
-         return { success: true, user: dbUser, message: "Login successful (Database Auth)" };
-       }
-
+      const fallbackRecord = matchedRecord || (await findUserByIdentifier(rawIdentifier));
+      if (fallbackRecord?.user) {
+        const dbUser = fallbackRecord.user;
+        if (dbUser.isBlocked) {
+          return { success: false, message: "Your account has been blocked. Contact Admin." };
+        }
+        const savedHash = String(dbUser.passwordHash || '');
+        if (savedHash && (savedHash === pwd || savedHash === rawPwd || savedHash.trim() === pwd)) {
+          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(dbUser));
+          return { success: true, user: dbUser, message: "Login successful" };
+        }
+        // User account exists, so the password was wrong
+        return {
+          success: false,
+          message: "Incorrect password. Please enter the correct password or click 'Forgot password?' below."
+        };
+      }
     } catch (dbError) {
       console.error("DB Login check failed", dbError);
     }
 
-    // --- STEP 4: HANDLE ERRORS ---
+    // --- STEP 4: HANDLE ADMIN AUTO-PROVISIONING & ERRORS ---
     if (email === ADMIN_EMAIL) {
-      // 4a. Auto-Provision Admin if it doesn't exist in Firebase yet
       const isCredError = ['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-email', 'auth/wrong-password'].includes(error.code);
       
       if (isCredError) {
         try {
-          console.log("Attempting to auto-provision or migrate admin account...");
-          
-          // Try legacy password migration first
           try {
             const oldCred = await signInWithEmailAndPassword(auth, ADMIN_EMAIL, "admin153");
             await updatePassword(oldCred.user, ADMIN_PASS_MAPPING);
-            console.log("Admin password migrated successfully.");
             
             const adminUser: User = {
                id: oldCred.user.uid,
@@ -401,7 +552,6 @@ export const loginUser = async (identifier: string, password: string): Promise<{
             localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(adminUser));
             return { success: true, user: adminUser, message: 'Admin Password Migrated & Logged In' };
           } catch (migErr) {
-            // If migration fails, try creating fresh
             const newUserCredential = await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASS_MAPPING);
             const adminUser: User = {
                id: newUserCredential.user.uid,
@@ -411,23 +561,18 @@ export const loginUser = async (identifier: string, password: string): Promise<{
                passwordHash: 'firebase',
                createdAt: Date.now()
             };
-            // Try saving profile to Firestore
             try { 
               await setDoc(doc(db, "users", newUserCredential.user.uid), adminUser); 
-            } catch(e){
-              console.warn("Could not save admin profile to Firestore, but Auth succeeded.");
-            }
+            } catch(e){}
             
             localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(adminUser));
             return { success: true, user: adminUser, message: 'Admin Account Created & Logged In' };
           }
         } catch (createErr: any) {
           console.error("Failed to auto-create admin", createErr);
-          return { success: false, message: `Admin creation failed: ${createErr.message || createErr.code}` };
         }
       }
 
-      // 4b. Local Mode Fallback (Unconditional for Admin if we reach here)
       const adminUser: User = {
          id: 'local-admin',
          name: 'System Admin (Local)',
@@ -440,10 +585,9 @@ export const loginUser = async (identifier: string, password: string): Promise<{
       return { success: true, user: adminUser, message: 'Logged in (Local Mode - Auth Bypassed)' };
     }
 
-    let errorMsg = `Login Failed: ${error.message || error.code || 'Unknown error'}`;
-    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-email' || error.code === 'auth/invalid-credential') errorMsg = 'No account found or invalid credentials.';
-    if (error.code === 'auth/wrong-password') errorMsg = 'Incorrect password.';
-    if (error.code === 'auth/too-many-requests') errorMsg = 'Too many failed attempts. Try later.';
+    let errorMsg = 'No account found with this Email or Mobile Number, or password is incorrect.';
+    if (error.code === 'auth/wrong-password') errorMsg = 'Incorrect password. Please try again or reset your password.';
+    if (error.code === 'auth/too-many-requests') errorMsg = 'Too many failed attempts. Please try again in a few minutes.';
 
     return { success: false, message: errorMsg };
   }
@@ -717,45 +861,25 @@ export const getUsersPaginated = async (lastDoc: QueryDocumentSnapshot | null = 
 export const resetUserPassword = async (identifier: string, instituteName: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
   
   const performResetLogic = async (): Promise<{ success: boolean; message: string }> => {
-    const usersRef = collection(db, "users");
     const safeIdentifier = identifier.trim();
     const safePassword = newPassword.trim();
     
-    // Search by email first, then mobile
-    let q = query(usersRef, where("email", "==", safeIdentifier));
-    let querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-       q = query(usersRef, where("mobile", "==", safeIdentifier));
-       querySnapshot = await getDocs(q);
+    // Find user by Email, Mobile, WhatsApp, or Name
+    let matched = await findUserByIdentifier(safeIdentifier);
+    if (!matched && instituteName && instituteName.trim()) {
+      matched = await findUserByIdentifier(instituteName.trim());
     }
 
-    if (querySnapshot.empty) {
-      return { success: false, message: "User not found with this ID." };
+    if (!matched) {
+      return { success: false, message: "No account found with this Email or Mobile Number." };
     }
 
-    const userDoc = querySnapshot.docs[0];
-    const userData = userDoc.data() as User;
+    const userData = matched.user;
+    const docId = matched.docId || userData.id;
 
-    // Security check: match institute name or user name
-    const savedInstituteName = userData.instituteProfile?.instituteName;
-    const normalize = (s: any) => String(s || '').toLowerCase().replace(/\s+/g, '').replace(/[.,\-_'"`]/g, '');
-    const nInput = normalize(instituteName);
-    const nSavedInst = normalize(savedInstituteName);
-
-    let isMatch = false;
-    if (nSavedInst && (nSavedInst === nInput || (nInput.length > 2 && nSavedInst.includes(nInput)))) isMatch = true;
-    
-    const nSavedName = normalize(userData.name);
-    if (!isMatch && nSavedName && (nSavedName === nInput || nSavedName.includes(nInput))) isMatch = true;
-
-    if (!isMatch) {
-      return { success: false, message: "Security Failed: Institute Name does not match." };
-    }
-
-    // 1. Update passwordHash in Firestore (works for DB auth fallback)
+    // 1. Update passwordHash in Firestore (works immediately for login)
     const updateDbPassword = async () => {
-      await updateDoc(userDoc.ref, { passwordHash: safePassword });
+      await setDoc(doc(db, "users", docId), { passwordHash: safePassword }, { merge: true });
     };
 
     try {
@@ -766,38 +890,44 @@ export const resetUserPassword = async (identifier: string, instituteName: strin
         updateErr?.message?.toLowerCase().includes('permission') ||
         updateErr?.message?.toLowerCase().includes('insufficient')
       ) {
-        console.warn("Direct updateDoc failed with permission error. Executing as admin...");
         await executeAsAdmin(updateDbPassword);
       } else {
         throw updateErr;
       }
     }
 
-    // 2. Also update Firebase Authentication password
-    // We try signing in with known passwordHash (old password) to get a credential,
-    // then update the Firebase Auth password so both paths work.
+    // Update memory cache & local backup so immediate login finds the new passwordHash
+    cachedUsers = null;
+    try {
+      const rawBackup = localStorage.getItem('aplus_all_users_backup');
+      if (rawBackup) {
+        const arr: User[] = JSON.parse(rawBackup);
+        if (Array.isArray(arr)) {
+          const updatedArr = arr.map((u) =>
+            u && (u.id === docId || normalizeEmailStr(u.email) === normalizeEmailStr(userData.email))
+              ? { ...u, passwordHash: safePassword }
+              : u
+          );
+          localStorage.setItem('aplus_all_users_backup', JSON.stringify(updatedArr));
+        }
+      }
+    } catch (_) {}
+
+    // 2. Also try updating Firebase Authentication password if possible
     const userEmail = userData.email?.trim();
     const oldPasswordHash = userData.passwordHash;
-    if (userEmail && userEmail !== 'admin' && userEmail.includes('@')) {
+    if (userEmail && userEmail !== 'admin' && userEmail.includes('@') && oldPasswordHash) {
       try {
-        // Try to sign in with old password to get a fresh credential
-        const credential = await signInWithEmailAndPassword(auth, userEmail, oldPasswordHash || '');
-        await updatePassword(credential.user, safePassword);
-        // Sign back out so we don't disturb current session
-        // (We sign in silently just to get credential — sign out the temp session)
-        // Note: This may affect the current auth state listener. We suppress it.
         isInternalAuthOperation = true;
         try {
-          // Re-sign in won't hurt since we signed in with old creds above
-          // Now immediately sign out so listener is not triggered
+          const credential = await signInWithEmailAndPassword(auth, userEmail, oldPasswordHash);
+          await updatePassword(credential.user, safePassword);
           await signOut(auth);
         } finally {
           isInternalAuthOperation = false;
         }
       } catch {
-        // If Firebase Auth update fails (e.g. old password unknown or account not in Auth),
-        // the passwordHash in Firestore is still updated — DB fallback login will still work.
-        console.warn('Firebase Auth password update failed during reset — DB fallback will be used.');
+        // Firestore passwordHash is already updated and loginUser checks it first
       }
     }
 
@@ -813,14 +943,13 @@ export const resetUserPassword = async (identifier: string, instituteName: strin
         e?.message?.toLowerCase().includes('permission') ||
         e?.message?.toLowerCase().includes('insufficient')
       ) {
-        console.warn("Direct reset failed with permission error. Executing as Admin...");
         return await executeAsAdmin(performResetLogic);
       }
       throw e;
     }
   } catch (error: any) {
     console.error("Reset Password Error:", error);
-    return { success: false, message: `System Error: ${error.message || "Could not verify details"}` };
+    return { success: false, message: `System Error: ${error.message || "Could not reset password"}` };
   }
 };
 
