@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Chapter, Question, QuestionType, Subtopic } from '../types';
 import { CLASSES, CARD_COLORS } from '../constants';
 import { getSubjects } from '../services/subjectService';
-import { getChapters, getVisibilitySettings, toggleVisibility, VisibilityState, deleteChapterPermanently } from '../services/chapterService';
+import { getChapters, getChapterCountsByClass, getVisibilitySettings, toggleVisibility, VisibilityState, deleteChapterPermanently } from '../services/chapterService';
 import { getQuestionsForChapters, updateChapterQuestion, deleteChapterQuestion, getAllClassUploadedContent, deleteSubtopicPermanently } from '../services/questionService';
 import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
 import { Button } from './Button';
@@ -21,8 +21,8 @@ interface ManageContentProps {
 type Tab = 'QUESTIONS' | 'VISIBILITY';
 
 const isUrduStyleSubject = (subject: string) => {
-  const s = subject.toLowerCase();
-  return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per');
+  const s = (subject || '').toLowerCase();
+  return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per') || s.includes('ethic') || s.includes('quran') || /[\u0600-\u06FF]/.test(subject || '');
 };
 
 // Internal utility to render formatted text in management UI
@@ -95,13 +95,22 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   const loadSubjectsAndCounts = async () => {
     setIsLoading(true);
     try {
-      const allSubjectsMap = await getSubjects(true);
+      const [allSubjectsMap, classChapterCounts] = await Promise.all([
+        getSubjects(true),
+        getChapterCountsByClass(selectedClass)
+      ]);
       const subjects = allSubjectsMap[selectedClass] || [];
       setAvailableSubjects(subjects);
       
       const counts: Record<string, number> = {};
       subjects.forEach(subj => {
-          counts[subj] = 0; // We skip counting to load instantly
+        const exact = classChapterCounts[subj];
+        if (exact !== undefined) {
+          counts[subj] = exact;
+        } else {
+          const matchKey = Object.keys(classChapterCounts).find(k => k.toLowerCase() === subj.toLowerCase());
+          counts[subj] = matchKey ? classChapterCounts[matchKey] : 0;
+        }
       });
       
       setSubjectCounts(counts);
@@ -131,7 +140,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
     try {
         const chaptersList = await getChapters(subject, selectedClass, false, true);
         const chapterIds = chaptersList.map(c => c.id);
-        const questions = await getQuestionsForChapters(subject, chaptersList, chapterIds, true);
+        const questions = await getQuestionsForChapters(subject, chaptersList, chapterIds, true, selectedClass);
         setAllQuestions(questions);
         setFilteredQuestions(questions);
         setVisibleCount(20);
@@ -250,7 +259,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
   };
 
   const handleSaveEdit = async () => {
-    if (!editingQuestion || !editForm.text) return;
+    if (!editingQuestion || (!editForm.text && !editForm.textUrdu)) return;
     setIsSaving(true);
     
     const updatedQuestion: Question = {
@@ -490,7 +499,7 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                                    <div className="space-y-1">
                                                       {q.optionsUrdu.map((opt, oIdx) => (
                                                         <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-theme-text-muted opacity-60 border border-gray-700/50'}`} dir="rtl">
-                                                           <span className="font-black opacity-30 text-xs">({String.fromCharCode(97 + oIdx)})</span> {renderFormattedText(opt)}
+                                                           <span className="font-black opacity-30 text-xs">({String.fromCharCode(65 + oIdx)})</span> {renderFormattedText(opt)}
                                                         </div>
                                                       ))}
                                                    </div>

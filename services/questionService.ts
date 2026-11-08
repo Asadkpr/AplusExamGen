@@ -109,7 +109,7 @@ export const saveUploadedChapterContent = async (
   const docRef = doc(db, COLLECTION, chapterId);
 
   try {
-    const docSnap = await getDoc(docRef);
+    const docSnap = await withTimeout(getDoc(docRef), 10000);
     if (docSnap.exists()) {
       const data = docSnap.data() as UploadedContent;
       existingQuestions = data.questions || [];
@@ -119,10 +119,44 @@ export const saveUploadedChapterContent = async (
     console.warn("Could not fetch existing content for merge, starting fresh.", e);
   }
 
-  const mergedQuestions = [...existingQuestions, ...newQuestions];
+  // Filter out completely blank rows and deduplicate exact duplicates to prevent Firestore 1MB limit overflow
+  const rawMerged = [...existingQuestions, ...newQuestions];
+  const seenKeys = new Set<string>();
+  const mergedQuestions: Question[] = [];
+  for (const q of rawMerged) {
+    const tEng = (q.text || '').trim();
+    const tUrdu = (q.textUrdu || '').trim();
+    if (!tEng && !tUrdu) continue;
+    const dedupeKey = `${(q.subtopic || '').trim()}|${(q.type || '').trim()}|${tEng}|${tUrdu}|${JSON.stringify(q.options || [])}|${JSON.stringify(q.optionsUrdu || [])}`;
+    if (!seenKeys.has(dedupeKey)) {
+      seenKeys.add(dedupeKey);
+      mergedQuestions.push({
+        ...q,
+        chapterId
+      });
+    }
+  }
+
   const subtopicMap = new Map<string, Subtopic>();
-  existingSubtopics.forEach(s => subtopicMap.set(s.name.toLowerCase().trim(), s));
-  newSubtopics.forEach(s => subtopicMap.set(s.name.toLowerCase().trim(), s));
+  existingSubtopics.forEach(s => {
+    if (s && s.name && s.name.trim()) {
+      subtopicMap.set(s.name.toLowerCase().trim(), { id: s.id || s.name.trim(), name: s.name.trim() });
+    }
+  });
+  newSubtopics.forEach(s => {
+    if (s && s.name && s.name.trim()) {
+      subtopicMap.set(s.name.toLowerCase().trim(), { id: s.id || s.name.trim(), name: s.name.trim() });
+    }
+  });
+  mergedQuestions.forEach(q => {
+    const stName = (q.subtopic || '').trim();
+    if (stName && !subtopicMap.has(stName.toLowerCase())) {
+      subtopicMap.set(stName.toLowerCase(), { id: stName, name: stName });
+    }
+  });
+  if (mergedQuestions.length > 0 && subtopicMap.size === 0) {
+    subtopicMap.set('general', { id: 'General', name: 'General' });
+  }
   const mergedSubtopics = Array.from(subtopicMap.values());
 
   const rawData: UploadedContent = {
@@ -146,29 +180,38 @@ export const saveUploadedChapterContent = async (
     cache[chapterId] = data;
     localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify(cache));
   } catch (e) {
-    console.warn("Local cache save failed (non-critical)", e);
+    // If localStorage quota is exceeded, keep only the newly uploaded chapter so it never fails silently
+    try {
+      localStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify({ [chapterId]: data }));
+    } catch (_) {}
   }
 
-  const saveOp = async () => {
-    await setDoc(docRef, data);
-  };
+  const metaDocId = `${subject.trim()}_${classLevel.trim()}`.replace(/\s+/g, '_').toLowerCase();
 
   try {
-    await withTimeout(saveOp(), 4000);
-    
-    // UPDATE FAST CACHE
-    const metaDocId = `${subject.trim()}_${classLevel.trim()}`.replace(/\s+/g, '_').toLowerCase();
-    try {
-      await withTimeout(setDoc(doc(db, 'subtopics_meta', metaDocId), {
+    // Run both main document save (30s timeout) and fast subtopics_meta update (15s timeout)
+    await Promise.all([
+      withTimeout(setDoc(docRef, data), 30000),
+      withTimeout(setDoc(doc(db, 'subtopics_meta', metaDocId), {
         updatedAt: Date.now(),
         map: { [chapterId]: mergedSubtopics }
-      }, { merge: true }), 2500);
-    } catch(e) { console.warn("Failed to update fast cache", e); }
+      }, { merge: true }), 15000).catch(e => console.warn("Failed to update fast cache", e))
+    ]);
 
     return true;
   } catch (error: any) {
-    console.warn("Cloud save throttled or delayed, but questions saved safely in local cache:", error?.message || error);
-    return true;
+    console.warn("Primary cloud save encountered an issue, retrying once:", error?.message || error);
+    try {
+      await withTimeout(setDoc(docRef, data), 30000);
+      await withTimeout(setDoc(doc(db, 'subtopics_meta', metaDocId), {
+        updatedAt: Date.now(),
+        map: { [chapterId]: mergedSubtopics }
+      }, { merge: true }), 15000).catch(() => {});
+      return true;
+    } catch (retryErr: any) {
+      console.error("Cloud save failed after retry:", retryErr?.message || retryErr);
+      throw new Error(retryErr?.message || "Failed to save questions to cloud database. Please check your internet connection and try again.");
+    }
   }
 };
 
@@ -176,7 +219,8 @@ export const getQuestionsForChapters = async (
   subject: string, 
   allChapters: Chapter[], 
   selectedChapterIds: string[],
-  bypassCache: boolean = false
+  bypassCache: boolean = false,
+  classLevel?: string
 ): Promise<Question[]> => {
   let finalQuestions: Question[] = [];
   const processedChapterIds = new Set<string>();
@@ -184,7 +228,7 @@ export const getQuestionsForChapters = async (
   if (!bypassCache) {
     // 1. Try Memory Cache First
     selectedChapterIds.forEach(id => {
-      if (memoryContentCache[id] && memoryContentCache[id].questions) {
+      if (memoryContentCache[id] && memoryContentCache[id].questions && memoryContentCache[id].questions.length > 0) {
         finalQuestions = [...finalQuestions, ...memoryContentCache[id].questions];
         processedChapterIds.add(id);
       }
@@ -197,7 +241,7 @@ export const getQuestionsForChapters = async (
         if (stored) {
           const cache = JSON.parse(stored);
           selectedChapterIds.forEach(id => {
-            if (!processedChapterIds.has(id) && cache[id] && cache[id].questions) {
+            if (!processedChapterIds.has(id) && cache[id] && cache[id].questions && cache[id].questions.length > 0) {
               finalQuestions = [...finalQuestions, ...cache[id].questions];
               processedChapterIds.add(id);
               memoryContentCache[id] = cache[id]; // Populate memory cache
@@ -214,7 +258,7 @@ export const getQuestionsForChapters = async (
     const fetchSingleChapter = async (id: string): Promise<UploadedContent | null> => {
       const ref = doc(db, COLLECTION, id);
       try {
-        const snap = await withTimeout(getDoc(ref), 5000);
+        const snap = await withTimeout(getDoc(ref), 20000);
         if (snap.exists()) return snap.data() as UploadedContent;
       } catch (_) {
         try {
@@ -252,10 +296,35 @@ export const getQuestionsForChapters = async (
     }
   }
 
-  return finalQuestions;
+  // Fallback: if all chapters were requested (e.g. ManageContent) and no questions came back by chapterId, query by subject + classLevel
+  if (finalQuestions.length === 0 && subject && classLevel) {
+    try {
+      const q = query(
+        collection(db, COLLECTION),
+        where("subject", "==", subject.trim()),
+        where("classLevel", "==", classLevel.trim())
+      );
+      const snap = await withTimeout(getDocs(q), 15000);
+      snap.forEach(d => {
+        const data = d.data() as UploadedContent;
+        if (data && Array.isArray(data.questions)) {
+          finalQuestions = [...finalQuestions, ...data.questions];
+          memoryContentCache[d.id] = data;
+        }
+      });
+    } catch (_) {}
+  }
+
+  // Filter out any completely blank questions
+  return finalQuestions.filter(q => (q.text && q.text.trim()) || (q.textUrdu && q.textUrdu.trim()));
 };
 
-export const getUploadedSubtopicsMap = async (subject: string, classLevel: string, forceRefresh: boolean = false): Promise<Record<string, Subtopic[]>> => {
+export const getUploadedSubtopicsMap = async (
+  subject: string,
+  classLevel: string,
+  forceRefresh: boolean = false,
+  expectedChapterIds?: string[]
+): Promise<Record<string, Subtopic[]>> => {
   let map: Record<string, Subtopic[]> = {};
   const cleanSubject = subject.trim();
   const cleanClass = classLevel.trim();
@@ -263,58 +332,64 @@ export const getUploadedSubtopicsMap = async (subject: string, classLevel: strin
   const now = Date.now();
   const metaDocId = `${cleanSubject}_${cleanClass}`.replace(/\s+/g, '_').toLowerCase();
 
-  // 1. Try Memory Cache
-  if (!forceRefresh && lastFetchTime[cacheKey] && (now - lastFetchTime[cacheKey] < CACHE_DURATION)) {
+  // Helper to overlay local/memory cache entries so freshly uploaded chapters are always present
+  const mergeLocalAndMemory = (targetMap: Record<string, Subtopic[]>) => {
+    try {
+      const stored = localStorage.getItem(CONTENT_CACHE_KEY);
+      if (stored) {
+        const cache = JSON.parse(stored);
+        Object.values(cache).forEach((item: any) => {
+          if (item && item.subject === cleanSubject && item.classLevel === cleanClass && Array.isArray(item.subtopics) && item.subtopics.length > 0) {
+            targetMap[item.chapterId] = item.subtopics;
+          }
+        });
+      }
+    } catch (_) {}
     Object.values(memoryContentCache).forEach(item => {
-      if (item.subject === cleanSubject && item.classLevel === cleanClass && item.subtopics) {
-        map[item.chapterId] = item.subtopics;
+      if (item && item.subject === cleanSubject && item.classLevel === cleanClass && Array.isArray(item.subtopics) && item.subtopics.length > 0) {
+        targetMap[item.chapterId] = item.subtopics;
       }
     });
-    if (Object.keys(map).length > 0) return map;
+  };
+
+  // 1. Try Memory Cache if fresh and not forceRefresh
+  if (!forceRefresh && lastFetchTime[cacheKey] && (now - lastFetchTime[cacheKey] < CACHE_DURATION)) {
+    mergeLocalAndMemory(map);
+    const hasAllExpected = !expectedChapterIds || expectedChapterIds.length === 0 || expectedChapterIds.every(id => map[id] && map[id].length > 0);
+    if (Object.keys(map).length > 0 && hasAllExpected) return map;
   }
 
   // 2. Try Fast Cloud Metadata Cache (Avoids fetching thousands of questions)
   try {
-    const metaSnap = await withTimeout(getDoc(doc(db, 'subtopics_meta', metaDocId)), 2000);
+    const metaSnap = await withTimeout(getDoc(doc(db, 'subtopics_meta', metaDocId)), 8000);
     if (metaSnap.exists()) {
       const metaData = metaSnap.data();
       if (metaData && metaData.map && Object.keys(metaData.map).length > 0) {
-        lastFetchTime[cacheKey] = Date.now();
-        return metaData.map as Record<string, Subtopic[]>;
+        map = { ...(metaData.map as Record<string, Subtopic[]>) };
+        mergeLocalAndMemory(map);
+        const hasAllExpected = !expectedChapterIds || expectedChapterIds.length === 0 || expectedChapterIds.every(id => map[id] && map[id].length > 0);
+        if (hasAllExpected) {
+          lastFetchTime[cacheKey] = Date.now();
+          return map;
+        }
       }
     }
   } catch (e) {
     console.warn("Fast meta cache read failed (quota or offline)", e);
   }
 
-  // 2.5 Try Local Storage content cache (instant)
-  if (!forceRefresh) {
-    try {
-      const stored = localStorage.getItem(CONTENT_CACHE_KEY);
-      if (stored) {
-        const cache = JSON.parse(stored);
-        Object.values(cache).forEach((item: any) => {
-          if (item && item.subject === cleanSubject && item.classLevel === cleanClass && item.subtopics && item.subtopics.length > 0) {
-            map[item.chapterId] = item.subtopics;
-          }
-        });
-        if (Object.keys(map).length > 0) {
-          lastFetchTime[cacheKey] = Date.now();
-          return map;
-        }
-      }
-    } catch(e) {}
-  }
+  // 2.5 Merge Local Storage content cache
+  mergeLocalAndMemory(map);
 
-  // 3. Fallback: Fetch content for this subject/class
+  // 3. Fallback / Self-Heal: Fetch content for this subject/class from uploaded_content
   const q = query(
     collection(db, COLLECTION), 
     where("subject", "==", cleanSubject), 
     where("classLevel", "==", cleanClass)
   );
   const fetchOp = async () => {
-    const snapshot = await withTimeout(getDocs(q), 12000);
-    return snapshot.docs.map(doc => doc.data() as UploadedContent);
+    const snapshot = await withTimeout(getDocs(q), 15000);
+    return snapshot.docs.map(d => ({ ...d.data(), chapterId: d.id } as UploadedContent));
   };
 
   try {
@@ -326,14 +401,19 @@ export const getUploadedSubtopicsMap = async (subject: string, classLevel: strin
       try {
         const cacheSnap = await getDocsFromCache(q);
         if (!cacheSnap.empty) {
-          data = cacheSnap.docs.map(doc => doc.data() as UploadedContent);
+          data = cacheSnap.docs.map(d => ({ ...d.data(), chapterId: d.id } as UploadedContent));
         }
       } catch (_) {}
     }
 
     data.forEach(item => {
-      if (item.subtopics && item.subtopics.length > 0) {
-        map[item.chapterId] = item.subtopics;
+      let subs = item.subtopics || [];
+      if (subs.length === 0 && Array.isArray(item.questions) && item.questions.length > 0) {
+        const subNames = Array.from(new Set(item.questions.map(qItem => (qItem.subtopic || 'General').trim()).filter(Boolean)));
+        subs = subNames.map(n => ({ id: n, name: n }));
+      }
+      if (subs.length > 0) {
+        map[item.chapterId] = subs;
       }
       memoryContentCache[item.chapterId] = item; // Update Memory Cache
     });
@@ -361,19 +441,7 @@ export const getUploadedSubtopicsMap = async (subject: string, classLevel: strin
 
   } catch (e) {
     // 5. Ultimate Fallback: LocalStorage
-    try {
-      const stored = localStorage.getItem(CONTENT_CACHE_KEY);
-      if (stored) {
-        const cache = JSON.parse(stored);
-        Object.values(cache).forEach((item: any) => {
-           if (item.subject === cleanSubject && item.classLevel === cleanClass) {
-             if (item.subtopics && item.subtopics.length > 0) {
-               map[item.chapterId] = item.subtopics;
-             }
-           }
-        });
-      }
-    } catch (err) {}
+    mergeLocalAndMemory(map);
   }
   
   return map;

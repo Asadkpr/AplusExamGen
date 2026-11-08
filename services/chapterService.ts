@@ -153,7 +153,7 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
   // 1. Load from visibility_settings/custom_chapters (central Firestore document accessible to all users)
   try {
     const vsRef = doc(db, VISIBILITY_COLLECTION, CUSTOM_CHAPTERS_DOC);
-    const vsSnap = await withTimeout(getDoc(vsRef), 2500);
+    const vsSnap = await withTimeout(getDoc(vsRef), 8000);
     if (vsSnap.exists()) {
       const data = vsSnap.data();
       if (Array.isArray(data.chapters)) {
@@ -209,7 +209,7 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
         where("subject", "==", cleanSubj), 
         where("classLevel", "==", cleanClass)
       );
-      const querySnapshot = await withTimeout(getDocs(q), 2500);
+      const querySnapshot = await withTimeout(getDocs(q), 10000);
       return querySnapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
@@ -272,7 +272,8 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
     return ch;
   });
 
-  const uploadedSubtopicsMap = await getUploadedSubtopicsMap(cleanSubj, cleanClass, forceRefresh);
+  const expectedIds = combinedChapters.map(c => c.id);
+  const uploadedSubtopicsMap = await getUploadedSubtopicsMap(cleanSubj, cleanClass, forceRefresh, expectedIds);
   
   combinedChapters = combinedChapters.map(chapter => {
     const subtopics = uploadedSubtopicsMap[chapter.id] || [];
@@ -313,6 +314,43 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
   lastChaptersFetchTime[cacheKey] = Date.now();
 
   return combinedChapters;
+};
+
+export const getChapterCountsByClass = async (classLevel: string): Promise<Record<string, number>> => {
+  const cleanClass = classLevel.trim().toLowerCase();
+  const counts: Record<string, number> = {};
+  const seenIds = new Set<string>();
+
+  try {
+    const vsRef = doc(db, VISIBILITY_COLLECTION, CUSTOM_CHAPTERS_DOC);
+    const vsSnap = await withTimeout(getDoc(vsRef), 6000);
+    if (vsSnap.exists()) {
+      const data = vsSnap.data();
+      if (Array.isArray(data.chapters)) {
+        data.chapters.forEach((c: any) => {
+          if (c && c.id && String(c.classLevel || '').trim().toLowerCase() === cleanClass && !seenIds.has(c.id)) {
+            seenIds.add(c.id);
+            const subj = String(c.subject || '').trim();
+            if (subj) counts[subj] = (counts[subj] || 0) + 1;
+          }
+        });
+      }
+    }
+  } catch (_) {}
+
+  try {
+    const q = query(collection(db, COLLECTION), where("classLevel", "==", classLevel.trim()));
+    const snap = await withTimeout(getDocs(q), 6000);
+    snap.forEach(d => {
+      if (!seenIds.has(d.id)) {
+        seenIds.add(d.id);
+        const subj = String(d.data().subject || '').trim();
+        if (subj) counts[subj] = (counts[subj] || 0) + 1;
+      }
+    });
+  } catch (_) {}
+
+  return counts;
 };
 
 export const addChapter = async (subject: string, classLevel: string, name: string): Promise<boolean> => {
@@ -356,7 +394,7 @@ export const addChapter = async (subject: string, classLevel: string, name: stri
   // 2. Also save to Firestore chapters collection with timeout safeguard
   try {
     const docRef = doc(db, COLLECTION, chapterId);
-    await withTimeout(setDoc(docRef, newChapterRecord), 3500);
+    await withTimeout(setDoc(docRef, newChapterRecord), 15000);
   } catch (e: any) {
     console.warn("Firestore chapter cloud write delayed or throttled (saved safely in local storage):", e?.message || e);
   }
@@ -364,7 +402,7 @@ export const addChapter = async (subject: string, classLevel: string, name: stri
   // 3. Save to visibility_settings/custom_chapters (central document for instant sync to all users)
   try {
     const vsRef = doc(db, VISIBILITY_COLLECTION, CUSTOM_CHAPTERS_DOC);
-    const vsSnap = await withTimeout(getDoc(vsRef), 2500);
+    const vsSnap = await withTimeout(getDoc(vsRef), 8000);
     let list: CustomChapterRecord[] = [];
     if (vsSnap.exists()) {
       const data = vsSnap.data();
@@ -377,7 +415,7 @@ export const addChapter = async (subject: string, classLevel: string, name: stri
     );
     if (!exists) {
       list.push(newChapterRecord);
-      await withTimeout(setDoc(vsRef, { chapters: list, updatedAt: Date.now() }, { merge: true }), 2500);
+      await withTimeout(setDoc(vsRef, { chapters: list, updatedAt: Date.now() }, { merge: true }), 10000);
     }
   } catch (e: any) {
     console.warn("Could not save to visibility_settings/custom_chapters:", e);

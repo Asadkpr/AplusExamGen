@@ -560,6 +560,17 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     setSections([...sections, newSection]);
   };
 
+  const getMaxQuestionsForSectionType = (typeVal: string, _isEng: boolean = false): number => {
+    const upper = (typeVal || '').trim().toUpperCase();
+    if (upper === 'MCQ') return 100;
+    if (upper === 'LONG') return 20;
+    if (upper === 'SHORT') return 50;
+    const rank = getSectionSortRank(typeVal);
+    if (rank === 1) return 100;
+    if (rank === 3) return 20;
+    return 50;
+  };
+
   const handleUpdateSection = (id: string, field: keyof PaperPatternSection, value: any) => {
     setSections(prev => {
       return prev.map((s, idx) => {
@@ -574,6 +585,14 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
         let nextSection = { ...s, [field]: nextValue };
         const currentSubject = (editingPattern?.subject || selectedSubject).toLowerCase();
         const isEnglishSubject = currentSubject === 'english';
+
+        const maxAllowed = getMaxQuestionsForSectionType(nextSection.type, isEnglishSubject);
+        if ((nextSection.questionCount || 0) > maxAllowed) {
+          nextSection.questionCount = maxAllowed;
+        }
+        if ((nextSection.attemptCount || 0) > nextSection.questionCount) {
+          nextSection.attemptCount = nextSection.questionCount;
+        }
 
         // 🔹 AUTO-DETECT SUMMARY TYPE FOR ENGLISH
         if (field === 'type' && isEnglishSubject && value === 'Summary') {
@@ -601,11 +620,11 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
         }
 
         // AUTO-UPDATE DISPLAY TITLE IF NOT IN CUSTOM MODE
-        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion' || field === 'heading') {
+        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion' || field === 'heading' || field === 'questionCount') {
            if (!customTitleModes[id]) {
-             const updatedType = field === 'type' ? value : nextSection.type;
-             const updatedCount = field === 'attemptCount' ? value : nextSection.attemptCount;
-             const updatedMarks = field === 'marksPerQuestion' ? value : nextSection.marksPerQuestion;
+             const updatedType = nextSection.type;
+             const updatedCount = nextSection.attemptCount;
+             const updatedMarks = nextSection.marksPerQuestion;
              
              const autoTitle = getAutoTitle(updatedType, updatedCount, updatedMarks, idx, isEnglishSubject);
              if (autoTitle) {

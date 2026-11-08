@@ -24,8 +24,8 @@ const generateId = () => {
 };
 
 const isUrduStyleSubject = (subject: string) => {
-  const s = subject.toLowerCase();
-  return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per');
+  const s = (subject || '').toLowerCase();
+  return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per') || s.includes('ethic') || s.includes('quran') || /[\u0600-\u06FF]/.test(subject || '');
 };
 
 const isEnglishSubject = (subject: string) => {
@@ -395,8 +395,19 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
           const cleanCols = parseCSVLine(row);
           if (cleanCols.length < 3) continue;
           
-          const subtopicName = cleanCols[0] ? processValue(cleanCols[0]) : 'General';
+          const rawSubtopic = cleanCols[0] ? processValue(cleanCols[0]) : '';
           let typeStr = cleanCols[1] ? cleanCols[1].trim() : 'MCQ';
+
+          // Skip repeated header rows inside CSV
+          if (rawSubtopic.toLowerCase() === 'subtopic' && typeStr.toLowerCase() === 'type') continue;
+
+          let textEng = cleanCols[2] ? processValue(cleanCols[2]) : ''; 
+          const textUrdu = cleanCols.length > 3 ? processValue(cleanCols[3]) : '';
+
+          // Skip completely blank Excel rows (e.g. ,,,,,,,,,,,,,)
+          if (!textEng && !textUrdu) continue;
+
+          const subtopicName = rawSubtopic || 'General';
           
           let normalizedType = 'MCQ';
           const upperType = typeStr.toUpperCase();
@@ -407,6 +418,12 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
              normalizedType = upperType;
              const matchSubtype = ENGLISH_SUBTYPES.find(s => s.toUpperCase() === upperType);
              if (matchSubtype) normalizedType = matchSubtype;
+          } else if (['MCQS', 'OBJECTIVE', 'MULTIPLE CHOICE'].includes(upperType)) {
+             normalizedType = 'MCQ';
+          } else if (['SQ', 'SQS', 'SHORT QUESTION', 'SHORT QUESTIONS'].includes(upperType)) {
+             normalizedType = 'SHORT';
+          } else if (['LQ', 'LQS', 'LONG QUESTION', 'LONG QUESTIONS', 'DETAILED'].includes(upperType)) {
+             normalizedType = 'LONG';
           } else if (isEnglish) {
              const lowerTypeStr = typeStr.toLowerCase();
              if (lowerTypeStr.includes('verb')) normalizedType = 'Verb';
@@ -427,18 +444,20 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
              else if (lowerTypeStr.includes('voice')) normalizedType = 'Voice';
              else normalizedType = typeStr || 'MCQ';
           } else {
-             normalizedType = typeStr || 'MCQ';
+             const lowerTypeStr = typeStr.toLowerCase();
+             if (lowerTypeStr.includes('short') || lowerTypeStr.includes('مختصر')) normalizedType = 'SHORT';
+             else if (lowerTypeStr.includes('long') || lowerTypeStr.includes('تفصیلی')) normalizedType = 'LONG';
+             else if (lowerTypeStr.includes('mcq') || lowerTypeStr.includes('معروضی')) normalizedType = 'MCQ';
+             else if (lowerTypeStr.includes('num') || lowerTypeStr.includes('حسابی')) normalizedType = 'NUMERICAL';
+             else normalizedType = typeStr || 'MCQ';
           }
           
           const type = normalizedType as QuestionType;
-          let textEng = cleanCols[2] ? processValue(cleanCols[2]) : ''; 
           
           if (isEnglish && type === 'Paraphrase') {
              // Backward compatibility for '/' as line break in paraphrases, plus the new '@' support
              textEng = textEng.replace(/\//g, '\n');
           }
-          
-          const textUrdu = cleanCols.length > 3 ? processValue(cleanCols[3]) : '';
           
           const isObjective = type === 'MCQ' || ['Verb', 'Spelling', 'Meaning', 'Grammar'].includes(type);
           
@@ -449,14 +468,19 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
           let optionsUrdu: string[] | undefined = undefined;
           let correctAnswerIndex = 8;
           let marksIndex = 9;
-          if (cleanCols.length >= 14) {
+          if (cleanCols.length >= 12) {
             optionsUrdu = [cleanCols[8], cleanCols[9], cleanCols[10], cleanCols[11]]
               .filter(o => o !== undefined && o !== '')
               .map(o => processValue(o));
-            correctAnswerIndex = 12; marksIndex = 13;
+            correctAnswerIndex = 12;
+            marksIndex = 13;
           }
-          const correctAnswer = cleanCols.length > correctAnswerIndex ? cleanCols[correctAnswerIndex].trim() : '';
-          const marks = parseInt(cleanCols[marksIndex]) || (isObjective ? 1 : 2);
+          let rawCorrect = cleanCols.length > correctAnswerIndex && cleanCols[correctAnswerIndex] ? cleanCols[correctAnswerIndex].trim() : '';
+          if (['a', 'b', 'c', 'd'].includes(rawCorrect.toLowerCase())) {
+            rawCorrect = rawCorrect.toUpperCase();
+          }
+          const correctAnswer = rawCorrect;
+          const marks = (cleanCols.length > marksIndex ? parseInt(cleanCols[marksIndex]) : NaN) || (isObjective ? 1 : (type === 'LONG' ? 5 : 2));
           
           if (subtopicName) subtopicsSet.add(subtopicName);
           questions.push({ 
@@ -471,6 +495,9 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
             correctAnswer, 
             marks 
           });
+      }
+      if (questions.length > 0 && subtopicsSet.size === 0) {
+        subtopicsSet.add('General');
       }
       setParsedQuestions(questions);
       setParsedSubtopics(Array.from(subtopicsSet).map(name => ({ id: name, name: name })));
@@ -876,9 +903,9 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                             {q.textUrdu && <div className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{renderFormattedTextPreview(q.textUrdu)}</div>}
                                           </div>
                                           
-                                          {q.options && q.options.length > 0 && (
+                                          {((q.options && q.options.length > 0) || (q.optionsUrdu && q.optionsUrdu.length > 0)) && (
                                             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-800 pt-3">
-                                              {q.options && (
+                                              {q.options && q.options.length > 0 && (
                                                 <div className="space-y-1.5">
                                                   {q.options.map((opt, oIdx) => (
                                                     <div key={oIdx} className={`text-[12px] text-gray-400 flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500' : ''}`}>

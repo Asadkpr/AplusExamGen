@@ -19,6 +19,8 @@ interface PrintablePaperProps {
   headerStyle?: 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8';
   pageBreakAfterMCQ?: boolean;
   bubbleSheetPosition?: BubbleSheetPosition;
+  watermarkOpacity?: number;
+  papersPerSheet?: 1 | 2;
 }
 
 declare global {
@@ -621,12 +623,108 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   chaptersDisplay,
   headerStyle = 'default',
   pageBreakAfterMCQ = false,
-  bubbleSheetPosition = 'above_mcq'
+  bubbleSheetPosition = 'above_mcq',
+  watermarkOpacity,
+  papersPerSheet = 1
 }) => {
+  const isTwoPerSheet = papersPerSheet === 2 || layoutMode === 2;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [pageBreakMap, setPageBreakMap] = useState<Record<string, { endedPage: number; nextPage: number; isManual?: boolean }>>({});
   const [pageSummary, setPageSummary] = useState<{ totalPages: number; lastPageUsedPercent: number }>({ totalPages: 1, lastPageUsedPercent: 45 });
+  const [pageHeights, setPageHeights] = useState<Record<number, number>>({ 1: 750 });
+  const [bwLogoUrl, setBwLogoUrl] = useState<string>('');
+  const [watermarkLogoUrl, setWatermarkLogoUrl] = useState<string>('');
+
+  const effectiveWatermarkPercent =
+    watermarkOpacity !== undefined
+      ? Math.max(0, Math.min(60, watermarkOpacity))
+      : instituteProfile?.showWatermarkOnPapers === false
+      ? 0
+      : Math.max(0, Math.min(60, instituteProfile?.watermarkOpacity ?? 12));
+
+  useEffect(() => {
+    const rawLogo = instituteProfile?.logoUrl;
+    if (!rawLogo) {
+      setBwLogoUrl('');
+      setWatermarkLogoUrl('');
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    if (!rawLogo.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const w = img.naturalWidth || img.width || 240;
+        const h = img.naturalHeight || img.height || 240;
+
+        // 1. Header B&W Logo (preserves original background/alpha)
+        const c1 = document.createElement('canvas');
+        c1.width = w;
+        c1.height = h;
+        const ctx1 = c1.getContext('2d');
+        if (ctx1) {
+          ctx1.drawImage(img, 0, 0, w, h);
+          const imgData1 = ctx1.getImageData(0, 0, w, h);
+          const d1 = imgData1.data;
+          for (let i = 0; i < d1.length; i += 4) {
+            const gray = Math.round(0.299 * d1[i] + 0.587 * d1[i + 1] + 0.114 * d1[i + 2]);
+            d1[i] = gray;
+            d1[i + 1] = gray;
+            d1[i + 2] = gray;
+          }
+          ctx1.putImageData(imgData1, 0, 0);
+          setBwLogoUrl(c1.toDataURL('image/png'));
+        } else {
+          setBwLogoUrl(rawLogo);
+        }
+
+        // 2. Watermark B&W Logo (also strips pure white backgrounds so JPG logos blend cleanly)
+        const c2 = document.createElement('canvas');
+        c2.width = w;
+        c2.height = h;
+        const ctx2 = c2.getContext('2d');
+        if (ctx2) {
+          ctx2.drawImage(img, 0, 0, w, h);
+          const imgData2 = ctx2.getImageData(0, 0, w, h);
+          const d2 = imgData2.data;
+          for (let i = 0; i < d2.length; i += 4) {
+            const gray = Math.round(0.299 * d2[i] + 0.587 * d2[i + 1] + 0.114 * d2[i + 2]);
+            d2[i] = gray;
+            d2[i + 1] = gray;
+            d2[i + 2] = gray;
+            if (gray >= 248) {
+              d2[i + 3] = 0;
+            }
+          }
+          ctx2.putImageData(imgData2, 0, 0);
+          setWatermarkLogoUrl(c2.toDataURL('image/png'));
+        } else {
+          setWatermarkLogoUrl(rawLogo);
+        }
+      } catch {
+        setBwLogoUrl(rawLogo);
+        setWatermarkLogoUrl(rawLogo);
+      }
+    };
+    img.onerror = () => {
+      if (!cancelled) {
+        setBwLogoUrl(rawLogo);
+        setWatermarkLogoUrl(rawLogo);
+      }
+    };
+    img.src = rawLogo;
+    return () => {
+      cancelled = true;
+    };
+  }, [instituteProfile?.logoUrl]);
+
+  const displayLogoUrl = bwLogoUrl || instituteProfile?.logoUrl || '';
+  const displayWatermarkUrl = watermarkLogoUrl || displayLogoUrl;
 
   useEffect(() => {
     const calculatePagination = () => {
@@ -666,6 +764,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
       const items = Array.from(container.querySelectorAll('[data-block-id]')) as HTMLElement[];
       const newBreakMap: Record<string, { endedPage: number; nextPage: number; isManual?: boolean }> = {};
+      const nextPageHeights: Record<number, number> = {};
 
       let currentPage = 1;
       let currentPageStartY = 0;
@@ -682,6 +781,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         if (vBottom > maxVirtualBottom) maxVirtualBottom = vBottom;
 
         if (isManualBreak) {
+          nextPageHeights[currentPage] = Math.max(240, Math.round((vTop - currentPageStartY) / scaleRatio));
           newBreakMap[blockId] = {
             endedPage: currentPage,
             nextPage: currentPage + 1,
@@ -693,6 +793,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         }
 
         if (vBottom - currentPageStartY > a4PageHeightPx && vTop - currentPageStartY > minTopOffsetPx) {
+          nextPageHeights[currentPage] = Math.max(240, Math.round((vTop - currentPageStartY) / scaleRatio));
           newBreakMap[blockId] = {
             endedPage: currentPage,
             nextPage: currentPage + 1,
@@ -704,7 +805,17 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       }
 
       const lastPageHeight = Math.max(0, maxVirtualBottom - currentPageStartY);
+      nextPageHeights[currentPage] = Math.max(240, Math.round(lastPageHeight / scaleRatio));
       const usedPercent = Math.min(100, Math.max(5, Math.round((lastPageHeight / a4PageHeightPx) * 100)));
+
+      setPageHeights(prev => {
+        const pKeys = Object.keys(prev);
+        const nKeys = Object.keys(nextPageHeights);
+        if (pKeys.length === nKeys.length && pKeys.every(k => Math.abs((prev[Number(k)] || 0) - (nextPageHeights[Number(k)] || 0)) <= 4)) {
+          return prev;
+        }
+        return nextPageHeights;
+      });
 
       setPageBreakMap(prev => {
         const prevKeys = Object.keys(prev);
@@ -734,7 +845,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       clearTimeout(t2);
       window.removeEventListener('resize', calculatePagination);
     };
-  }, [questions, sections, baseFontSize, lineSpacing, medium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, classLevel, subject, timeAllowed, paperCode]);
+  }, [questions, sections, baseFontSize, lineSpacing, medium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, classLevel, subject, timeAllowed, paperCode, isTwoPerSheet]);
 
   const getLayoutStyles = (mode: number, baseSize: number) => {
     // Flexible baseSize scaling between 8px and 20px
@@ -752,7 +863,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           spacing: 'space-y-0',
           logoSize: 'w-8 h-8',
           mcqGap: 'gap-y-0',
-          optionGrid: 'grid-cols-2 gap-x-2 gap-y-0.5'
+          optionGrid: 'grid-cols-2 gap-x-6 gap-y-1'
         };
       default:
         return {
@@ -764,7 +875,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
           spacing: 'space-y-0',
           logoSize: 'w-14 h-14',
           mcqGap: 'gap-y-0',
-          optionGrid: 'grid-cols-2 gap-x-4 gap-y-1'
+          optionGrid: 'grid-cols-2 gap-x-8 gap-y-1.5'
         };
     }
   };
@@ -772,7 +883,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   const urduFontStack = "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif";
   const englishFontStack = "'Times New Roman', serif";
 
-  const styles = getLayoutStyles(layoutMode, baseFontSize);
+  const styles = getLayoutStyles(isTwoPerSheet ? 2 : layoutMode, baseFontSize);
   const fontFamily = englishFontStack;
   
   // Dynamic Spacing Calculation (-10 to 10 scale, 0 is compact default — NEVER negative margins so questions/lines never overlap)
@@ -807,7 +918,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   const cleanText = (val?: string) => (val || '').replace(/\r\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
 
   const renderQuestionText = (q: Question, counter?: any, textOverride?: string, urduOverride?: string, hideCounter: boolean = false, centerAlign: boolean = false) => {
-    const mainText = cleanText(textOverride || q.text || '');
+    const mainText = cleanText(textOverride || q.text || q.textUrdu || '');
     const urduText = cleanText(urduOverride || q.textUrdu || q.text || '');
     
     const isDualCounter = counter && typeof counter === 'object' && 'eng' in counter && 'urdu' in counter;
@@ -893,8 +1004,8 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   };
 
   const renderOptionContent = (q: Question, oIdx: number) => {
-    const optEng = cleanText(q.options ? q.options[oIdx] : '');
-    const optUrdu = cleanText(q.optionsUrdu ? q.optionsUrdu[oIdx] : '');
+    const optEng = cleanText((q.options && q.options[oIdx]) ? q.options[oIdx] : (q.optionsUrdu ? q.optionsUrdu[oIdx] : ''));
+    const optUrdu = cleanText((q.optionsUrdu && q.optionsUrdu[oIdx]) ? q.optionsUrdu[oIdx] : (q.options ? q.options[oIdx] : ''));
 
     if (medium === 'Urdu' || (medium === 'English' && isUrduText(optEng))) {
       const display = medium === 'Urdu' ? (optUrdu || optEng) : optEng;
@@ -917,7 +1028,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
     if (medium === 'Both') {
       const hasUrduOpt = isUrduText(optUrdu);
       return (
-        <div className="flex items-baseline gap-3" dir="ltr">
+        <div className="inline-flex items-baseline gap-6" dir="ltr">
           <span className="text-left text-black whitespace-pre-wrap inline-block" style={{ fontFamily: englishFontStack, lineHeight: dynamicLineHeight }}>{renderFormattedText(optEng)}</span>
           {optUrdu && (
             <span
@@ -950,37 +1061,69 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   };
 
   const hasQuestions = questions && questions.length > 0;
-  let runningMCQCounter = 0;
 
-  // Calculate total MCQ count and locate first/last MCQ sections
+  // Collect ordered MCQ questions and locate first/last MCQ sections
   let firstMCQSectionId: string | null = null;
   let lastMCQSectionId: string | null = null;
-  const totalMCQCount = sections.reduce((acc, sec) => {
-    if ((sec.type || '').toUpperCase() !== 'MCQ') return acc;
+  const orderedMCQQuestions: Question[] = [];
+  sections.forEach(sec => {
+    if ((sec.type || '').toUpperCase() !== 'MCQ') return;
     const secQs = questions.filter(
       q =>
         q.targetSectionId === sec.id ||
         (!q.targetSectionId && (q.type === sec.type || q.type?.toUpperCase() === sec.type?.toUpperCase()))
     );
-    if (secQs.length === 0) return acc;
+    if (secQs.length === 0) return;
     if (!firstMCQSectionId) firstMCQSectionId = sec.id;
     lastMCQSectionId = sec.id;
 
     if (sec.subParts && sec.subParts.length > 0) {
-      return (
-        acc +
-        sec.subParts.reduce((partAcc, part, pIdx) => {
-          const start = sec.subParts!.slice(0, pIdx).reduce((sAcc, p) => sAcc + (p.questionCount || 0), 0);
-          const partQs = secQs.slice(start, start + (part.questionCount || 0));
-          return partAcc + partQs.length;
-        }, 0)
-      );
+      sec.subParts.forEach((part, pIdx) => {
+        const start = sec.subParts!.slice(0, pIdx).reduce((sAcc, p) => sAcc + (p.questionCount || 0), 0);
+        const partQs = secQs.slice(start, start + (part.questionCount || 0));
+        orderedMCQQuestions.push(...partQs);
+      });
+    } else {
+      orderedMCQQuestions.push(...secQs);
     }
-    return acc + secQs.length;
-  }, 0);
+  });
+  const totalMCQCount = orderedMCQQuestions.length;
 
   // Determine if there is any MCQ section with questions
   const hasMCQWithQuestions = totalMCQCount > 0;
+
+  const getCorrectBubbleLetter = (q: Question): 'A' | 'B' | 'C' | 'D' | null => {
+    const raw = (q.correctAnswer || (q as any).answer || '').toString().trim();
+    if (!raw) return null;
+    const upper = raw.toUpperCase();
+    if (['A', 'B', 'C', 'D'].includes(upper)) return upper as 'A' | 'B' | 'C' | 'D';
+    const parenMatch = upper.match(/^[\(\[\s]*([ABCD])[\)\]\.\:\-\s]*$/);
+    if (parenMatch) return parenMatch[1] as 'A' | 'B' | 'C' | 'D';
+    const optMatch = upper.match(/^(?:OPTION|OPT|ANS|ANSWER)\s*[\(\[\:\-\s]*([ABCD])[\)\]\.\s]*$/);
+    if (optMatch) return optMatch[1] as 'A' | 'B' | 'C' | 'D';
+    if (['1', '2', '3', '4'].includes(raw)) {
+      return (['A', 'B', 'C', 'D'][parseInt(raw, 10) - 1]) as 'A' | 'B' | 'C' | 'D';
+    }
+    const urduMap: Record<string, 'A' | 'B' | 'C' | 'D'> = {
+      'الف': 'A',
+      'ا': 'A',
+      'ب': 'B',
+      'ج': 'C',
+      'د': 'D'
+    };
+    const cleanUrdu = raw.replace(/[\(\)\[\]\.\-\s]/g, '');
+    if (urduMap[cleanUrdu]) return urduMap[cleanUrdu];
+    const norm = raw.toLowerCase();
+    if (q.options && q.options.length > 0) {
+      const idx = q.options.findIndex(o => (o || '').trim().toLowerCase() === norm);
+      if (idx >= 0 && idx < 4) return (['A', 'B', 'C', 'D'][idx]) as 'A' | 'B' | 'C' | 'D';
+    }
+    if (q.optionsUrdu && q.optionsUrdu.length > 0) {
+      const idx = q.optionsUrdu.findIndex(o => (o || '').trim().toLowerCase() === norm);
+      if (idx >= 0 && idx < 4) return (['A', 'B', 'C', 'D'][idx]) as 'A' | 'B' | 'C' | 'D';
+    }
+    return null;
+  };
 
   // Find the first non-MCQ section that has questions and occurs after an MCQ section
   let firstSubjectiveSectionId: string | null = null;
@@ -998,27 +1141,329 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
     }
   }
 
+  const renderPageWatermark = (pageNum: number) => {
+    if (!displayWatermarkUrl || effectiveWatermarkPercent <= 0) return null;
+    const pageH = isTwoPerSheet ? 480 : (pageHeights[pageNum] || 750);
+    const wmSize = isTwoPerSheet ? 160 : Math.min(280, Math.max(150, Math.round(pageH * 0.42)));
+    const wmTop = isTwoPerSheet ? 140 : Math.max(115, Math.round((pageH - wmSize) / 2));
+
+    return (
+      <div
+        className="relative w-full h-0 overflow-visible pointer-events-none select-none z-0"
+        dir="ltr"
+        aria-hidden="true"
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: `${wmTop}px`,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: `${wmSize}px`,
+            height: `${wmSize}px`,
+            opacity: effectiveWatermarkPercent / 100,
+            pointerEvents: 'none'
+          }}
+          className="flex items-center justify-center"
+        >
+          <img
+            src={displayWatermarkUrl}
+            alt=""
+            className="w-full h-full object-contain grayscale"
+            style={{ filter: 'grayscale(100%)' }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const renderPaperHeader = () => {
+    const showLogo = Boolean(displayLogoUrl && instituteProfile?.showLogoOnPapers);
+    if (headerStyle === 'sba') {
+      return (
+        <div className="border border-black p-1.5 mb-2 relative z-10" style={{ borderColor: '#000000', fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+          <div className="flex items-start justify-between border-b border-black pb-1.5 mb-1.5">
+            {showLogo ? (
+              <div className="w-16 h-16 flex-shrink-0 border border-black p-0.5 bg-white">
+                <img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-full h-full object-contain grayscale" />
+              </div>
+            ) : (
+              <div className="w-16 h-16 flex-shrink-0 invisible" />
+            )}
+            <div className="flex-grow text-center px-2 flex flex-col justify-center items-center" style={{ lineHeight: '1.3' }}>
+              <h1 style={{ fontSize: '15px' }} className="font-bold uppercase text-black m-0">School Base Assessment (SBA)</h1>
+              <h2 style={{ fontSize: '14px' }} className="font-bold text-black mt-0.5 m-0">GRADE-{classLevel.replace(/\D/g,'') || '8'}</h2>
+              <h2 style={{ fontSize: '14px' }} className="font-bold text-black uppercase mt-0.5 m-0">SUBJECT: {subject}</h2>
+              <p style={{ fontSize: '11px' }} className="font-bold mt-0.5 mb-0 text-black">[{sections.map((s, i) => `Part ${String.fromCharCode(65+i)}: ${s.attemptCount * s.marksPerQuestion} Marks`).join(' ')} Total: {totalMarks} Marks]</p>
+            </div>
+            <div className="w-16 h-16 flex-shrink-0 flex flex-col justify-between">
+               <div className="w-14 h-14 border border-black p-0.5 ml-auto"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkAQMAAABKLAcXAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAABPElEQVQ4jZXUMY6EIBQG4Ecs7OACRq9BYeKVsNtK6KabuRLJFF7DiRfAjsLw73Nnd7NTLCNUfomE5/sfEr0sCwhP3Zw6YMnKUK3ugbc0JPIacRFwDz81w1YodXcimjOi3iaa3oork72C/63zpPjbZW8e8/WnE//q2ca2Tn+aekYWF+wm6XGdZV5qoY1zQOgiV5bTuD9zEGvkE85LwW2cw5G0zIuPEndH2lRzyMuu7shhAI7KCsQzsSvMVxoCZcWjg90KLysvSzQCmzeLJqpDXlMVQ8+PqYs8SzmZxgqEVqtd874C0QcNLtVYtMxrXGpZuS4qRJ66nHhJso8oaSjS11yrVKfm2ev/xXeFE2tpIm5UgY5bvBvghpjey3NuoZqxvNUx/lzh975zOv5Z4O7eVsi8+H1Wqw3pUKKX9QnB/E40GAtouwAAAABJRU5ErkJggg==" alt="QR Code" className="w-full h-full object-contain" /></div>
+            </div>
+          </div>
+          
+          <div style={{ fontSize: '12px', lineHeight: '1.4' }} className="flex flex-col gap-1.5 font-bold px-1 text-black">
+            <div className="flex items-end gap-2">
+              <span className="whitespace-nowrap shrink-0">School Name:</span>
+              <div className="flex-grow border-b border-black text-left pb-0.5 min-h-[18px]">{instituteProfile?.instituteName || ""}</div>
+            </div>
+            <div className="flex items-end gap-3">
+              <span className="whitespace-nowrap shrink-0">Student Name :</span>
+              <div className="flex-grow border-b border-black min-h-[16px]"></div>
+              <span className="whitespace-nowrap shrink-0">Roll Number :</span>
+              <div className="w-28 border-b border-black min-h-[16px]"></div>
+              <span className="whitespace-nowrap shrink-0">Section :</span>
+              <div className="w-24 border-b border-black min-h-[16px]"></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (headerStyle === 'layout3') {
+      return (
+        <div className="mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+          <div className="flex items-center justify-center mb-1.5 text-black border-b-[3px] border-black pb-1.5 gap-4">
+             {showLogo && (
+                <div className="w-20 h-12 flex-shrink-0"><img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-full h-full object-contain grayscale" /></div>
+             )}
+             <h1 style={{ fontSize: '22px', lineHeight: '1.2' }} className="font-black uppercase tracking-tighter m-0">{instituteProfile?.instituteName || "STEP ACADEMY"}</h1>
+          </div>
+          
+          <table className="w-full border-collapse border border-black text-black" style={{ fontSize: '11px', lineHeight: '1.35' }}>
+            <tbody>
+              <tr>
+                <td className="border border-black font-bold p-1 bg-black/5 w-16">Name</td>
+                <td colSpan={2} className="border border-black p-1 w-1/3"></td>
+                <td className="border border-black font-bold p-1 bg-black/5 w-16">Batch</td>
+                <td className="border border-black p-1"></td>
+                <td className="border border-black font-bold p-1 bg-black/5 w-16">Date</td>
+                <td colSpan={2} className="border border-black p-1 w-24"></td>
+              </tr>
+              <tr>
+                <td className="border border-black font-bold p-1 bg-black/5">Class</td>
+                <td className="border border-black p-1 font-bold text-center">{classLevel}</td>
+                <td className="border border-black font-bold p-1 bg-black/5 text-center w-16">Roll #</td>
+                <td className="border border-black p-1"></td>
+                <td className="border border-black font-bold p-1 bg-black/5">Subject</td>
+                <td className="border border-black p-1 font-bold text-center uppercase">{subject}</td>
+                <td className="border border-black font-bold p-1 bg-black/5">T. Marks</td>
+                <td className="border border-black p-1 font-bold text-center">{totalMarks}</td>
+              </tr>
+              <tr>
+                <td className="border border-black font-bold p-1 bg-black/5">Syllabus</td>
+                <td colSpan={5} className="border border-black p-1">{chaptersDisplay || ''}</td>
+                <td className="border border-black font-bold p-1 bg-black/5">Time</td>
+                <td className="border border-black p-1 font-bold text-center">{timeAllowed}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (headerStyle === 'layout4') {
+      return (
+        <div className="border-[1.5px] border-black mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+          <div className="text-center text-black border-b-[1.5px] border-black p-1.5">
+            <h1 style={{ fontSize: '18px', lineHeight: '1.25' }} className="font-black uppercase m-0">{instituteProfile?.instituteName || "APLUS ACADEMY"}</h1>
+            <p style={{ fontSize: '10px', lineHeight: '1.3' }} className="font-bold m-0 mt-0.5">{instituteProfile?.address || ""}</p>
+          </div>
+          
+          <div className="flex">
+            <div className="w-[35%] flex flex-col border-r-[1.5px] border-black">
+              <div className="flex border-b-[1.5px] border-black h-1/3">
+                <div className="w-1/2 p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Student Name:</div>
+                <div className="w-1/2 p-1"></div>
+              </div>
+              <div className="flex border-b-[1.5px] border-black h-1/3">
+                <div className="w-1/2 p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Paper Type:</div>
+                <div className="w-1/2 p-1 text-[11px] font-bold flex items-center text-black">Subjective</div>
+              </div>
+              <div className="flex h-1/3">
+                <div className="w-1/2 p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Paper Date:</div>
+                <div className="w-1/2 p-1"></div>
+              </div>
+            </div>
+            
+            <div className="w-[30%] flex items-center justify-center border-r-[1.5px] border-black p-1">
+               {showLogo ? (
+                  <img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-16 h-16 object-contain grayscale" />
+               ) : (
+                  <div className="text-[10px] font-bold text-black/30">LOGO</div>
+               )}
+            </div>
+            
+            <div className="w-[35%] flex flex-col">
+              <div className="flex border-b-[1.5px] border-black h-1/3">
+                <div className="w-[45%] p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Class:</div>
+                <div className="w-[55%] p-1 text-[11px] font-bold flex items-center text-black pl-2">{classLevel}</div>
+              </div>
+              <div className="flex border-b-[1.5px] border-black h-1/3">
+                <div className="w-[45%] p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Subject:</div>
+                <div className="w-[55%] p-1 text-[11px] font-bold flex items-center text-black pl-2">{subject}</div>
+              </div>
+              <div className="flex h-1/3">
+                <div className="w-[45%] p-1 font-bold text-[10px] leading-tight border-r-[1.5px] border-black flex items-center text-black">Maximum Marks:</div>
+                <div className="w-[55%] p-1 text-[11px] font-bold flex items-center text-black pl-2">{totalMarks}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (headerStyle === 'layout5') {
+      return (
+        <div className="border border-black mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+           <div className="flex border-b border-black">
+              <div className="w-[20%] p-1.5 flex items-center justify-center border-r border-black">
+                 {showLogo ? (
+                    <img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-16 h-12 object-contain grayscale" />
+                 ) : (
+                    <div className="text-[10px] font-bold text-black/30">LOGO</div>
+                 )}
+              </div>
+              <div className="w-[80%] text-center p-1.5 flex flex-col justify-center items-center text-black">
+                 <h1 style={{ fontSize: '18px', lineHeight: '1.25' }} className="font-bold m-0">{instituteProfile?.instituteName || "ACADEMY NAME"}</h1>
+                 <p style={{ fontSize: '10px', lineHeight: '1.3' }} className="font-bold m-0 mt-0.5">{instituteProfile?.address || ""}</p>
+                 {instituteProfile?.showContactOnPapers && <p style={{ fontSize: '10px', lineHeight: '1.3' }} className="font-bold m-0">{instituteProfile?.contactNumber}</p>}
+              </div>
+           </div>
+           
+           <table className="w-full border-collapse text-black" style={{ fontSize: '11px', lineHeight: '1.35' }}>
+              <tbody>
+                 <tr className="border-b border-black">
+                    <td className="p-1 border-r border-black w-1/4">Name:</td>
+                    <td className="p-1 border-r border-black w-1/4">Roll:</td>
+                    <td className="p-1 border-r border-black w-1/4">Section:</td>
+                    <td className="p-1 w-1/4">Time: <span className="font-bold ml-1">{timeAllowed}</span></td>
+                 </tr>
+                 <tr>
+                    <td className="p-1 border-r border-black w-1/4">Date:</td>
+                    <td className="p-1 border-r border-black w-1/4">Paper: <span className="font-bold ml-1">{subject}</span></td>
+                    <td className="p-1 border-r border-black w-1/4">Syllabus:</td>
+                    <td className="p-1 w-1/4">Obt Marks:</td>
+                 </tr>
+              </tbody>
+           </table>
+        </div>
+      );
+    }
+
+    if (headerStyle === 'layout6') {
+      return (
+        <div className="border-[2px] border-black p-2 mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+           <div className="flex items-center justify-center mb-1.5 text-black pb-1 gap-4">
+              {showLogo && (
+                 <div className="w-16 h-16 flex-shrink-0 border border-black p-1"><img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-full h-full object-contain grayscale" /></div>
+              )}
+              <div className="flex flex-col items-center">
+                 <h1 style={{ fontSize: '20px', lineHeight: '1.2' }} className="font-black uppercase m-0 tracking-wider">{instituteProfile?.instituteName || "INSTITUTE NAME"}</h1>
+                 <p style={{ fontSize: '11px', lineHeight: '1.3' }} className="font-bold m-0 mt-1">{instituteProfile?.address || ""}</p>
+              </div>
+           </div>
+           <div style={{ fontSize: '11px', lineHeight: '1.35' }} className="flex justify-between border-t-[2px] border-black pt-1.5 font-bold text-black uppercase">
+              <span>Class: {classLevel}</span>
+              <span>Subject: {subject}</span>
+              <span>Time: {timeAllowed}</span>
+              <span>Marks: {totalMarks}</span>
+           </div>
+        </div>
+      );
+    }
+
+    if (headerStyle === 'layout7') {
+      return (
+        <div className="mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+           <div className="flex justify-between items-end border-b-2 border-black pb-1.5 text-black">
+              <div className="flex flex-col">
+                 <h1 style={{ fontSize: '22px', lineHeight: '1.2' }} className="font-black uppercase m-0">{instituteProfile?.instituteName || "ACADEMY NAME"}</h1>
+                 <p style={{ fontSize: '12px', lineHeight: '1.3' }} className="font-bold m-0 mt-1 tracking-wide">{instituteProfile?.address || "Address of the institute"}</p>
+              </div>
+              {showLogo && (
+                 <div className="w-14 h-14 flex-shrink-0"><img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-full h-full object-contain grayscale" /></div>
+              )}
+           </div>
+           <div style={{ fontSize: '12px', lineHeight: '1.4' }} className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-4 gap-y-2 pt-2 font-bold text-black items-end">
+              <div>Name:</div><div className="border-b border-black min-h-[18px]"></div>
+              <div>Class:</div><div className="border-b border-black flex items-center pb-0.5 min-h-[18px]">{classLevel}</div>
+              <div>Subject:</div><div className="border-b border-black flex items-center uppercase pb-0.5 min-h-[18px]">{subject}</div>
+              <div>Date:</div><div className="border-b border-black min-h-[18px]"></div>
+           </div>
+        </div>
+      );
+    }
+
+    if (headerStyle === 'layout8') {
+      return (
+        <div className="mb-3 relative z-10 border border-black rounded-xl overflow-hidden" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+           <div className="bg-black text-white p-2 flex justify-between items-center">
+              <div className="flex flex-col">
+                 <h1 style={{ fontSize: '18px', lineHeight: '1.2' }} className="font-black uppercase m-0">{instituteProfile?.instituteName || "INSTITUTE"}</h1>
+                 <p style={{ fontSize: '9px', lineHeight: '1.3' }} className="font-normal m-0 mt-0.5">{instituteProfile?.address || "Campus Address"}</p>
+              </div>
+              <div className="text-right flex flex-col">
+                 <span style={{ fontSize: '14px', lineHeight: '1.25' }} className="font-bold uppercase">{subject}</span>
+                 <span style={{ fontSize: '10px', lineHeight: '1.3' }}>Max Marks: {totalMarks}</span>
+              </div>
+           </div>
+           <div style={{ fontSize: '11px', lineHeight: '1.35' }} className="p-2 bg-white text-black flex justify-between items-end font-bold">
+              <span className="flex-1 flex items-end gap-2">Name: <span className="border-b border-black flex-1 mr-4 min-h-[16px]"></span></span>
+              <span>Class: {classLevel}</span>
+           </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="border-b-2 pb-1 mb-1 z-10 relative print:mt-0" style={{ borderColor: '#000000', fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+        <div className="flex items-center justify-between mb-1">
+          {showLogo ? (
+            <div className={`${styles.logoSize} flex-shrink-0`}><img src={displayLogoUrl} alt="Logo" style={{ filter: 'grayscale(100%)' }} className="w-full h-full object-contain grayscale" /></div>
+          ) : (
+            <div className={`${styles.logoSize} flex-shrink-0 invisible`} />
+          )}
+          <div className="flex-grow text-center px-1">
+            <h1 style={{ fontSize: styles.headerTitle, lineHeight: '1.25' }} className="font-bold uppercase tracking-tight mb-0.5 text-black">{instituteProfile?.instituteName || "INSTITUTE NAME"}</h1>
+            <p style={{ fontSize: styles.headerInfo, lineHeight: '1.3' }} className="flex items-center justify-center gap-2 opacity-80 text-black">
+              <span>{instituteProfile?.address}</span>
+              {instituteProfile?.showContactOnPapers && <><span className="opacity-30">|</span><span className="font-semibold">{instituteProfile?.contactNumber}</span></>}
+            </p>
+          </div>
+          <div className={`${styles.logoSize} flex-shrink-0 invisible`} aria-hidden="true" />
+        </div>
+        
+        <div style={{ fontSize: styles.headerInfo, borderTop: '1px solid #000000', lineHeight: '1.35' }} className="flex justify-between items-center font-bold py-1 px-1 uppercase tracking-tighter text-black">
+          <span>Class: <span className="font-normal">{classLevel}</span></span>
+          <span>Subject: <span className="font-normal">{subject}</span></span>
+          <span>Time: <span className="font-normal">{timeAllowed}</span></span>
+          <div className="flex gap-2 items-center">
+            <span>Total Marks: <span className="font-normal">{totalMarks}</span></span>
+            {paperCode && <span>Paper Code: <span className="font-bold border-2 px-1 py-0 rounded ml-0.5" style={{ borderColor: '#000000' }}>{paperCode}</span></span>}
+          </div>
+        </div>
+        
+        <div style={{ fontSize: styles.headerInfo, borderTop: '1px solid #000000', lineHeight: '1.35' }} className="flex justify-between items-center font-bold pt-1 px-1 text-black">
+          <span>Student: __________________________</span>
+          <div className="flex gap-4">
+            <span>Roll No: ________</span>
+            {chaptersDisplay && <span>CH: <span className="font-normal">{chaptersDisplay}</span></span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderBubbleSheet = (blockId: string) => {
     if (!hasMCQWithQuestions || totalMCQCount <= 0 || bubbleSheetPosition === 'none') return null;
 
     const bBreak = pageBreakMap[blockId];
     const colCount =
-      totalMCQCount <= 4
-        ? totalMCQCount
-        : totalMCQCount % 4 === 0 && totalMCQCount <= 16
-        ? 4
-        : 5;
-
-    const gridColsClass =
-      colCount === 1
-        ? 'grid-cols-1'
-        : colCount === 2
-        ? 'grid-cols-2'
-        : colCount === 3
-        ? 'grid-cols-3'
-        : colCount === 4
-        ? 'grid-cols-4'
-        : 'grid-cols-5';
+      totalMCQCount <= 6
+        ? Math.max(totalMCQCount, 6)
+        : totalMCQCount === 12
+        ? 6
+        : 7;
 
     return (
       <React.Fragment key={blockId}>
@@ -1029,11 +1474,12 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
             isManual={bBreak.isManual}
           />
         )}
+        {bBreak && renderPageWatermark(bBreak.nextPage)}
         <div
           data-block-id={blockId}
           dir="ltr"
-          style={{ fontFamily: englishFontStack, lineHeight: '1.3' }}
-          className={`border-[1.5px] border-black rounded-sm px-2 py-1 my-1 bg-white text-black break-inside-avoid ${bBreak ? 'page-break-before print:pt-2' : ''}`}
+          style={{ fontFamily: englishFontStack, lineHeight: '1.25' }}
+          className={`border-[1.5px] border-black rounded-sm px-1.5 py-1 my-1 bg-white text-black break-inside-avoid ${bBreak ? 'page-break-before print:pt-2' : ''}`}
         >
           <div className="flex items-center justify-between border-b border-black pb-0.5 mb-1 gap-2">
             <div className="flex items-center gap-2">
@@ -1062,23 +1508,27 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
             )}
           </div>
 
-          <div className={`grid ${gridColsClass} gap-x-2 gap-y-1`} dir="ltr">
+          <div
+            className="grid gap-x-1 gap-y-1"
+            style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+            dir="ltr"
+          >
             {Array.from({ length: totalMCQCount }).map((_, idx) => {
               const qNum = idx + 1;
               return (
                 <div
                   key={qNum}
-                  className="flex items-center justify-between border border-black/30 rounded-[2px] px-1.5 py-0.5 bg-white"
+                  className="inline-flex items-center justify-start gap-1 border border-black/30 rounded-[2px] px-1 py-0.5 bg-white"
                 >
-                  <span className="font-bold text-[10px] text-black min-w-[16px] text-left leading-none">
+                  <span className="font-bold text-[9.5px] text-black shrink-0 text-left leading-none">
                     {qNum}.
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="inline-flex items-center gap-[2px] shrink-0">
                     {['A', 'B', 'C', 'D'].map(letter => (
                       <svg
                         key={letter}
-                        width="14"
-                        height="14"
+                        width="12.5"
+                        height="12.5"
                         viewBox="0 0 16 16"
                         xmlns="http://www.w3.org/2000/svg"
                         style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
@@ -1108,274 +1558,106 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
     );
   };
 
-  return (
-    <div className="print-container">
-      <style>{`
-        .pdf-exporting .print\\:hidden,
-        .pdf-exporting .page-boundary-marker {
-          display: none !important;
-        }
-      `}</style>
-      <div 
-        id="printable-section"
-        ref={containerRef}
-        className="p-3 tex2jax_ignore relative overflow-visible" 
-        style={{ 
-          backgroundColor: '#ffffff', 
-          color: '#000000',           
-          fontFamily: fontFamily, 
-          lineHeight: dynamicLineHeight, 
-          boxSizing: 'border-box', 
-          paddingBottom: '3mm', 
-          width: '100%', 
-          margin: '0 auto' 
-        }}
+  const renderAnswerKeyBubbleSheet = (idPrefix: string = '') => {
+    if (!showAnswerKey || orderedMCQQuestions.length === 0) return null;
+
+    const colCount =
+      totalMCQCount <= 6
+        ? Math.max(totalMCQCount, 6)
+        : totalMCQCount === 12
+        ? 6
+        : 7;
+
+    return (
+      <div
+        data-block-id={`${idPrefix}mcq-answer-key-block`}
         dir="ltr"
+        style={{ fontFamily: englishFontStack, lineHeight: '1.25' }}
+        className="mt-1.5 border-[1.5px] border-black rounded-sm px-1.5 py-1 bg-white text-black break-inside-avoid z-10 relative"
       >
+        <div className="flex items-center justify-between border-b border-black pb-0.5 mb-1 gap-2">
+          <span className="font-black uppercase tracking-wider text-[10px] text-black">
+            ANSWER KEY — BUBBLE SHEET (MCQs: 1–{totalMCQCount})
+          </span>
+          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-black">
+            <span>Correct Option:</span>
+            <svg width="11" height="11" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+              <circle cx="6" cy="6" r="5" fill="#000000" stroke="#000000" strokeWidth="1" />
+            </svg>
+          </span>
+        </div>
+
+        <div
+          className="grid gap-x-1 gap-y-1"
+          style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+          dir="ltr"
+        >
+          {orderedMCQQuestions.map((mcq, idx) => {
+            const qNum = idx + 1;
+            const correctLetter = getCorrectBubbleLetter(mcq);
+            return (
+              <div
+                key={`${idPrefix}key-${mcq.id}-${qNum}`}
+                className="inline-flex items-center justify-start gap-1 border border-black/30 rounded-[2px] px-1 py-0.5 bg-white"
+              >
+                <span className="font-bold text-[9.5px] text-black shrink-0 text-left leading-none">
+                  {qNum}.
+                </span>
+                <div className="inline-flex items-center gap-[2px] shrink-0">
+                  {(['A', 'B', 'C', 'D'] as const).map(letter => {
+                    const isFilled = correctLetter === letter;
+                    return (
+                      <svg
+                        key={letter}
+                        width="12.5"
+                        height="12.5"
+                        viewBox="0 0 16 16"
+                        xmlns="http://www.w3.org/2000/svg"
+                        style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
+                      >
+                        <circle
+                          cx="8"
+                          cy="8"
+                          r="6.8"
+                          fill={isFilled ? '#000000' : '#ffffff'}
+                          stroke="#000000"
+                          strokeWidth="1.25"
+                        />
+                        <text
+                          x="8"
+                          y="8.4"
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize="8.5"
+                          fontWeight="bold"
+                          fontFamily="Times New Roman, serif"
+                          fill={isFilled ? '#ffffff' : '#000000'}
+                        >
+                          {letter}
+                        </text>
+                      </svg>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPaperCopy = (copyIndex: number) => {
+    const idPrefix = copyIndex === 0 ? '' : `copy${copyIndex + 1}-`;
+    let runningMCQCounter = 0;
+
+    return (
+      <div className="relative w-full">
+        {/* PAGE 1 WATERMARK */}
+        {renderPageWatermark(1)}
+
         {/* HEADER BLOCK */}
-        {headerStyle === 'sba' ? (
-          <div className="border border-black p-1.5 mb-2 relative z-10" style={{ borderColor: '#000000', fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-            <div className="flex items-start justify-between border-b border-black pb-1.5 mb-1.5">
-              {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers ? (
-                <div className="w-16 h-16 flex-shrink-0 border border-black p-0.5 bg-white"><img src={instituteProfile.logoUrl} alt="Logo" className="w-full h-full object-contain" /></div>
-              ) : (
-                <div className="w-16 h-16 flex-shrink-0 invisible" />
-              )}
-              <div className="flex-grow text-center px-2 flex flex-col justify-center items-center" style={{ lineHeight: '1.3' }}>
-                <h1 style={{ fontSize: '15px' }} className="font-bold uppercase text-black m-0">FIRST TERM SCHOOL-BASED ASSESSMENT (SBA) 2026-27</h1>
-                <h2 style={{ fontSize: '14px' }} className="font-bold text-black mt-0.5 m-0">GRADE-{classLevel.replace(/\D/g,'') || '8'}</h2>
-                <h2 style={{ fontSize: '14px' }} className="font-bold text-black uppercase mt-0.5 m-0">SUBJECT: {subject}</h2>
-                <p style={{ fontSize: '11px' }} className="font-bold mt-0.5 mb-0 text-black">[{sections.map((s, i) => `Part ${String.fromCharCode(65+i)}: ${s.attemptCount * s.marksPerQuestion} Marks`).join(' ')} Total: {totalMarks} Marks]</p>
-              </div>
-              <div className="w-16 h-16 flex-shrink-0 flex flex-col justify-between">
-                 <div className="w-14 h-14 border border-black p-0.5 ml-auto"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkAQMAAABKLAcXAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAABPElEQVQ4jZXUMY6EIBQG4Ecs7OACRq9BYeKVsNtK6KabuRLJFF7DiRfAjsLw73Nnd7NTLCNUfomE5/sfEr0sCwhP3Zw6YMnKUK3ugbc0JPIacRFwDz81w1YodXcimjOi3iaa3oork72C/63zpPjbZW8e8/WnE//q2ca2Tn+aekYWF+wm6XGdZV5qoY1zQOgiV5bTuD9zEGvkE85LwW2cw5G0zIuPEndH2lRzyMuu7shhAI7KCsQzsSvMVxoCZcWjg90KLysvSzQCmzeLJqpDXlMVQ8+PqYs8SzmZxgqEVqtd874C0QcNLtVYtMxrXGpZuS4qRJ66nHhJso8oaSjS11yrVKfm2ev/xXeFE2tpIm5UgY5bvBvghpjey3NuoZqxvNUx/lzh975zOv5Z4O7eVsi8+H1Wqw3pUKKX9QnB/E40GAtouwAAAABJRU5ErkJggg==" alt="QR Code" className="w-full h-full object-contain" /></div>
-              </div>
-            </div>
-            
-            <div style={{ fontSize: '12px', lineHeight: '1.4' }} className="flex flex-col gap-1.5 font-bold px-1 text-black">
-              <div className="flex items-end gap-2">
-                <span className="whitespace-nowrap shrink-0">School Name:</span>
-                <div className="flex-grow border-b border-black text-left pb-0.5 min-h-[18px]">{instituteProfile?.instituteName || ""}</div>
-              </div>
-              <div className="flex items-end gap-3">
-                <span className="whitespace-nowrap shrink-0">Student Name :</span>
-                <div className="flex-grow border-b border-black min-h-[16px]"></div>
-                <span className="whitespace-nowrap shrink-0">Roll Number :</span>
-                <div className="w-28 border-b border-black min-h-[16px]"></div>
-                <span className="whitespace-nowrap shrink-0">Section :</span>
-                <div className="w-24 border-b border-black min-h-[16px]"></div>
-              </div>
-            </div>
-          </div>
-        ) : headerStyle === 'layout3' ? (
-          <div className="mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-            <div className="flex items-center justify-center mb-1.5 text-black border-b-[3px] border-black pb-1.5 gap-4">
-               {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers && (
-                  <div className="w-20 h-12 flex-shrink-0"><img src={instituteProfile.logoUrl} alt="Logo" className="w-full h-full object-contain" /></div>
-               )}
-               <h1 style={{ fontSize: '22px', lineHeight: '1.2' }} className="font-black uppercase tracking-tighter m-0">{instituteProfile?.instituteName || "STEP ACADEMY"}</h1>
-            </div>
-            
-            <table className="w-full border-collapse border border-black text-black" style={{ fontSize: '11px', lineHeight: '1.35' }}>
-              <tbody>
-                <tr>
-                  <td className="border border-black font-bold p-1 bg-black/5 w-16">Name</td>
-                  <td colSpan={2} className="border border-black p-1 w-1/3"></td>
-                  <td className="border border-black font-bold p-1 bg-black/5 w-16">Batch</td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black font-bold p-1 bg-black/5 w-16">Date</td>
-                  <td colSpan={2} className="border border-black p-1 w-24"></td>
-                </tr>
-                <tr>
-                  <td className="border border-black font-bold p-1 bg-black/5">Class</td>
-                  <td className="border border-black p-1 font-bold text-center">{classLevel}</td>
-                  <td className="border border-black font-bold p-1 bg-black/5 text-center w-16">Roll #</td>
-                  <td className="border border-black p-1"></td>
-                  <td className="border border-black font-bold p-1 bg-black/5">Subject</td>
-                  <td className="border border-black p-1 font-bold text-center uppercase">{subject}</td>
-                  <td className="border border-black font-bold p-1 bg-black/5">T. Marks</td>
-                  <td className="border border-black p-1 font-bold text-center">{totalMarks}</td>
-                </tr>
-                <tr>
-                  <td className="border border-black font-bold p-1 bg-black/5">Syllabus</td>
-                  <td colSpan={5} className="border border-black p-1">{chaptersDisplay || ''}</td>
-                  <td className="border border-black font-bold p-1 bg-black/5">Time</td>
-                  <td className="border border-black p-1 font-bold text-center">{timeAllowed}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        ) : headerStyle === 'layout4' ? (
-          <div className="border-[1.5px] border-black mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-            <div className="text-center text-black border-b-[1.5px] border-black p-1.5">
-              <h1 style={{ fontSize: '18px', lineHeight: '1.25' }} className="font-black uppercase m-0">{instituteProfile?.instituteName || "APLUS ACADEMY"}</h1>
-              <p style={{ fontSize: '10px', lineHeight: '1.3' }} className="font-bold m-0 mt-0.5">{instituteProfile?.address || ""}</p>
-            </div>
-            
-            <div className="flex">
-              <div className="w-[35%] flex flex-col border-r-[1.5px] border-black">
-                <div className="flex border-b-[1.5px] border-black h-1/3">
-                  <div className="w-1/2 p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Student Name:</div>
-                  <div className="w-1/2 p-1"></div>
-                </div>
-                <div className="flex border-b-[1.5px] border-black h-1/3">
-                  <div className="w-1/2 p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Paper Type:</div>
-                  <div className="w-1/2 p-1 text-[11px] font-bold flex items-center text-black">Subjective</div>
-                </div>
-                <div className="flex h-1/3">
-                  <div className="w-1/2 p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Paper Date:</div>
-                  <div className="w-1/2 p-1"></div>
-                </div>
-              </div>
-              
-              <div className="w-[30%] flex items-center justify-center border-r-[1.5px] border-black p-1">
-                 {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers ? (
-                    <img src={instituteProfile.logoUrl} alt="Logo" className="w-16 h-16 object-contain" />
-                 ) : (
-                    <div className="text-[10px] font-bold text-black/30">LOGO</div>
-                 )}
-              </div>
-              
-              <div className="w-[35%] flex flex-col">
-                <div className="flex border-b-[1.5px] border-black h-1/3">
-                  <div className="w-[45%] p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Class:</div>
-                  <div className="w-[55%] p-1 text-[11px] font-bold flex items-center text-black pl-2">{classLevel}</div>
-                </div>
-                <div className="flex border-b-[1.5px] border-black h-1/3">
-                  <div className="w-[45%] p-1 font-bold text-[11px] border-r-[1.5px] border-black flex items-center text-black">Subject:</div>
-                  <div className="w-[55%] p-1 text-[11px] font-bold flex items-center text-black pl-2">{subject}</div>
-                </div>
-                <div className="flex h-1/3">
-                  <div className="w-[45%] p-1 font-bold text-[10px] leading-tight border-r-[1.5px] border-black flex items-center text-black">Maximum Marks:</div>
-                  <div className="w-[55%] p-1 text-[11px] font-bold flex items-center text-black pl-2">{totalMarks}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : headerStyle === 'layout5' ? (
-          <div className="border border-black mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-             <div className="flex border-b border-black">
-                <div className="w-[20%] p-1.5 flex items-center justify-center border-r border-black">
-                   {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers ? (
-                      <img src={instituteProfile.logoUrl} alt="Logo" className="w-16 h-12 object-contain" />
-                   ) : (
-                      <div className="text-[10px] font-bold text-black/30">LOGO</div>
-                   )}
-                </div>
-                <div className="w-[80%] text-center p-1.5 flex flex-col justify-center items-center text-black">
-                   <h1 style={{ fontSize: '18px', lineHeight: '1.25' }} className="font-bold m-0">{instituteProfile?.instituteName || "ACADEMY NAME"}</h1>
-                   <p style={{ fontSize: '10px', lineHeight: '1.3' }} className="font-bold m-0 mt-0.5">{instituteProfile?.address || ""}</p>
-                   {instituteProfile?.showContactOnPapers && <p style={{ fontSize: '10px', lineHeight: '1.3' }} className="font-bold m-0">{instituteProfile?.contactNumber}</p>}
-                </div>
-             </div>
-             
-             <table className="w-full border-collapse text-black" style={{ fontSize: '11px', lineHeight: '1.35' }}>
-                <tbody>
-                   <tr className="border-b border-black">
-                      <td className="p-1 border-r border-black w-1/4">Name:</td>
-                      <td className="p-1 border-r border-black w-1/4">Roll:</td>
-                      <td className="p-1 border-r border-black w-1/4">Section:</td>
-                      <td className="p-1 w-1/4">Time: <span className="font-bold ml-1">{timeAllowed}</span></td>
-                   </tr>
-                   <tr>
-                      <td className="p-1 border-r border-black w-1/4">Date:</td>
-                      <td className="p-1 border-r border-black w-1/4">Paper: <span className="font-bold ml-1">{subject}</span></td>
-                      <td className="p-1 border-r border-black w-1/4">Syllabus:</td>
-                      <td className="p-1 w-1/4">Obt Marks:</td>
-                   </tr>
-                </tbody>
-             </table>
-          </div>
-        ) : headerStyle === 'layout6' ? (
-          <div className="border-[2px] border-black p-2 mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-             <div className="flex items-center justify-center mb-1.5 text-black pb-1 gap-4">
-                {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers && (
-                   <div className="w-16 h-16 flex-shrink-0 border border-black p-1"><img src={instituteProfile.logoUrl} alt="Logo" className="w-full h-full object-contain" /></div>
-                )}
-                <div className="flex flex-col items-center">
-                   <h1 style={{ fontSize: '20px', lineHeight: '1.2' }} className="font-black uppercase m-0 tracking-wider">{instituteProfile?.instituteName || "INSTITUTE NAME"}</h1>
-                   <p style={{ fontSize: '11px', lineHeight: '1.3' }} className="font-bold m-0 mt-1">{instituteProfile?.address || ""}</p>
-                </div>
-             </div>
-             <div style={{ fontSize: '11px', lineHeight: '1.35' }} className="flex justify-between border-t-[2px] border-black pt-1.5 font-bold text-black uppercase">
-                <span>Class: {classLevel}</span>
-                <span>Subject: {subject}</span>
-                <span>Time: {timeAllowed}</span>
-                <span>Marks: {totalMarks}</span>
-             </div>
-          </div>
-        ) : headerStyle === 'layout7' ? (
-          <div className="mb-2 relative z-10" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-             <div className="flex justify-between items-end border-b-2 border-black pb-1.5 text-black">
-                <div className="flex flex-col">
-                   <h1 style={{ fontSize: '22px', lineHeight: '1.2' }} className="font-black uppercase m-0">{instituteProfile?.instituteName || "ACADEMY NAME"}</h1>
-                   <p style={{ fontSize: '12px', lineHeight: '1.3' }} className="font-bold m-0 mt-1 tracking-wide">{instituteProfile?.address || "Address of the institute"}</p>
-                </div>
-                {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers && (
-                   <div className="w-14 h-14 flex-shrink-0"><img src={instituteProfile.logoUrl} alt="Logo" className="w-full h-full object-contain" /></div>
-                )}
-             </div>
-             <div style={{ fontSize: '12px', lineHeight: '1.4' }} className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-4 gap-y-2 pt-2 font-bold text-black items-end">
-                <div>Name:</div><div className="border-b border-black min-h-[18px]"></div>
-                <div>Class:</div><div className="border-b border-black flex items-center pb-0.5 min-h-[18px]">{classLevel}</div>
-                <div>Subject:</div><div className="border-b border-black flex items-center uppercase pb-0.5 min-h-[18px]">{subject}</div>
-                <div>Date:</div><div className="border-b border-black min-h-[18px]"></div>
-             </div>
-          </div>
-        ) : headerStyle === 'layout8' ? (
-          <div className="mb-3 relative z-10 border border-black rounded-xl overflow-hidden" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-             <div className="bg-black text-white p-2 flex justify-between items-center">
-                <div className="flex flex-col">
-                   <h1 style={{ fontSize: '18px', lineHeight: '1.2' }} className="font-black uppercase m-0">{instituteProfile?.instituteName || "INSTITUTE"}</h1>
-                   <p style={{ fontSize: '9px', lineHeight: '1.3' }} className="font-normal m-0 mt-0.5">{instituteProfile?.address || "Campus Address"}</p>
-                </div>
-                <div className="text-right flex flex-col">
-                   <span style={{ fontSize: '14px', lineHeight: '1.25' }} className="font-bold uppercase">{subject}</span>
-                   <span style={{ fontSize: '10px', lineHeight: '1.3' }}>Max Marks: {totalMarks}</span>
-                </div>
-             </div>
-             <div style={{ fontSize: '11px', lineHeight: '1.35' }} className="p-2 bg-white text-black flex justify-between items-end font-bold">
-                <span className="flex-1 flex items-end gap-2">Name: <span className="border-b border-black flex-1 mr-4 min-h-[16px]"></span></span>
-                <span>Class: {classLevel}</span>
-             </div>
-          </div>
-        ) : (
-          <div className="border-b-2 pb-1 mb-1 z-10 relative print:mt-0" style={{ borderColor: '#000000', fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-            <div className="flex items-center justify-between mb-1">
-              {instituteProfile?.logoUrl && instituteProfile.showLogoOnPapers ? (
-                <div className={`${styles.logoSize} flex-shrink-0`}><img src={instituteProfile.logoUrl} alt="Logo" className="w-full h-full object-contain" /></div>
-              ) : (
-                <div className={`${styles.logoSize} flex-shrink-0 invisible`} />
-              )}
-              <div className="flex-grow text-center px-1">
-                <h1 style={{ fontSize: styles.headerTitle, lineHeight: '1.25' }} className="font-bold uppercase tracking-tight mb-0.5 text-black">{instituteProfile?.instituteName || "INSTITUTE NAME"}</h1>
-                <p style={{ fontSize: styles.headerInfo, lineHeight: '1.3' }} className="flex items-center justify-center gap-2 opacity-80 text-black">
-                  <span>{instituteProfile?.address}</span>
-                  {instituteProfile?.showContactOnPapers && <><span className="opacity-30">|</span><span className="font-semibold">{instituteProfile?.contactNumber}</span></>}
-                </p>
-              </div>
-              <div className={`${styles.logoSize} flex-shrink-0 invisible`} aria-hidden="true" />
-            </div>
-            
-            <div style={{ fontSize: styles.headerInfo, borderTop: '1px solid #000000', lineHeight: '1.35' }} className="flex justify-between items-center font-bold py-1 px-1 uppercase tracking-tighter text-black">
-              <span>Class: <span className="font-normal">{classLevel}</span></span>
-              <span>Subject: <span className="font-normal">{subject}</span></span>
-              <span>Time: <span className="font-normal">{timeAllowed}</span></span>
-              <div className="flex gap-2 items-center">
-                <span>Total Marks: <span className="font-normal">{totalMarks}</span></span>
-                {paperCode && <span>Paper Code: <span className="font-bold border-2 px-1 py-0 rounded ml-0.5" style={{ borderColor: '#000000' }}>{paperCode}</span></span>}
-              </div>
-            </div>
-            
-            <div style={{ fontSize: styles.headerInfo, borderTop: '1px solid #000000', lineHeight: '1.35' }} className="flex justify-between items-center font-bold pt-1 px-1 text-black">
-              <span>Student: __________________________</span>
-              <div className="flex gap-4">
-                <span>Roll No: ________</span>
-                {chaptersDisplay && <span>CH: <span className="font-normal">{chaptersDisplay}</span></span>}
-              </div>
-            </div>
-          </div>
-        )}
+        {renderPaperHeader()}
 
         {/* QUESTIONS ENGINE */}
         <div className="z-10 relative mt-0.5" dir={baseDir}>
@@ -1416,11 +1698,11 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               // 🔹 DYNAMIC FONT SIZE RESOLUTION
               const customTitleSize = section.titleFontSize ? `${section.titleFontSize}px` : styles.sectionTitle;
               const isBreakSection = Boolean(pageBreakAfterMCQ && section.id === firstSubjectiveSectionId);
-              const secHeaderBlockId = `sec-header-${idx}`;
+              const secHeaderBlockId = `${idPrefix}sec-header-${idx}`;
               const secHeaderBreak = pageBreakMap[secHeaderBlockId];
 
               return (
-                <React.Fragment key={section.id || idx}>
+                <React.Fragment key={`${idPrefix}${section.id || idx}`}>
                   {secHeaderBreak && (
                     <PageBoundaryBanner
                       endedPage={secHeaderBreak.endedPage}
@@ -1435,10 +1717,12 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                     }}
                     className={(isBreakSection || secHeaderBreak) ? 'page-break-before print:pt-2' : ''}
                   >
+                    {(secHeaderBreak || isBreakSection) && renderPageWatermark(secHeaderBreak?.nextPage || 2)}
                     <div
                       data-block-id={secHeaderBlockId}
                       data-manual-break={isBreakSection ? 'true' : 'false'}
                     >
+                      {isBreakSection && renderPaperHeader()}
                       {showHeading && (
                         <div className={`text-center mt-0.5 mb-0.5 font-bold tracking-widest py-0.5 text-black ${isUrduText(actualHeading) ? 'font-urdu' : ''}`} style={{ fontSize: styles.sectionTitle, lineHeight: '1.3', fontFamily: isUrduText(actualHeading) ? urduFontStack : englishFontStack }} dir={isUrduText(actualHeading) ? "rtl" : "ltr"}>
                           ( {renderFormattedText(actualHeading)} {medium === 'Both' && translateHeadingToUrdu(actualHeading) ? `/ ${translateHeadingToUrdu(actualHeading)}` : ''} )
@@ -1446,7 +1730,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                       )}
                     </div>
 
-                  {bubbleSheetPosition === 'above_mcq' && section.id === firstMCQSectionId && renderBubbleSheet('mcq-bubble-sheet-above')}
+                  {bubbleSheetPosition === 'above_mcq' && section.id === firstMCQSectionId && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-above`)}
                   
                   <div className="border-[1.5px] border-black px-2 py-1 rounded-sm">
                     {/* 🔹 LANGUAGE-AWARE SECTION HEADING WITH AUTO MARKS */}
@@ -1498,7 +1782,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                 <div style={{ fontSize: styles.questionText }} className={`font-bold italic mb-1 opacity-90 border-l-4 border-black pl-2 text-black ${isPartUrdu ? 'font-urdu text-right border-l-0 border-r-4 pr-2' : ''}`} dir={isPartUrdu ? 'rtl' : 'ltr'}>{renderFormattedText(part.label)}</div>
                                 {partQuestions.map((q, pqIdx) => {
                                   runningMCQCounter++;
-                                  const qBlockId = `mcq-${idx}-${pIdx}-${q.id}-${runningMCQCounter}`;
+                                  const qBlockId = `${idPrefix}mcq-${idx}-${pIdx}-${q.id}-${runningMCQCounter}`;
                                   const qBreak = pageBreakMap[qBlockId];
                                   const isLastInPart = pqIdx === partQuestions.length - 1;
                                   return (
@@ -1511,19 +1795,34 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                         />
                                       )}
                                       <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: isLastInPart ? '0px' : mcqPaddingBottom, marginBottom: isLastInPart ? '0px' : mcqMarginBottom }} className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`}>
+                                        {qBreak && renderPageWatermark(qBreak.nextPage)}
                                         <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
-                                        {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
-                                        <div 
-                                          className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : 'flex flex-wrap items-baseline gap-x-6 gap-y-0.5'} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0.5`} 
-                                          dir={baseDir}
-                                        >
-                                          {q.options?.map((_, oIdx) => (
-                                            <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1">
-                                              <span className="font-bold text-black shrink-0 inline-block" dir="ltr" style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}>({String.fromCharCode(97 + oIdx)})</span> 
-                                              <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
+                                        {/* 🔹 DYNAMIC OPTIONS LAYOUT WITH INCREASED SPACING & CAPITAL (A)(B)(C)(D) */}
+                                        {(() => {
+                                          const activeOptions = (q.options && q.options.length > 0) ? q.options : (q.optionsUrdu || []);
+                                          const hasLongOption = activeOptions.some((opt, idx) => {
+                                            const engLen = cleanText(q.options?.[idx] || opt).length;
+                                            const urdLen = cleanText(q.optionsUrdu?.[idx] || opt).length;
+                                            const activeLen = medium === 'Urdu' ? (urdLen || engLen) : (engLen || urdLen);
+                                            return activeLen > 24;
+                                          });
+                                          const singleMediumLayoutClass = hasLongOption
+                                            ? 'flex flex-wrap items-baseline gap-x-12 gap-y-1'
+                                            : 'grid grid-cols-4 gap-x-6 gap-y-1 w-full';
+                                          return (
+                                            <div 
+                                              className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : singleMediumLayoutClass} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0.5`} 
+                                              dir={baseDir}
+                                            >
+                                              {activeOptions.map((_, oIdx) => (
+                                                <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1.5">
+                                                  <span className="font-bold text-black shrink-0 inline-block" dir="ltr" style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}>({String.fromCharCode(65 + oIdx)})</span> 
+                                                  <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
+                                                </div>
+                                              ))}
                                             </div>
-                                          ))}
-                                        </div>
+                                          );
+                                        })()}
                                       </div>
                                     </React.Fragment>
                                   );
@@ -1534,9 +1833,19 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                       ) : (
                         sectionQuestions.map((q, mqIdx) => {
                           runningMCQCounter++;
-                          const qBlockId = `mcq-${idx}-${q.id}-${runningMCQCounter}`;
+                          const qBlockId = `${idPrefix}mcq-${idx}-${q.id}-${runningMCQCounter}`;
                           const qBreak = pageBreakMap[qBlockId];
                           const isLastMCQ = mqIdx === sectionQuestions.length - 1;
+                          const activeOptions = (q.options && q.options.length > 0) ? q.options : (q.optionsUrdu || []);
+                          const hasLongOption = activeOptions.some((opt, oIdx) => {
+                            const engLen = cleanText(q.options?.[oIdx] || opt).length;
+                            const urdLen = cleanText(q.optionsUrdu?.[oIdx] || opt).length;
+                            const activeLen = medium === 'Urdu' ? (urdLen || engLen) : (engLen || urdLen);
+                            return activeLen > 24;
+                          });
+                          const singleMediumLayoutClass = hasLongOption
+                            ? 'flex flex-wrap items-baseline gap-x-12 gap-y-1'
+                            : 'grid grid-cols-4 gap-x-6 gap-y-1 w-full';
                           return (
                             <React.Fragment key={q.id}>
                               {qBreak && (
@@ -1547,15 +1856,16 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                 />
                               )}
                               <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: isLastMCQ ? '0px' : mcqPaddingBottom, marginBottom: isLastMCQ ? '0px' : mcqMarginBottom }} className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`}>
+                                {qBreak && renderPageWatermark(qBreak.nextPage)}
                                 <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
-                                {/* 🔹 DYNAMIC OPTIONS LAYOUT: ONE LINE FOR SINGLE MEDIUM */}
+                                {/* 🔹 DYNAMIC OPTIONS LAYOUT WITH INCREASED SPACING & CAPITAL (A)(B)(C)(D) */}
                                 <div 
-                                  className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : 'flex flex-wrap items-baseline gap-x-6 gap-y-0.5'} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0.5`} 
+                                  className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : singleMediumLayoutClass} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0.5`} 
                                   dir={baseDir}
                                 >
-                                  {q.options?.map((_, oIdx) => (
-                                    <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1">
-                                      <span className="font-bold text-black shrink-0 inline-block" dir="ltr" style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}>({String.fromCharCode(97 + oIdx)})</span> 
+                                  {activeOptions.map((_, oIdx) => (
+                                    <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1.5">
+                                      <span className="font-bold text-black shrink-0 inline-block" dir="ltr" style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}>({String.fromCharCode(65 + oIdx)})</span> 
                                       <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
                                     </div>
                                   ))}
@@ -1580,7 +1890,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                             ? `${toRoman(localQuestionCounter)}.` 
                             : ((isSentences || isVoice) ? `(${toRoman(localQuestionCounter)})` : localQuestionCounter);
 
-                          const qBlockId = `q-${idx}-${qIdx}`;
+                          const qBlockId = `${idPrefix}q-${idx}-${qIdx}`;
                           const qBreak = pageBreakMap[qBlockId];
 
                           return (
@@ -1600,6 +1910,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                                   marginBottom: (isGridSection || isLastUnit) ? '0px' : questionMarginBottom 
                                 }}
                               >
+                              {qBreak && renderPageWatermark(qBreak.nextPage)}
                               {section.subParts && section.subParts.length > 0 ? (
                                  <div className="space-y-0">
                                     {!skipNumbering && section.type.toUpperCase() !== 'LONG' && <div className="font-bold text-black" style={{ fontSize: styles.questionText, lineHeight: dynamicLineHeight }}>{localQuestionCounter}.</div>}
@@ -1679,38 +1990,68 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                     </div>
                   )}
                   </div>
-                  {bubbleSheetPosition === 'below_mcq' && section.id === lastMCQSectionId && renderBubbleSheet('mcq-bubble-sheet-below')}
+                  {bubbleSheetPosition === 'below_mcq' && section.id === lastMCQSectionId && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-below`)}
                 </div>
               </React.Fragment>
             );
           })
           )}
-          {hasQuestions && bubbleSheetPosition === 'paper_end' && renderBubbleSheet('mcq-bubble-sheet-end')}
+          {hasQuestions && bubbleSheetPosition === 'paper_end' && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-end`)}
         </div>
 
-        {showAnswerKey && hasQuestions && (
-          <div className="mt-1 border-t border-dashed border-gray-400 pt-0.5 break-inside-avoid z-10 relative page-break-before text-black" dir="ltr">
-            <div className="text-center mb-0.5"><h3 className="font-extrabold text-xs uppercase border-b inline-block px-2 text-black" style={{ borderColor: '#000000' }}>Key</h3></div>
-            <div className="grid grid-cols-10 gap-1 text-[8px]">
-              {questions.map((q, qKeyIdx) => (
-                <div key={q.id} className="flex items-center justify-between border-b border-gray-100 py-0 px-0.5">
-                  <span className="font-bold text-black">Q.{qKeyIdx + 1}</span>
-                  <span className="font-mono font-bold text-black">[{q.correctAnswer || '-'}]</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* MCQ-ONLY BUBBLE SHEET ANSWER KEY */}
+        {renderAnswerKeyBubbleSheet(idPrefix)}
 
-        <div data-block-id="paper-footer-block" className="pt-1 border-t border-gray-200 mt-4 z-10 relative" dir="ltr">
-          <div className="flex justify-between text-[6px] text-gray-400 uppercase font-bold mb-1">
+        <div data-block-id={`${idPrefix}paper-footer-block`} className="pt-1 border-t border-gray-200 mt-2 z-10 relative" dir="ltr">
+          <div className="flex justify-between text-[6px] text-gray-400 uppercase font-bold mb-0.5">
             <span>Aplus ExamGen • v1.0.3</span>
             <span>By: Nauman Ali</span>
           </div>
-          <div className="text-center text-[9px] text-gray-500 font-medium">
+          <div className="text-center text-[8px] text-gray-500 font-medium">
             Generated by <a href="https://aplusexamgen.netlify.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline decoration-blue-600/30">https://aplusexamgen.netlify.app</a>
           </div>
         </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="print-container">
+      <style>{`
+        .pdf-exporting .print\\:hidden,
+        .pdf-exporting .page-boundary-marker {
+          display: none !important;
+        }
+      `}</style>
+      <div 
+        id="printable-section"
+        ref={containerRef}
+        className="p-3 tex2jax_ignore relative overflow-visible" 
+        style={{ 
+          backgroundColor: '#ffffff', 
+          color: '#000000',           
+          fontFamily: fontFamily, 
+          lineHeight: dynamicLineHeight, 
+          boxSizing: 'border-box', 
+          paddingBottom: '3mm', 
+          width: '100%', 
+          margin: '0 auto' 
+        }}
+        dir="ltr"
+      >
+        {renderPaperCopy(0)}
+
+        {isTwoPerSheet && (
+          <>
+            <div data-block-id="two-per-sheet-cut-line" className="my-2.5 py-0.5 flex items-center gap-2 text-black select-none z-10 relative" dir="ltr">
+              <span className="text-[11px] leading-none font-bold">✂</span>
+              <div className="flex-grow border-t-[1.5px] border-dashed border-black" />
+              <span className="text-[8px] font-black uppercase tracking-widest">Cut Here (2nd Test Copy)</span>
+              <div className="flex-grow border-t-[1.5px] border-dashed border-black" />
+            </div>
+            {renderPaperCopy(1)}
+          </>
+        )}
 
         {/* END OF LAST PAGE INDICATOR (Screen Only) */}
         <div className="page-boundary-marker mt-2 select-none print:hidden w-full flex items-center gap-2" dir="ltr">

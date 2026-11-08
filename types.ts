@@ -1,3 +1,4 @@
+export type PaperHeaderStyle = 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8';
 
 export interface InstituteProfile {
   instituteName: string;
@@ -9,6 +10,9 @@ export interface InstituteProfile {
   showLogoOnPapers: boolean;
   showContactOnPapers: boolean;
   saveAsDefault: boolean;
+  defaultHeaderStyle?: PaperHeaderStyle;
+  showWatermarkOnPapers?: boolean;
+  watermarkOpacity?: number; // 0 to 100 percentage
 }
 
 export interface User {
@@ -138,6 +142,8 @@ export interface SavedPaper {
   pageBreakAfterMCQ?: boolean; // Separate MCQs onto page 1, subjective on page 2
   headerStyle?: 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8';
   bubbleSheetPosition?: BubbleSheetPosition;
+  watermarkOpacity?: number;
+  papersPerSheet?: 1 | 2;
 }
 
 export type ViewState = 

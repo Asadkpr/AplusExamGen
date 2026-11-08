@@ -13,7 +13,50 @@ interface InstituteSetupProps {
   onBack?: () => void;
 }
 
+const convertToBlackAndWhiteDataUrl = (src: string): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve('');
+      return;
+    }
+    const img = new Image();
+    if (!src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width || 240;
+        canvas.height = img.naturalHeight || img.height || 240;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(src);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+          data[i] = gray;
+          data[i + 1] = gray;
+          data[i + 2] = gray;
+        }
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(src);
+      }
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+};
+
 export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess, onBack }) => {
+  const savedInstituteName = (user.instituteProfile?.instituteName || '').trim();
+  const isInstituteNameLocked = Boolean(savedInstituteName);
+
   const [formData, setFormData] = useState<Omit<InstituteProfile, 'logoUrl'>>({
     instituteName: user.instituteProfile?.instituteName || '',
     instituteType: user.instituteProfile?.instituteType || '',
@@ -23,12 +66,23 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
     showLogoOnPapers: user.instituteProfile?.showLogoOnPapers ?? true,
     showContactOnPapers: user.instituteProfile?.showContactOnPapers ?? true,
     saveAsDefault: user.instituteProfile?.saveAsDefault ?? true,
+    defaultHeaderStyle: user.instituteProfile?.defaultHeaderStyle || 'default',
+    showWatermarkOnPapers: user.instituteProfile?.showWatermarkOnPapers ?? true,
+    watermarkOpacity: user.instituteProfile?.watermarkOpacity ?? 12,
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(user.instituteProfile?.logoUrl || null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (user.instituteProfile?.logoUrl) {
+      convertToBlackAndWhiteDataUrl(user.instituteProfile.logoUrl).then(bw => {
+        if (bw) setLogoPreview(bw);
+      });
+    }
+  }, [user.instituteProfile?.logoUrl]);
 
   // Change Password state
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -43,7 +97,10 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'instituteName' && isInstituteNameLocked) {
+      return;
+    }
+    setFormData(prev => ({ ...prev, [name]: name === 'watermarkOpacity' ? Number(value) : value }));
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -62,8 +119,10 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
       }
       setLogoFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string);
+      reader.onloadend = async () => {
+        const rawDataUrl = reader.result as string;
+        const bwDataUrl = await convertToBlackAndWhiteDataUrl(rawDataUrl);
+        setLogoPreview(bwDataUrl || rawDataUrl);
         setErrors(prev => ({ ...prev, logo: '' }));
       };
       reader.readAsDataURL(file);
@@ -82,8 +141,9 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
       return;
     }
     setIsLoading(true);
+    const finalLogo = logoPreview ? await convertToBlackAndWhiteDataUrl(logoPreview) : undefined;
     const instituteProfile: InstituteProfile = {
-      instituteName: (formData.instituteName || '').trim(),
+      instituteName: isInstituteNameLocked ? savedInstituteName : (formData.instituteName || '').trim(),
       instituteType: formData.instituteType || '',
       address: (formData.address || '').trim(),
       city: (formData.city || '').trim(),
@@ -91,7 +151,10 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
       showLogoOnPapers: !!formData.showLogoOnPapers,
       showContactOnPapers: !!formData.showContactOnPapers,
       saveAsDefault: !!formData.saveAsDefault,
-      ...(logoPreview ? { logoUrl: logoPreview } : {}),
+      defaultHeaderStyle: formData.defaultHeaderStyle || 'default',
+      showWatermarkOnPapers: formData.showWatermarkOnPapers !== false,
+      watermarkOpacity: Math.max(0, Math.min(60, Number(formData.watermarkOpacity ?? 12))),
+      ...(finalLogo ? { logoUrl: finalLogo } : {}),
     };
 
     const updatedUser: User = {
@@ -128,7 +191,6 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
     }
     if (newPass === currentPass) {
       setPassError('New password must be different from current password.');
-      return;
     }
 
     setIsPassLoading(true);
@@ -191,8 +253,9 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
                 <div className="space-y-1 text-center">
                   {logoPreview ? (
                     <div className="relative inline-block animate-scaleIn">
-                       <img src={logoPreview} alt="Logo Preview" className="h-24 w-24 object-contain mx-auto rounded-md bg-white p-1" />
+                       <img src={logoPreview} alt="Logo Preview" style={{ filter: 'grayscale(100%)' }} className="h-24 w-24 object-contain mx-auto rounded-md bg-white p-1 grayscale" />
                        <button type="button" onClick={() => { setLogoPreview(null); setLogoFile(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-lg"><X size={14} /></button>
+                       <p className="text-[9px] text-gold-500 font-bold uppercase tracking-wider mt-1">Black & White Print Ready</p>
                     </div>
                   ) : (
                     <>
@@ -203,14 +266,32 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
                           <input id="file-upload" name="file-upload" type="file" className="sr-only" accept="image/*" onChange={handleFileChange} />
                         </label>
                       </div>
-                      <p className="text-[10px] text-theme-text-muted uppercase tracking-widest font-bold">Optional • PNG/JPG max 150KB</p>
+                      <p className="text-[10px] text-theme-text-muted uppercase tracking-widest font-bold">Optional • PNG/JPG max 150KB (Auto Black & White)</p>
                     </>
                   )}
                 </div>
               </div>
             </div>
 
-            <Input label="Institute Name *" name="instituteName" placeholder="e.g. Government High School Lahore" value={formData.instituteName} onChange={handleChange} error={errors.instituteName} />
+            <div>
+              <Input
+                label="Institute Name *"
+                name="instituteName"
+                placeholder="e.g. Government High School Lahore"
+                value={isInstituteNameLocked ? savedInstituteName : formData.instituteName}
+                onChange={handleChange}
+                disabled={isInstituteNameLocked}
+                readOnly={isInstituteNameLocked}
+                className={isInstituteNameLocked ? 'opacity-65 cursor-not-allowed bg-gray-900' : ''}
+                icon={isInstituteNameLocked ? <Lock size={16} className="text-gold-500" /> : undefined}
+                error={errors.instituteName}
+              />
+              {isInstituteNameLocked && (
+                <p className="text-[10px] text-gold-500 -mt-3 mb-3 font-bold uppercase tracking-tight">
+                  School Name is permanently locked after saving.
+                </p>
+              )}
+            </div>
             <Select label="Institute Type *" name="instituteType" options={INSTITUTE_TYPES} value={formData.instituteType} onChange={handleChange} error={errors.instituteType} />
 
             <div className="mb-4">
@@ -238,10 +319,58 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
 
             <Input label="Institute Contact Number *" name="contactNumber" type="tel" placeholder="03001234567 or 04231234567" value={formData.contactNumber} onChange={handleChange} error={errors.contactNumber} maxLength={15} />
 
+            <div className="mb-4">
+              <label className="block text-sm font-bold text-theme-text-main mb-1 uppercase tracking-tight">
+                Default Paper Header Style
+              </label>
+              <select
+                name="defaultHeaderStyle"
+                value={formData.defaultHeaderStyle || 'default'}
+                onChange={handleChange}
+                className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-gold-500/50 focus:border-gold-500 transition-colors text-theme-text-main font-bold outline-none cursor-pointer"
+              >
+                <option value="default">Default Header</option>
+                <option value="sba">SBA Header</option>
+                <option value="layout3">Layout 3</option>
+                <option value="layout4">Layout 4</option>
+                <option value="layout5">Layout 5</option>
+                <option value="layout6">Layout 6</option>
+                <option value="layout7">Layout 7</option>
+                <option value="layout8">Layout 8</option>
+              </select>
+              <p className="text-[10px] text-theme-text-muted mt-1 font-bold uppercase tracking-tight">
+                This header layout will be automatically applied to all your papers.
+              </p>
+            </div>
+
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between py-2 border-t border-b border-gray-700">
                 <span className="text-sm font-bold text-theme-text-muted uppercase tracking-tight">Show Logo on Papers</span>
                 <button type="button" onClick={() => handleToggle('showLogoOnPapers')} className={`${formData.showLogoOnPapers ? 'bg-gold-500' : 'bg-gray-700'} relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none`}><span className={`${formData.showLogoOnPapers ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200`} /></button>
+              </div>
+              <div className="py-2 border-b border-gray-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-theme-text-muted uppercase tracking-tight">Show Logo Watermark on Paper Background</span>
+                  <button type="button" onClick={() => handleToggle('showWatermarkOnPapers')} className={`${formData.showWatermarkOnPapers ? 'bg-gold-500' : 'bg-gray-700'} relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none`}><span className={`${formData.showWatermarkOnPapers ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200`} /></button>
+                </div>
+                {formData.showWatermarkOnPapers && (
+                  <div className="pt-1 pb-1">
+                    <div className="flex items-center justify-between text-xs font-bold text-theme-text-muted mb-1">
+                      <span className="uppercase tracking-tight">Watermark Opacity</span>
+                      <span className="text-gold-500 font-black">{formData.watermarkOpacity ?? 12}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      name="watermarkOpacity"
+                      min={2}
+                      max={50}
+                      step={1}
+                      value={formData.watermarkOpacity ?? 12}
+                      onChange={handleChange}
+                      className="w-full accent-gold-500 cursor-pointer"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between py-2 border-b border-gray-700">
                 <span className="text-sm font-bold text-theme-text-muted uppercase tracking-tight">Show Contact on Papers</span>

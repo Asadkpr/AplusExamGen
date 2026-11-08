@@ -45,7 +45,7 @@ const isUrdu = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
 const isUrduStyleSubject = (subject: string) => {
   const s = (subject || '').toLowerCase();
-  return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per');
+  return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per') || s.includes('ethic') || s.includes('quran') || /[\u0600-\u06FF]/.test(subject || '');
 };
 
 const isEnglishSubject = (subject: string) => {
@@ -153,9 +153,31 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [fontSize, setFontSize] = useState(13);
   const [lineSpacing, setLineSpacing] = useState(0); // -10 to 10 scale, 0 is compact default
-  const [headerStyle, setHeaderStyle] = useState<'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8'>('default');
+  const [headerStyle, setHeaderStyle] = useState<'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8'>(
+    user.instituteProfile?.defaultHeaderStyle || initialPaper?.headerStyle || 'default'
+  );
   const [pageBreakAfterMCQ, setPageBreakAfterMCQ] = useState(false);
   const [bubbleSheetPosition, setBubbleSheetPosition] = useState<BubbleSheetPosition>('above_mcq');
+  const [papersPerSheet, setPapersPerSheet] = useState<1 | 2>(initialPaper?.papersPerSheet || 1);
+  const [watermarkOpacity, setWatermarkOpacity] = useState<number>(
+    initialPaper?.watermarkOpacity ??
+      (user.instituteProfile?.showWatermarkOnPapers === false
+        ? 0
+        : (user.instituteProfile?.watermarkOpacity ?? 12))
+  );
+
+  useEffect(() => {
+    if (user.instituteProfile?.defaultHeaderStyle) {
+      setHeaderStyle(user.instituteProfile.defaultHeaderStyle);
+    }
+    if (initialPaper?.watermarkOpacity === undefined) {
+      setWatermarkOpacity(
+        user.instituteProfile?.showWatermarkOnPapers === false
+          ? 0
+          : (user.instituteProfile?.watermarkOpacity ?? 12)
+      );
+    }
+  }, [user.instituteProfile?.defaultHeaderStyle, user.instituteProfile?.showWatermarkOnPapers, user.instituteProfile?.watermarkOpacity, initialPaper?.watermarkOpacity]);
   
   // 🔹 Custom Pattern Modal State
   const [showCustomPatternModal, setShowCustomPatternModal] = useState(false);
@@ -223,7 +245,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       window.removeEventListener('resize', updateScale);
       if (observer) observer.disconnect();
     };
-  }, [step, fontSize, lineSpacing, selectedMedium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, sectionSelections]);
+  }, [step, fontSize, lineSpacing, selectedMedium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, papersPerSheet, sectionSelections]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -300,8 +322,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setPaperTime(paper.timeAllowed || '2:00 Hours');
       setPaperCode(paper.paperCode || '');
       setPageBreakAfterMCQ(Boolean(paper.pageBreakAfterMCQ));
-      if (paper.headerStyle) setHeaderStyle(paper.headerStyle);
+      setHeaderStyle(user.instituteProfile?.defaultHeaderStyle || paper.headerStyle || 'default');
       if (paper.bubbleSheetPosition) setBubbleSheetPosition(paper.bubbleSheetPosition);
+      if (paper.papersPerSheet) setPapersPerSheet(paper.papersPerSheet);
+      if (paper.watermarkOpacity !== undefined) setWatermarkOpacity(paper.watermarkOpacity);
       
       const selections: Record<string, string[]> = {};
       paper.questions.forEach(q => {
@@ -594,7 +618,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
 
   const initializeQuestionSelection = async (forceBypassCache: boolean = false, overrideSections?: PaperPatternSection[]) => {
     setIsLoadingQuestions(true);
-    let pool = await getQuestionsForChapters(selectedSubject, availableChapters, selectedChapters, forceBypassCache);
+    let pool = await getQuestionsForChapters(selectedSubject, availableChapters, selectedChapters, forceBypassCache, selectedClass);
     if (selectedSubtopics.length > 0) {
       pool = pool.filter(q => q.subtopic && selectedSubtopics.includes(q.subtopic));
     }
@@ -818,7 +842,9 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         paperCode: paperCode || '',
         pageBreakAfterMCQ: Boolean(pageBreakAfterMCQ),
         headerStyle: headerStyle || 'default',
-        bubbleSheetPosition: bubbleSheetPosition || 'above_mcq'
+        bubbleSheetPosition: bubbleSheetPosition || 'above_mcq',
+        papersPerSheet: papersPerSheet || 1,
+        watermarkOpacity: watermarkOpacity
       };
 
       const targetId = savedPaperId || initialPaper?.id;
@@ -1225,7 +1251,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           <div className={isDual ? "space-y-1 text-right font-urdu" : "flex flex-wrap flex-row-reverse gap-x-6 gap-y-1 font-urdu"} dir="rtl">
             {q.optionsUrdu!.map((opt, i) => (
               <div key={i} className={`flex items-center gap-1.5 text-[12px] ${q.correctAnswer === String.fromCharCode(65 + i) ? 'text-gold-500 font-black' : 'text-theme-text-muted opacity-80'}`}>
-                <span className="opacity-30 font-bold">({String.fromCharCode(97 + i)})</span>
+                <span className="opacity-30 font-bold">({String.fromCharCode(65 + i)})</span>
                 <span className="whitespace-nowrap">{renderFormattedPreview(opt)}</span>
               </div>
             ))}
@@ -1256,7 +1282,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
             <div className="flex-grow overflow-hidden">
               {question ? (
                 <div>
-                  <p className="text-[11px] text-theme-text-main line-clamp-2 leading-tight font-medium whitespace-pre-wrap">{renderFormattedPreview(question.text)}</p>
+                  <p className="text-[11px] text-theme-text-main line-clamp-2 leading-tight font-medium whitespace-pre-wrap">{renderFormattedPreview(question.text || question.textUrdu || '')}</p>
+                  {question.text && question.textUrdu && (
+                    <p className="text-[11px] text-right text-theme-text-muted line-clamp-1 font-urdu mt-0.5 whitespace-pre-wrap" dir="rtl">{renderFormattedPreview(question.textUrdu)}</p>
+                  )}
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[8px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border border-gold-500/20 [.light-theme_&]:bg-gold-100 [.light-theme_&]:text-gold-700 [.light-theme_&]:border-gold-200">{question.type}</span>
                     {question.subtopic && <span className="text-[8px] text-theme-text-sub font-bold italic truncate">/ {question.subtopic}</span>}
@@ -1351,21 +1380,6 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        </div>
                     </div>
 
-                    {/* Header Style */}
-                    <div className="bg-surface-900/50 border border-surface-700 pl-3 pr-1 py-1 rounded-xl flex items-center gap-2 shadow-inner hidden md:flex shrink-0">
-                       <span className="text-[9px] text-theme-text-muted font-black uppercase tracking-widest whitespace-nowrap">Header:</span>
-                       <select value={headerStyle} onChange={(e) => setHeaderStyle(e.target.value as any)} className="bg-surface-800 border border-surface-700 text-theme-text-main text-[11px] font-bold rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer">
-                         <option value="default">Default</option>
-                         <option value="sba">SBA</option>
-                         <option value="layout3">Layout 3</option>
-                         <option value="layout4">Layout 4</option>
-                         <option value="layout5">Layout 5</option>
-                         <option value="layout6">Layout 6</option>
-                         <option value="layout7">Layout 7</option>
-                         <option value="layout8">Layout 8</option>
-                       </select>
-                    </div>
-
                     {/* Bubble Sheet Placement */}
                     <div className="bg-surface-900/50 border border-surface-700 pl-1 sm:pl-3 pr-1 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
                        <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap">Bubble:</span>
@@ -1380,6 +1394,48 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                          <option value="paper_end">End of Paper</option>
                          <option value="none">Off / Hide</option>
                        </select>
+                    </div>
+
+                    {/* Paper Per Sheet (1 or 2 Tests per Sheet) */}
+                    <div className="bg-surface-900/50 border border-surface-700 pl-1 sm:pl-3 pr-1 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap">Per Sheet:</span>
+                       <select
+                         value={papersPerSheet}
+                         onChange={(e) => setPapersPerSheet(Number(e.target.value) as 1 | 2)}
+                         className="bg-surface-800 border border-surface-700 text-theme-text-main text-[8px] sm:text-[11px] font-bold rounded-md sm:rounded-lg px-1 sm:px-2 py-0.5 sm:py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer"
+                         title="Select Papers Per Sheet (1 or 2 Tests Per Sheet)"
+                       >
+                         <option value={1}>1 Test / Sheet</option>
+                         <option value={2}>2 Tests / Sheet</option>
+                       </select>
+                    </div>
+
+                    {/* Watermark Opacity Stepper (-) / (+) */}
+                    <div className="bg-surface-900/50 border border-surface-700 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap" title="Background Logo Watermark Opacity">Watermark:</span>
+                       <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setWatermarkOpacity(prev => Math.max(0, prev - 2))}
+                            disabled={watermarkOpacity <= 0}
+                            className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                            title="Decrease Watermark Opacity (-)"
+                          >
+                            -
+                          </button>
+                          <span className="px-1 sm:px-2 text-[8px] sm:text-[11px] font-black text-theme-text-main min-w-[22px] sm:min-w-[34px] text-center select-none">
+                            {watermarkOpacity}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setWatermarkOpacity(prev => Math.min(50, prev + 2))}
+                            disabled={watermarkOpacity >= 50}
+                            className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
+                            title="Increase Watermark Opacity (+)"
+                          >
+                            +
+                          </button>
+                       </div>
                     </div>
 
                     {/* Direct Save Button */}
@@ -1418,20 +1474,19 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                       <span>{isDownloadingPdf ? 'PDF...' : 'PDF'}</span>
                     </Button>
 
-                    {/* More Actions Toggle Dropdown */}
+                    {/* Setting Toggle Dropdown (Word 'Setting' instead of icon) */}
                     <div className="relative shrink-0" ref={actionsMenuRef}>
                       <Button 
                         onClick={() => setIsActionsMenuOpen(prev => !prev)}
                         variant="secondary" 
-                        className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-1.5 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap bg-surface-800 hover:bg-surface-700 border-surface-600"
-                        title="More paper options"
+                        className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-black shadow-lg whitespace-nowrap bg-surface-800 hover:bg-surface-700 border-surface-600"
+                        title="Paper Setting"
                       >
-                        <Settings size={11} className="mr-0.5 sm:mr-1.5 text-gold-500 sm:w-3.5 sm:h-3.5" /> 
-                        <span className="hidden md:inline">Options</span> 
-                        <ChevronDown size={9} className={`ml-0.5 opacity-70 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
+                        <span className="text-gold-400 font-black tracking-wide">Setting</span>
+                        <ChevronDown size={9} className={`ml-1 opacity-70 transition-transform ${isActionsMenuOpen ? 'rotate-180' : ''}`} />
                       </Button>
                       {isActionsMenuOpen && (
-                        <div className="absolute right-0 top-full pt-2 w-52 max-w-[calc(100vw-24px)] z-[150] animate-fadeIn">
+                        <div className="absolute right-0 top-full pt-2 w-60 max-w-[calc(100vw-24px)] z-[150] animate-fadeIn">
                           <div className="bg-surface-800 border border-surface-700 rounded-xl shadow-2xl overflow-hidden divide-y divide-surface-700">
                             <button 
                               onClick={() => { setIsActionsMenuOpen(false); executeSave(true); }} 
@@ -1455,24 +1510,18 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                               <Printer size={15} className="text-gold-500" /> 
                               Print Paper
                             </button>
-                            <div className="px-4 py-2.5 flex items-center justify-between gap-2 md:hidden">
+                            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
                               <span className="text-[10px] text-theme-text-muted font-black uppercase flex items-center gap-2">
                                 <Layout size={14} className="text-gold-500" />
-                                Header
+                                Paper Per Sheet
                               </span>
                               <select
-                                value={headerStyle}
-                                onChange={(e) => setHeaderStyle(e.target.value as any)}
+                                value={papersPerSheet}
+                                onChange={(e) => setPapersPerSheet(Number(e.target.value) as 1 | 2)}
                                 className="bg-surface-900 border border-surface-700 text-theme-text-main text-[10px] font-bold rounded-lg px-2 py-1 outline-none"
                               >
-                                <option value="default">Default</option>
-                                <option value="sba">SBA</option>
-                                <option value="layout3">Layout 3</option>
-                                <option value="layout4">Layout 4</option>
-                                <option value="layout5">Layout 5</option>
-                                <option value="layout6">Layout 6</option>
-                                <option value="layout7">Layout 7</option>
-                                <option value="layout8">Layout 8</option>
+                                <option value={1}>1 Test / Sheet</option>
+                                <option value={2}>2 Tests / Sheet</option>
                               </select>
                             </div>
                             <div className="px-4 py-2.5 flex items-center justify-between gap-2">
@@ -1490,6 +1539,24 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                 <option value="paper_end">End of Paper</option>
                                 <option value="none">Off / Hide</option>
                               </select>
+                            </div>
+                            <div className="px-4 py-2.5 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-theme-text-muted font-black uppercase flex items-center gap-2">
+                                  <Sliders size={14} className="text-gold-500" />
+                                  Watermark Opacity
+                                </span>
+                                <span className="text-[10px] font-black text-gold-500">{watermarkOpacity}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={0}
+                                max={50}
+                                step={1}
+                                value={watermarkOpacity}
+                                onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
+                                className="w-full accent-gold-500 cursor-pointer"
+                              />
                             </div>
                             <button 
                               onClick={() => { setPageBreakAfterMCQ(!pageBreakAfterMCQ); setIsActionsMenuOpen(false); }} 
@@ -2105,11 +2172,12 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        <PrintablePaper 
                          instituteProfile={user.instituteProfile} classLevel={selectedClass} subject={selectedSubject} 
                          totalMarks={effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0)} 
-                         sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={1} medium={selectedMedium} showAnswerKey={showAnswerKey}
+                         sections={effectiveSections} questions={getSelectedQuestions()} layoutMode={papersPerSheet} papersPerSheet={papersPerSheet} medium={selectedMedium} showAnswerKey={showAnswerKey}
                          baseFontSize={fontSize} lineSpacing={lineSpacing} timeAllowed={paperTime} paperCode={paperCode}
                          chaptersDisplay={getChaptersDisplay()} headerStyle={headerStyle}
                          pageBreakAfterMCQ={pageBreakAfterMCQ}
                          bubbleSheetPosition={bubbleSheetPosition}
+                         watermarkOpacity={watermarkOpacity}
                        />
                     </div>
                   </div>

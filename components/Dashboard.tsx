@@ -239,7 +239,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="bg-gradient-to-r from-[#0F172A] to-[#1E293B] rounded-2xl p-5 md:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between relative overflow-hidden mb-8 border border-gray-800 shadow-xl gap-6">
             <div className="flex items-center gap-4 z-10 w-full lg:w-auto">
               {user.instituteProfile?.logoUrl && !isAdmin ? (
-                <img src={user.instituteProfile.logoUrl} alt="Institute Logo" className="w-16 h-16 rounded-full object-contain bg-white p-1 border-2 border-gold-500 shadow-xl shrink-0" />
+                <img src={user.instituteProfile.logoUrl} alt="Institute Logo" style={{ filter: 'grayscale(100%)' }} className="w-16 h-16 rounded-full object-contain bg-white p-1 border-2 border-gold-500 shadow-xl shrink-0 grayscale" />
               ) : (
                 <div className="bg-white/10 p-4 rounded-full border border-white/5 shadow-inner shrink-0">
                   <UserCog size={32} className="text-white" />

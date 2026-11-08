@@ -219,6 +219,17 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     });
   };
 
+  const getMaxQuestionsForType = (typeVal: string): number => {
+    const upper = (typeVal || '').trim().toUpperCase();
+    if (upper === 'MCQ') return 100;
+    if (upper === 'LONG') return 20;
+    if (upper === 'SHORT') return 50;
+    const rank = getSectionSortRank(typeVal);
+    if (rank === 1) return 100;
+    if (rank === 3) return 20;
+    return 50;
+  };
+
   const handleUpdateSection = (id: string, field: keyof PaperPatternSection, value: any) => {
     setSections(prev => {
       const updated = prev.map((s, idx) => {
@@ -230,6 +241,15 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
         }
 
         let nextSection = { ...s, [field]: nextValue };
+
+        // Enforce Max Questions limit: MCQ max 100, Short max 50, Long max 20
+        const maxAllowed = getMaxQuestionsForType(nextSection.type);
+        if ((nextSection.questionCount || 1) > maxAllowed) {
+          nextSection.questionCount = maxAllowed;
+        }
+        if ((nextSection.attemptCount || 1) > nextSection.questionCount) {
+          nextSection.attemptCount = nextSection.questionCount;
+        }
 
         // When section type changes, auto-assign SECTION – I / II / III and clear subParts if not Long
         if (field === 'type') {
@@ -244,11 +264,11 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
         }
 
         // Auto-update display titles if not in manual/custom title mode
-        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion' || field === 'heading') {
+        if (field === 'type' || field === 'attemptCount' || field === 'marksPerQuestion' || field === 'heading' || field === 'questionCount') {
           if (!customTitleModes[id]) {
-            const updatedType = field === 'type' ? String(value) : nextSection.type;
-            const updatedCount = field === 'attemptCount' ? Number(value) : nextSection.attemptCount;
-            const updatedMarks = field === 'marksPerQuestion' ? Number(value) : nextSection.marksPerQuestion;
+            const updatedType = nextSection.type;
+            const updatedCount = nextSection.attemptCount;
+            const updatedMarks = nextSection.marksPerQuestion;
 
             const autoTitle = getAutoTitle(updatedType, updatedCount, updatedMarks, idx, isEnglishSubject);
             if (autoTitle) {
@@ -314,7 +334,15 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           nextValue = value.split(',').map(n => n.trim()).filter(Boolean);
         }
 
-        return { ...p, [field]: nextValue };
+        const updatedPart = { ...p, [field]: nextValue };
+        const maxPartQs = getMaxQuestionsForType(updatedPart.type || s.type);
+        if ((updatedPart.questionCount || 0) > maxPartQs) {
+          updatedPart.questionCount = maxPartQs;
+        }
+        if ((updatedPart.attemptCount || 0) > (updatedPart.questionCount || maxPartQs)) {
+          updatedPart.attemptCount = updatedPart.questionCount || maxPartQs;
+        }
+        return updatedPart;
       });
 
       const totalPartMarks = parts?.reduce((acc, p) => acc + (p.marks || 0), 0) || s.marksPerQuestion;
@@ -359,7 +387,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     }
 
     setIsSaving(true);
-    // Guarantee correct sequence before saving and applying: MCQ -> Short -> Long
+    // Guarantee correct sequence before applying: MCQ -> Short -> Long
     const sortedSections = sortSectionsByStandardSequence(sections, isEnglishSubject);
     const calculatedTotal = sortedSections.reduce(
       (acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 
@@ -379,13 +407,6 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
     };
 
     try {
-      if (saveToLibrary) {
-        await savePattern(patternObj);
-      }
-      onApplyPattern(patternObj);
-      onClose();
-    } catch (e) {
-      console.error("Error saving pattern", e);
       onApplyPattern(patternObj);
       onClose();
     } finally {
@@ -711,9 +732,13 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     <input
                       type="number"
                       min="1"
-                      max="100"
+                      max={getMaxQuestionsForType(s.type)}
                       value={s.questionCount}
-                      onChange={e => handleUpdateSection(s.id, 'questionCount', Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={e => {
+                        const maxQs = getMaxQuestionsForType(s.type);
+                        const val = Math.min(maxQs, Math.max(1, parseInt(e.target.value) || 1));
+                        handleUpdateSection(s.id, 'questionCount', val);
+                      }}
                       className="w-full bg-gray-800 text-theme-text-main text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500 font-bold"
                     />
                   </div>
@@ -726,9 +751,12 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                     <input
                       type="number"
                       min="1"
-                      max={s.questionCount}
+                      max={Math.min(s.questionCount, getMaxQuestionsForType(s.type))}
                       value={s.attemptCount}
-                      onChange={e => handleUpdateSection(s.id, 'attemptCount', Math.min(s.questionCount, Math.max(1, parseInt(e.target.value) || 1)))}
+                      onChange={e => {
+                        const maxAttempt = Math.min(s.questionCount, getMaxQuestionsForType(s.type));
+                        handleUpdateSection(s.id, 'attemptCount', Math.min(maxAttempt, Math.max(1, parseInt(e.target.value) || 1)));
+                      }}
                       className="w-full bg-gray-800 text-gold-500 font-bold text-[11px] p-1.5 rounded-lg border border-gray-700 text-center outline-none focus:border-gold-500"
                     />
                   </div>
@@ -822,6 +850,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
 
                       {s.subParts?.map((part, pIdx) => {
                         const partTypes = isEnglishSubject ? ENGLISH_SPECIFIC_TYPES : PREDEFINED_TYPES;
+                        const maxPartQuestions = getMaxQuestionsForType(part.type || s.type);
 
                         return (
                           <div key={part.id} className="grid grid-cols-12 gap-2 items-center bg-gray-950/40 p-2.5 lg:p-2 rounded-lg border border-gray-700/50">
@@ -862,8 +891,10 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub text-center mb-0.5">Total Qs</label>
                               <input
                                 type="number"
+                                min="1"
+                                max={maxPartQuestions}
                                 value={part.questionCount || 0}
-                                onChange={e => handleUpdatePart(s.id, part.id, 'questionCount', parseInt(e.target.value) || 0)}
+                                onChange={e => handleUpdatePart(s.id, part.id, 'questionCount', Math.min(maxPartQuestions, Math.max(1, parseInt(e.target.value) || 1)))}
                                 className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-[10px] text-theme-text-main font-bold text-center outline-none focus:border-gold-500"
                               />
                             </div>
@@ -872,8 +903,10 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               <label className="block lg:hidden text-[8px] font-black uppercase text-theme-text-sub text-center mb-0.5">Attempt</label>
                               <input
                                 type="number"
+                                min="1"
+                                max={Math.min(part.questionCount || maxPartQuestions, maxPartQuestions)}
                                 value={part.attemptCount || 0}
-                                onChange={e => handleUpdatePart(s.id, part.id, 'attemptCount', parseInt(e.target.value) || 0)}
+                                onChange={e => handleUpdatePart(s.id, part.id, 'attemptCount', Math.min(part.questionCount || maxPartQuestions, maxPartQuestions, Math.max(1, parseInt(e.target.value) || 1)))}
                                 className="w-full bg-gray-900 border border-gray-700 rounded p-1 text-[10px] text-gold-500 font-bold text-center outline-none focus:border-gold-500"
                               />
                             </div>
@@ -930,18 +963,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
         </div>
 
         {/* FOOTER ACTION BAR */}
-        <div className="pt-2.5 sm:pt-3 mt-1 sm:mt-2 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3 shrink-0">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-theme-text-muted hover:text-theme-text-main">
-            <input
-              type="checkbox"
-              checked={saveToLibrary}
-              onChange={e => setSaveToLibrary(e.target.checked)}
-              className="accent-gold-500 w-4 h-4 cursor-pointer rounded"
-            />
-            <BookmarkCheck size={16} className={saveToLibrary ? "text-gold-500" : "text-gray-500"} />
-            <span>Save this pattern to library for future use</span>
-          </label>
-
+        <div className="pt-2.5 sm:pt-3 mt-1 sm:mt-2 border-t border-gray-700 flex items-center justify-end gap-2.5 sm:gap-3 shrink-0">
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <Button
               type="button"
