@@ -8,6 +8,7 @@ import { getPatterns, getPatternsByClassAndSubject } from '../services/patternSe
 import { getQuestionsForChapters } from '../services/questionService';
 import { BubbleSheetPosition, Chapter, QuestionType, Question, PaperPatternSection, User, PaperPattern, Subtopic, SavedPaper, PaperPatternSectionPart } from '../types';
 import { savePaper, updatePaper } from '../services/paperService';
+import { updateUser } from '../services/authService';
 import { PrintablePaper } from './PrintablePaper';
 import { CustomPatternModal } from './CustomPatternModal';
 import { sortSectionsByStandardSequence } from './PaperPatterns';
@@ -153,8 +154,19 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [fontSize, setFontSize] = useState(13);
   const [lineSpacing, setLineSpacing] = useState(0); // -10 to 10 scale, 0 is compact default
+  const getInitialHeaderStyle = (): 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8' => {
+    if (initialPaper?.headerStyle) return initialPaper.headerStyle;
+    try {
+      const savedLocal = localStorage.getItem(`aplus_default_header_${user.id}`);
+      if (savedLocal && ['default', 'sba', 'layout3', 'layout4', 'layout5', 'layout6', 'layout7', 'layout8'].includes(savedLocal)) {
+        return savedLocal as any;
+      }
+    } catch (_) {}
+    return user.instituteProfile?.defaultHeaderStyle || 'default';
+  };
+
   const [headerStyle, setHeaderStyle] = useState<'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8'>(
-    user.instituteProfile?.defaultHeaderStyle || initialPaper?.headerStyle || 'default'
+    getInitialHeaderStyle()
   );
   const [pageBreakAfterMCQ, setPageBreakAfterMCQ] = useState(false);
   const [bubbleSheetPosition, setBubbleSheetPosition] = useState<BubbleSheetPosition>('above_mcq');
@@ -166,9 +178,37 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         : (user.instituteProfile?.watermarkOpacity ?? 12))
   );
 
+  const handleHeaderStyleChange = (newStyle: 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8') => {
+    setHeaderStyle(newStyle);
+    try {
+      localStorage.setItem(`aplus_default_header_${user.id}`, newStyle);
+    } catch (_) {}
+    if (user.instituteProfile) {
+      user.instituteProfile.defaultHeaderStyle = newStyle;
+      updateUser({
+        ...user,
+        instituteProfile: {
+          ...user.instituteProfile,
+          defaultHeaderStyle: newStyle
+        }
+      }).catch(() => {});
+    }
+  };
+
   useEffect(() => {
-    if (user.instituteProfile?.defaultHeaderStyle) {
-      setHeaderStyle(user.instituteProfile.defaultHeaderStyle);
+    if (!initialPaper?.headerStyle) {
+      try {
+        const savedLocal = localStorage.getItem(`aplus_default_header_${user.id}`);
+        if (savedLocal && ['default', 'sba', 'layout3', 'layout4', 'layout5', 'layout6', 'layout7', 'layout8'].includes(savedLocal)) {
+          setHeaderStyle(savedLocal as any);
+        } else if (user.instituteProfile?.defaultHeaderStyle) {
+          setHeaderStyle(user.instituteProfile.defaultHeaderStyle);
+        }
+      } catch (_) {
+        if (user.instituteProfile?.defaultHeaderStyle) {
+          setHeaderStyle(user.instituteProfile.defaultHeaderStyle);
+        }
+      }
     }
     if (initialPaper?.watermarkOpacity === undefined) {
       setWatermarkOpacity(
@@ -177,7 +217,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
           : (user.instituteProfile?.watermarkOpacity ?? 12)
       );
     }
-  }, [user.instituteProfile?.defaultHeaderStyle, user.instituteProfile?.showWatermarkOnPapers, user.instituteProfile?.watermarkOpacity, initialPaper?.watermarkOpacity]);
+  }, [user.id, user.instituteProfile?.defaultHeaderStyle, user.instituteProfile?.showWatermarkOnPapers, user.instituteProfile?.watermarkOpacity, initialPaper?.headerStyle, initialPaper?.watermarkOpacity]);
   
   // 🔹 Custom Pattern Modal State
   const [showCustomPatternModal, setShowCustomPatternModal] = useState(false);
@@ -322,7 +362,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setPaperTime(paper.timeAllowed || '2:00 Hours');
       setPaperCode(paper.paperCode || '');
       setPageBreakAfterMCQ(Boolean(paper.pageBreakAfterMCQ));
-      setHeaderStyle(user.instituteProfile?.defaultHeaderStyle || paper.headerStyle || 'default');
+      setHeaderStyle(paper.headerStyle || getInitialHeaderStyle());
       if (paper.bubbleSheetPosition) setBubbleSheetPosition(paper.bubbleSheetPosition);
       if (paper.papersPerSheet) setPapersPerSheet(paper.papersPerSheet);
       if (paper.watermarkOpacity !== undefined) setWatermarkOpacity(paper.watermarkOpacity);
@@ -1378,6 +1418,26 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                             +
                           </button>
                        </div>
+                    </div>
+
+                    {/* Header Style Selector (8 Headers - remembers selection by default) */}
+                    <div className="bg-surface-900/50 border border-surface-700 pl-1 sm:pl-3 pr-1 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap">Header:</span>
+                       <select
+                         value={headerStyle}
+                         onChange={(e) => handleHeaderStyleChange(e.target.value as any)}
+                         className="bg-surface-800 border border-surface-700 text-theme-text-main text-[8px] sm:text-[11px] font-bold rounded-md sm:rounded-lg px-1 sm:px-2 py-0.5 sm:py-1 outline-none focus:ring-1 focus:ring-gold-500/50 transition-all cursor-pointer max-w-[85px] sm:max-w-none"
+                         title="Select Paper Header Style"
+                       >
+                         <option value="default">Default Header</option>
+                         <option value="sba">SBA Header</option>
+                         <option value="layout3">Layout 3</option>
+                         <option value="layout4">Layout 4</option>
+                         <option value="layout5">Layout 5</option>
+                         <option value="layout6">Layout 6</option>
+                         <option value="layout7">Layout 7</option>
+                         <option value="layout8">Layout 8</option>
+                       </select>
                     </div>
 
                     {/* Bubble Sheet Placement */}

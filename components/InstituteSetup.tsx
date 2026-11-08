@@ -66,7 +66,17 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
     showLogoOnPapers: user.instituteProfile?.showLogoOnPapers ?? true,
     showContactOnPapers: user.instituteProfile?.showContactOnPapers ?? true,
     saveAsDefault: user.instituteProfile?.saveAsDefault ?? true,
-    defaultHeaderStyle: user.instituteProfile?.defaultHeaderStyle || 'default',
+    defaultHeaderStyle: (() => {
+      try {
+        const localSaved = localStorage.getItem(`aplus_default_header_${user.id}`);
+        if (localSaved && ['default', 'style2', 'style3', 'style4', 'style5', 'style6', 'style7', 'style8'].includes(localSaved)) {
+          return localSaved as NonNullable<InstituteProfile['defaultHeaderStyle']>;
+        }
+      } catch {
+        // ignore
+      }
+      return user.instituteProfile?.defaultHeaderStyle || 'default';
+    })(),
     showWatermarkOnPapers: user.instituteProfile?.showWatermarkOnPapers ?? true,
     watermarkOpacity: user.instituteProfile?.watermarkOpacity ?? 12,
   });
@@ -156,6 +166,12 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
       watermarkOpacity: Math.max(0, Math.min(60, Number(formData.watermarkOpacity ?? 12))),
       ...(finalLogo ? { logoUrl: finalLogo } : {}),
     };
+
+    try {
+      localStorage.setItem(`aplus_default_header_${user.id}`, instituteProfile.defaultHeaderStyle || 'default');
+    } catch {
+      // ignore
+    }
 
     const updatedUser: User = {
       ...user,
