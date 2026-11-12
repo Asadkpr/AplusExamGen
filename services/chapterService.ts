@@ -22,7 +22,7 @@ const UPLOADED_COLLECTION = 'uploaded_content';
 export const VISIBILITY_COLLECTION = 'visibility_settings';
 export const VISIBILITY_DOC = 'global';
 export const CUSTOM_CHAPTERS_DOC = 'custom_chapters';
-export const LOCAL_CHAPTERS_KEY = 'aplus_custom_chapters_v1';
+export const LOCAL_CHAPTERS_KEY = 'aplus_custom_chapters_v2';
 
 export interface CustomChapterRecord {
   id: string;
@@ -145,10 +145,15 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
     return cachedChapters[cacheKey];
   }
 
+  try {
+    localStorage.removeItem('aplus_custom_chapters_v1');
+  } catch (_) {}
+
   const visibility = await getVisibilitySettings(forceRefresh);
   const defaults = getDefaultChapters(cleanSubj, cleanClass);
 
   const customMap = new Map<string, Chapter>();
+  let loadedFromCentralCloud = false;
 
   // 1. Load from visibility_settings/custom_chapters (central Firestore document accessible to all users)
   try {
@@ -157,6 +162,7 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
     if (vsSnap.exists()) {
       const data = vsSnap.data();
       if (Array.isArray(data.chapters)) {
+        loadedFromCentralCloud = true;
         data.chapters.forEach((c: any) => {
           if (
             c && 
@@ -177,29 +183,31 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
     console.warn("Could not fetch from visibility_settings/custom_chapters:", e);
   }
 
-  // 2. Load from LocalStorage (instant cache)
-  try {
-    const stored = localStorage.getItem(LOCAL_CHAPTERS_KEY);
-    if (stored) {
-      const list: CustomChapterRecord[] = JSON.parse(stored);
-      list.forEach(c => {
-        if (
-          c && 
-          c.subject.toLowerCase().trim() === cleanSubj.toLowerCase() && 
-          c.classLevel.toLowerCase().trim() === cleanClass.toLowerCase()
-        ) {
-          if (!customMap.has(c.id)) {
-            customMap.set(c.id, {
-              id: c.id,
-              name: c.name,
-              subtopics: [],
-              availableQuestionTypes: c.availableQuestionTypes || ['MCQ', 'SHORT', 'LONG']
-            });
+  // 2. Load from LocalStorage (only as fallback if central cloud couldn't be reached)
+  if (!loadedFromCentralCloud) {
+    try {
+      const stored = localStorage.getItem(LOCAL_CHAPTERS_KEY);
+      if (stored) {
+        const list: CustomChapterRecord[] = JSON.parse(stored);
+        list.forEach(c => {
+          if (
+            c && 
+            c.subject.toLowerCase().trim() === cleanSubj.toLowerCase() && 
+            c.classLevel.toLowerCase().trim() === cleanClass.toLowerCase()
+          ) {
+            if (!customMap.has(c.id)) {
+              customMap.set(c.id, {
+                id: c.id,
+                name: c.name,
+                subtopics: [],
+                availableQuestionTypes: c.availableQuestionTypes || ['MCQ', 'SHORT', 'LONG']
+              });
+            }
           }
-        }
-      });
-    }
-  } catch (e) {}
+        });
+      }
+    } catch (e) {}
+  }
 
   // 3. Fetch from Firestore chapters collection with timeout
   try {
@@ -222,32 +230,9 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
     };
 
     const cloudChapters = await fetchCustomOp();
-    
-    // Sync cloud chapters to customMap and localStorage
-    try {
-      const stored = localStorage.getItem(LOCAL_CHAPTERS_KEY);
-      const localList: CustomChapterRecord[] = stored ? JSON.parse(stored) : [];
-      let updatedLocal = false;
-
-      cloudChapters.forEach(ch => {
-        customMap.set(ch.id, ch);
-        if (!localList.some(item => item.id === ch.id || item.name.toLowerCase().trim() === ch.name.toLowerCase().trim())) {
-          localList.push({
-            id: ch.id,
-            subject: cleanSubj,
-            classLevel: cleanClass,
-            name: ch.name,
-            availableQuestionTypes: ch.availableQuestionTypes,
-            createdAt: Date.now()
-          });
-          updatedLocal = true;
-        }
-      });
-
-      if (updatedLocal) {
-        localStorage.setItem(LOCAL_CHAPTERS_KEY, JSON.stringify(localList));
-      }
-    } catch (e) {}
+    cloudChapters.forEach(ch => {
+      customMap.set(ch.id, ch);
+    });
   } catch (e: any) {
     console.warn("Fetch custom chapters from cloud chapters collection (using central doc/local):", e?.message || e);
   }
@@ -282,6 +267,19 @@ export const getChapters = async (subject: string, classLevel: string, filterHid
       subtopics
     };
   });
+
+  // Deduplicate chapters with identical names (keep the one that has content/subtopics)
+  const byNameMap = new Map<string, Chapter>();
+  combinedChapters.forEach(ch => {
+    const normName = (ch.name || '').trim().toLowerCase();
+    const existing = byNameMap.get(normName);
+    if (!existing) {
+      byNameMap.set(normName, ch);
+    } else if (ch.subtopics.length > existing.subtopics.length) {
+      byNameMap.set(normName, ch);
+    }
+  });
+  combinedChapters = Array.from(byNameMap.values());
 
   if (filterHidden) {
     combinedChapters = combinedChapters

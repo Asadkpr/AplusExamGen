@@ -78,7 +78,12 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
       return user.instituteProfile?.defaultHeaderStyle || 'default';
     })(),
     showWatermarkOnPapers: user.instituteProfile?.showWatermarkOnPapers ?? true,
-    watermarkOpacity: user.instituteProfile?.watermarkOpacity ?? 12,
+    watermarkOpacity: (() => {
+      const raw = user.instituteProfile?.watermarkOpacity;
+      if (raw === undefined || raw === null || Number.isNaN(Number(raw))) return 3;
+      const n = Number(raw);
+      return n > 10 ? Math.max(0, Math.min(10, Math.round((n - 6) / 2))) : Math.max(0, Math.min(10, Math.round(n)));
+    })(),
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -163,7 +168,7 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
       saveAsDefault: !!formData.saveAsDefault,
       defaultHeaderStyle: formData.defaultHeaderStyle || 'default',
       showWatermarkOnPapers: formData.showWatermarkOnPapers !== false,
-      watermarkOpacity: Math.max(0, Math.min(60, Number(formData.watermarkOpacity ?? 12))),
+      watermarkOpacity: Math.max(0, Math.min(10, Number(formData.watermarkOpacity ?? 3))),
       ...(finalLogo ? { logoUrl: finalLogo } : {}),
     };
 
@@ -372,16 +377,16 @@ export const InstituteSetup: React.FC<InstituteSetupProps> = ({ user, onSuccess,
                 {formData.showWatermarkOnPapers && (
                   <div className="pt-1 pb-1">
                     <div className="flex items-center justify-between text-xs font-bold text-theme-text-muted mb-1">
-                      <span className="uppercase tracking-tight">Watermark Opacity</span>
-                      <span className="text-gold-500 font-black">{formData.watermarkOpacity ?? 12}%</span>
+                      <span className="uppercase tracking-tight">Watermark Opacity (0 – 10)</span>
+                      <span className="text-gold-500 font-black">{formData.watermarkOpacity ?? 3} / 10</span>
                     </div>
                     <input
                       type="range"
                       name="watermarkOpacity"
-                      min={2}
-                      max={50}
+                      min={0}
+                      max={10}
                       step={1}
-                      value={formData.watermarkOpacity ?? 12}
+                      value={formData.watermarkOpacity ?? 3}
                       onChange={handleChange}
                       className="w-full accent-gold-500 cursor-pointer"
                     />

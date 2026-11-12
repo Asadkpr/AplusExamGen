@@ -171,11 +171,17 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [pageBreakAfterMCQ, setPageBreakAfterMCQ] = useState(false);
   const [bubbleSheetPosition, setBubbleSheetPosition] = useState<BubbleSheetPosition>('above_mcq');
   const [papersPerSheet, setPapersPerSheet] = useState<1 | 2>(initialPaper?.papersPerSheet || 1);
+  const normalizeWatermarkLevel = (val?: number): number => {
+    if (val === undefined || val === null || Number.isNaN(Number(val))) return 3;
+    const n = Number(val);
+    if (n > 10) {
+      return Math.max(0, Math.min(10, Math.round((n - 6) / 2)));
+    }
+    return Math.max(0, Math.min(10, Math.round(n)));
+  };
+
   const [watermarkOpacity, setWatermarkOpacity] = useState<number>(
-    initialPaper?.watermarkOpacity ??
-      (user.instituteProfile?.showWatermarkOnPapers === false
-        ? 0
-        : (user.instituteProfile?.watermarkOpacity ?? 12))
+    normalizeWatermarkLevel(initialPaper?.watermarkOpacity ?? user.instituteProfile?.watermarkOpacity)
   );
 
   const handleHeaderStyleChange = (newStyle: 'default' | 'sba' | 'layout3' | 'layout4' | 'layout5' | 'layout6' | 'layout7' | 'layout8') => {
@@ -212,9 +218,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     }
     if (initialPaper?.watermarkOpacity === undefined) {
       setWatermarkOpacity(
-        user.instituteProfile?.showWatermarkOnPapers === false
-          ? 0
-          : (user.instituteProfile?.watermarkOpacity ?? 12)
+        normalizeWatermarkLevel(user.instituteProfile?.watermarkOpacity)
       );
     }
   }, [user.id, user.instituteProfile?.defaultHeaderStyle, user.instituteProfile?.showWatermarkOnPapers, user.instituteProfile?.watermarkOpacity, initialPaper?.headerStyle, initialPaper?.watermarkOpacity]);
@@ -365,7 +369,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setHeaderStyle(paper.headerStyle || getInitialHeaderStyle());
       if (paper.bubbleSheetPosition) setBubbleSheetPosition(paper.bubbleSheetPosition);
       if (paper.papersPerSheet) setPapersPerSheet(paper.papersPerSheet);
-      if (paper.watermarkOpacity !== undefined) setWatermarkOpacity(paper.watermarkOpacity);
+      if (paper.watermarkOpacity !== undefined) setWatermarkOpacity(normalizeWatermarkLevel(paper.watermarkOpacity));
       
       const selections: Record<string, string[]> = {};
       paper.questions.forEach(q => {
@@ -378,10 +382,11 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
       setStep(7);
       
       const loadBgData = async () => {
-         const chs = await getChapters(paper.subject, paper.classLevel, !isAdmin);
-         setAvailableChapters(chs);
+         const chs = await getChapters(paper.subject, paper.classLevel, true);
+         const activeChs = chs.filter(ch => ch.subtopics && ch.subtopics.length > 0);
+         setAvailableChapters(activeChs);
          const chapterIds: string[] = paper.selectedChapterIds ? [...paper.selectedChapterIds] : [];
-         const pool = await getQuestionsForChapters(paper.subject, chs, chapterIds, false);
+         const pool = await getQuestionsForChapters(paper.subject, activeChs, chapterIds, false);
          setQuestionPool(pool);
          if (paper.sections.length > 0) setActiveTabId(paper.sections[0].id);
       };
@@ -441,8 +446,8 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         setIsLoadingPatterns(true);
         
         try {
-          const chapters = await getChapters(selectedSubject, selectedClass, !isAdmin);
-          setAvailableChapters(chapters);
+          const chapters = await getChapters(selectedSubject, selectedClass, true);
+          setAvailableChapters(chapters.filter(ch => ch.subtopics && ch.subtopics.length > 0));
         } catch (e) {
           console.error(e);
         } finally {
@@ -1470,26 +1475,26 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                        </select>
                     </div>
 
-                    {/* Watermark Opacity Stepper (-) / (+) */}
+                    {/* Watermark Opacity Stepper (-) / (+) : 0 to 10 */}
                     <div className="bg-surface-900/50 border border-surface-700 px-1 sm:px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 shadow-inner shrink-0">
-                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap" title="Background Logo Watermark Opacity">Watermark:</span>
+                       <span className="text-[8px] sm:text-[9px] text-theme-text-muted font-black uppercase tracking-tight sm:tracking-widest whitespace-nowrap" title="Background Logo Watermark Opacity (0 to 10)">Watermark:</span>
                        <div className="flex items-center bg-surface-800 border border-surface-700 rounded-md sm:rounded-lg overflow-hidden">
                           <button
                             type="button"
-                            onClick={() => setWatermarkOpacity(prev => Math.max(0, prev - 2))}
+                            onClick={() => setWatermarkOpacity(prev => Math.max(0, prev - 1))}
                             disabled={watermarkOpacity <= 0}
                             className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
                             title="Decrease Watermark Opacity (-)"
                           >
                             -
                           </button>
-                          <span className="px-1 sm:px-2 text-[8px] sm:text-[11px] font-black text-theme-text-main min-w-[22px] sm:min-w-[34px] text-center select-none">
-                            {watermarkOpacity}%
+                          <span className="px-1 sm:px-2 text-[8px] sm:text-[11px] font-black text-theme-text-main min-w-[22px] sm:min-w-[30px] text-center select-none">
+                            {watermarkOpacity}
                           </span>
                           <button
                             type="button"
-                            onClick={() => setWatermarkOpacity(prev => Math.min(50, prev + 2))}
-                            disabled={watermarkOpacity >= 50}
+                            onClick={() => setWatermarkOpacity(prev => Math.min(10, prev + 1))}
+                            disabled={watermarkOpacity >= 10}
                             className="w-4 h-5 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black text-theme-text-main hover:bg-gold-500 hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed select-none"
                             title="Increase Watermark Opacity (+)"
                           >
@@ -1606,12 +1611,12 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                   <Sliders size={14} className="text-gold-500" />
                                   Watermark Opacity
                                 </span>
-                                <span className="text-[10px] font-black text-gold-500">{watermarkOpacity}%</span>
+                                <span className="text-[10px] font-black text-gold-500">{watermarkOpacity} / 10</span>
                               </div>
                               <input
                                 type="range"
                                 min={0}
-                                max={50}
+                                max={10}
                                 step={1}
                                 value={watermarkOpacity}
                                 onChange={(e) => setWatermarkOpacity(Number(e.target.value))}
@@ -2222,7 +2227,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                       className="a4-preview-scaler mx-auto shadow-2xl print:shadow-none transition-transform relative group/paper"
                       style={{
                         width: '794px',
-                        minHeight: '1123px',
+                        minHeight: 'auto',
                         color: '#000000',
                         backgroundColor: '#ffffff',
                         transform: previewScale < 1 ? `scale(${previewScale})` : 'none',

@@ -16,7 +16,7 @@ import { SUBJECTS_BY_CLASS } from '../constants';
 const COLLECTION = 'subjects';
 const VISIBILITY_COLLECTION = 'visibility_settings';
 const VISIBILITY_DOC = 'custom_subjects';
-const LOCAL_KEY = 'aplus_custom_subjects_v1';
+const LOCAL_KEY = 'aplus_custom_subjects_v2';
 const HIDDEN_KEY = 'aplus_hidden_subjects_v1';
 
 // 🔹 Memory Cache
@@ -53,6 +53,10 @@ export const getSubjects = async (forceRefresh: boolean = false): Promise<Record
     return cachedSubjects;
   }
 
+  try {
+    localStorage.removeItem('aplus_custom_subjects_v1');
+  } catch (_) {}
+
   // 1. Load hidden subjects (deleted system subjects)
   let hidden: string[] = [];
   try {
@@ -61,12 +65,14 @@ export const getSubjects = async (forceRefresh: boolean = false): Promise<Record
   } catch (e) {}
 
   const cloudCustomSubjects: CustomSubject[] = [];
+  let loadedFromCloud = false;
 
   // 2. Fetch from visibility_settings/custom_subjects (guaranteed permissions across all clients)
   try {
     const vsRef = doc(db, VISIBILITY_COLLECTION, VISIBILITY_DOC);
     const vsSnap = await withTimeout(getDoc(vsRef), 2500);
     if (vsSnap.exists()) {
+      loadedFromCloud = true;
       const data = vsSnap.data();
       if (Array.isArray(data.subjects)) {
         data.subjects.forEach((s: any) => {
@@ -95,6 +101,7 @@ export const getSubjects = async (forceRefresh: boolean = false): Promise<Record
   // 3. Fetch from subjects collection
   try {
     const snapshot = await withTimeout(getDocs(collection(db, COLLECTION)), 2500);
+    loadedFromCloud = true;
     snapshot.docs.forEach(docSnap => {
       const s = docSnap.data() as Partial<CustomSubject>;
       if (s && s.classLevel && s.name) {
@@ -126,29 +133,33 @@ export const getSubjects = async (forceRefresh: boolean = false): Promise<Record
     if (classLevel && name) {
       const cleanName = name.trim();
       const hideKey = `${classLevel}:${cleanName}`;
-      if (hidden.includes(hideKey)) return; // Skip if hidden
+      if (hidden.some(h => h.toLowerCase() === hideKey.toLowerCase())) return; // Skip if hidden
 
       if (!result[classLevel]) result[classLevel] = [];
-      if (!result[classLevel].includes(cleanName)) result[classLevel].push(cleanName);
+      if (!result[classLevel].some(existing => existing.toLowerCase() === cleanName.toLowerCase())) {
+        result[classLevel].push(cleanName);
+      }
     }
   };
 
   cloudCustomSubjects.forEach(s => addToResult(s.classLevel, s.name));
 
-  // 5. Fetch from Local Storage (for offline or local subjects)
-  try {
-    const stored = localStorage.getItem(LOCAL_KEY);
-    if (stored) {
-      const localSubjects: CustomSubject[] = JSON.parse(stored);
-      if (Array.isArray(localSubjects)) {
-        localSubjects.forEach(s => {
-          if (s && s.classLevel && s.name) {
-            addToResult(s.classLevel, s.name);
-          }
-        });
+  // 5. Fetch from Local Storage (only for offline fallback)
+  if (!loadedFromCloud) {
+    try {
+      const stored = localStorage.getItem(LOCAL_KEY);
+      if (stored) {
+        const localSubjects: CustomSubject[] = JSON.parse(stored);
+        if (Array.isArray(localSubjects)) {
+          localSubjects.forEach(s => {
+            if (s && s.classLevel && s.name) {
+              addToResult(s.classLevel, s.name);
+            }
+          });
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   // Cache and sync local storage backup
   try {

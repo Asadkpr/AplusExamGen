@@ -632,16 +632,29 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [pageBreakMap, setPageBreakMap] = useState<Record<string, { endedPage: number; nextPage: number; isManual?: boolean }>>({});
   const [pageSummary, setPageSummary] = useState<{ totalPages: number; lastPageUsedPercent: number }>({ totalPages: 1, lastPageUsedPercent: 45 });
-  const [pageHeights, setPageHeights] = useState<Record<number, number>>({ 1: 750 });
+  const [anchorLayouts, setAnchorLayouts] = useState<Record<string, { centerOffset: number; wmSize: number }>>({});
   const [bwLogoUrl, setBwLogoUrl] = useState<string>('');
   const [watermarkLogoUrl, setWatermarkLogoUrl] = useState<string>('');
 
-  const effectiveWatermarkPercent =
+  const normalizeWatermarkLevel = (val?: number): number => {
+    if (val === undefined || val === null || Number.isNaN(Number(val))) return 3;
+    const n = Number(val);
+    if (n > 10) {
+      return Math.max(0, Math.min(10, Math.round((n - 6) / 2)));
+    }
+    return Math.max(0, Math.min(10, Math.round(n)));
+  };
+
+  const watermarkLevel =
     watermarkOpacity !== undefined
-      ? Math.max(0, Math.min(60, watermarkOpacity))
-      : instituteProfile?.showWatermarkOnPapers === false
+      ? normalizeWatermarkLevel(watermarkOpacity)
+      : normalizeWatermarkLevel(instituteProfile?.watermarkOpacity);
+
+  // Level 0 on the control starts at 6% visibility (0.06 opacity) and scales up to Level 10
+  const effectiveWatermarkPercent =
+    instituteProfile?.showWatermarkOnPapers === false && watermarkOpacity === undefined
       ? 0
-      : Math.max(0, Math.min(60, instituteProfile?.watermarkOpacity ?? 12));
+      : 6 + watermarkLevel * 2;
 
   useEffect(() => {
     const rawLogo = instituteProfile?.logoUrl;
@@ -726,6 +739,49 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   const displayLogoUrl = bwLogoUrl || instituteProfile?.logoUrl || '';
   const displayWatermarkUrl = watermarkLogoUrl || displayLogoUrl;
 
+  const measureWatermarkAnchors = React.useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+    if (containerRect.width === 0) return;
+
+    const scaleRatio = containerRect.width / (container.offsetWidth || 794);
+    const anchorEls = Array.from(container.querySelectorAll('[data-page-anchor]')) as HTMLElement[];
+    const boundaryEls = Array.from(container.querySelectorAll('.page-boundary-marker, [data-cut-line="true"]')) as HTMLElement[];
+    const boundaryTops = boundaryEls
+      .map(b => (b.getBoundingClientRect().top - containerRect.top) / scaleRatio)
+      .sort((a, b) => a - b);
+
+    const nextLayouts: Record<string, { centerOffset: number; wmSize: number }> = {};
+    for (const anchorEl of anchorEls) {
+      const anchorId = anchorEl.getAttribute('data-page-anchor') || '';
+      if (!anchorId) continue;
+      const anchorTop = (anchorEl.getBoundingClientRect().top - containerRect.top) / scaleRatio;
+      const nextBoundaryTop = boundaryTops.find(bt => bt > anchorTop + 40) ?? (containerRect.height / scaleRatio);
+      const regionHeight = Math.max(200, nextBoundaryTop - anchorTop);
+      const centerOffset = Math.round(regionHeight / 2);
+      const wmSize = Math.min(260, Math.max(120, Math.round(regionHeight * 0.42)));
+      nextLayouts[anchorId] = { centerOffset, wmSize };
+    }
+
+    setAnchorLayouts(prev => {
+      const pKeys = Object.keys(prev);
+      const nKeys = Object.keys(nextLayouts);
+      if (
+        pKeys.length === nKeys.length &&
+        nKeys.every(
+          k =>
+            prev[k] &&
+            Math.abs(prev[k].centerOffset - nextLayouts[k].centerOffset) <= 3 &&
+            Math.abs(prev[k].wmSize - nextLayouts[k].wmSize) <= 3
+        )
+      ) {
+        return prev;
+      }
+      return nextLayouts;
+    });
+  }, []);
+
   useEffect(() => {
     const calculatePagination = () => {
       const container = containerRef.current;
@@ -734,14 +790,14 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       const containerRect = container.getBoundingClientRect();
       if (containerRect.width === 0) return;
 
-      // Scale-invariant A4 printable height (276mm printable height for 202mm printable width)
+      // Scale-invariant safe A4 printable height (252mm content height for 202mm width so browser print never spills before .page-break-before)
       const scaleRatio = containerRect.width / (container.offsetWidth || 794);
-      const a4PageHeightPx = (containerRect.width / 202) * 276;
+      const a4PageHeightPx = (containerRect.width / 202) * 252;
       const minTopOffsetPx = 40 * scaleRatio;
 
-      // Measure existing screen-only page boundary banners so we subtract their height
-      const markers = Array.from(container.querySelectorAll('.page-boundary-marker')) as HTMLElement[];
-      const markerRects = markers.map(m => {
+      // Subtract both screen-only page boundary banners AND repeated page headers so virtual coordinates are 100% pure content
+      const injectedEls = Array.from(container.querySelectorAll('.page-boundary-marker, .repeated-page-header')) as HTMLElement[];
+      const injectedRects = injectedEls.map(m => {
         const r = m.getBoundingClientRect();
         const style = window.getComputedStyle(m);
         const mt = (parseFloat(style.marginTop || '0') || 0) * scaleRatio;
@@ -754,7 +810,7 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
       const getVirtualY = (screenY: number) => {
         let virtualY = screenY;
-        for (const m of markerRects) {
+        for (const m of injectedRects) {
           if (m.top < screenY - 1) {
             virtualY -= m.totalHeight;
           }
@@ -762,9 +818,22 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         return Math.max(0, virtualY);
       };
 
+      const mainHeaderEl = container.querySelector('[data-main-paper-header="true"]') as HTMLElement | null;
+      const mainHeaderHeightPx = mainHeaderEl
+        ? mainHeaderEl.getBoundingClientRect().height
+        : 95 * scaleRatio;
+
+      const copy1El = container.querySelector('[data-copy-wrapper="0"]') as HTMLElement | null;
+      const copy1PureHeight = copy1El
+        ? Math.max(
+            0,
+            getVirtualY(copy1El.getBoundingClientRect().bottom - containerRect.top) -
+              getVirtualY(copy1El.getBoundingClientRect().top - containerRect.top)
+          )
+        : 0;
+
       const items = Array.from(container.querySelectorAll('[data-block-id]')) as HTMLElement[];
       const newBreakMap: Record<string, { endedPage: number; nextPage: number; isManual?: boolean }> = {};
-      const nextPageHeights: Record<number, number> = {};
 
       let currentPage = 1;
       let currentPageStartY = 0;
@@ -780,42 +849,84 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         const vBottom = getVirtualY(rect.bottom - containerRect.top);
         if (vBottom > maxVirtualBottom) maxVirtualBottom = vBottom;
 
+        if (blockId === 'copy2-root-start') {
+          const fitsBothOnOnePage =
+            currentPage === 1 &&
+            !pageBreakAfterMCQ &&
+            copy1PureHeight > 0 &&
+            copy1PureHeight * 2 + 36 * scaleRatio <= a4PageHeightPx;
+
+          if (!fitsBothOnOnePage) {
+            newBreakMap[blockId] = {
+              endedPage: currentPage,
+              nextPage: currentPage + 1,
+              isManual: true
+            };
+            currentPage += 1;
+            currentPageStartY = vTop;
+          }
+          continue;
+        }
+
+        const secKey = item.getAttribute('data-section-header-for');
+        if (secKey) {
+          const firstQEl = container.querySelector(`[data-first-q-of="${secKey}"]`) as HTMLElement | null;
+          const checkBottom = firstQEl
+            ? Math.max(vBottom, getVirtualY(firstQEl.getBoundingClientRect().bottom - containerRect.top))
+            : vBottom;
+
+          if (isManualBreak) {
+            newBreakMap[blockId] = {
+              endedPage: currentPage,
+              nextPage: currentPage + 1,
+              isManual: true
+            };
+            currentPage += 1;
+            currentPageStartY = vTop - mainHeaderHeightPx;
+            continue;
+          }
+
+          if (checkBottom - currentPageStartY > a4PageHeightPx && vTop - currentPageStartY > minTopOffsetPx) {
+            newBreakMap[blockId] = {
+              endedPage: currentPage,
+              nextPage: currentPage + 1,
+              isManual: false
+            };
+            currentPage += 1;
+            currentPageStartY = vTop - mainHeaderHeightPx;
+          }
+          continue;
+        }
+
+        // First question of a section is already checked together with its section header above
+        if (item.hasAttribute('data-first-q-of')) {
+          continue;
+        }
+
         if (isManualBreak) {
-          nextPageHeights[currentPage] = Math.max(240, Math.round((vTop - currentPageStartY) / scaleRatio));
           newBreakMap[blockId] = {
             endedPage: currentPage,
             nextPage: currentPage + 1,
             isManual: true
           };
           currentPage += 1;
-          currentPageStartY = vTop;
+          currentPageStartY = vTop - mainHeaderHeightPx;
           continue;
         }
 
         if (vBottom - currentPageStartY > a4PageHeightPx && vTop - currentPageStartY > minTopOffsetPx) {
-          nextPageHeights[currentPage] = Math.max(240, Math.round((vTop - currentPageStartY) / scaleRatio));
           newBreakMap[blockId] = {
             endedPage: currentPage,
             nextPage: currentPage + 1,
             isManual: false
           };
           currentPage += 1;
-          currentPageStartY = vTop;
+          currentPageStartY = vTop - mainHeaderHeightPx;
         }
       }
 
       const lastPageHeight = Math.max(0, maxVirtualBottom - currentPageStartY);
-      nextPageHeights[currentPage] = Math.max(240, Math.round(lastPageHeight / scaleRatio));
       const usedPercent = Math.min(100, Math.max(5, Math.round((lastPageHeight / a4PageHeightPx) * 100)));
-
-      setPageHeights(prev => {
-        const pKeys = Object.keys(prev);
-        const nKeys = Object.keys(nextPageHeights);
-        if (pKeys.length === nKeys.length && pKeys.every(k => Math.abs((prev[Number(k)] || 0) - (nextPageHeights[Number(k)] || 0)) <= 4)) {
-          return prev;
-        }
-        return nextPageHeights;
-      });
 
       setPageBreakMap(prev => {
         const prevKeys = Object.keys(prev);
@@ -835,17 +946,24 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         }
         return { totalPages: currentPage, lastPageUsedPercent: usedPercent };
       });
+
+      measureWatermarkAnchors();
     };
 
-    const t1 = setTimeout(calculatePagination, 50);
-    const t2 = setTimeout(calculatePagination, 250);
+    const t1 = setTimeout(calculatePagination, 40);
+    const t2 = setTimeout(calculatePagination, 180);
     window.addEventListener('resize', calculatePagination);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener('resize', calculatePagination);
     };
-  }, [questions, sections, baseFontSize, lineSpacing, medium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, classLevel, subject, timeAllowed, paperCode, isTwoPerSheet]);
+  }, [questions, sections, baseFontSize, lineSpacing, medium, showAnswerKey, headerStyle, pageBreakAfterMCQ, bubbleSheetPosition, classLevel, subject, timeAllowed, paperCode, isTwoPerSheet, measureWatermarkAnchors]);
+
+  useEffect(() => {
+    const t = setTimeout(measureWatermarkAnchors, 25);
+    return () => clearTimeout(t);
+  }, [pageBreakMap, pageSummary.totalPages, isTwoPerSheet, measureWatermarkAnchors]);
 
   const getLayoutStyles = (mode: number, baseSize: number) => {
     // Flexible baseSize scaling between 8px and 20px
@@ -1141,14 +1259,16 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
     }
   }
 
-  const renderPageWatermark = (pageNum: number) => {
+  const renderPageWatermark = (anchorId: string) => {
     if (!displayWatermarkUrl || effectiveWatermarkPercent <= 0) return null;
-    const pageH = isTwoPerSheet ? 480 : (pageHeights[pageNum] || 750);
-    const wmSize = isTwoPerSheet ? 160 : Math.min(280, Math.max(150, Math.round(pageH * 0.42)));
-    const wmTop = isTwoPerSheet ? 140 : Math.max(115, Math.round((pageH - wmSize) / 2));
+    const layout = anchorLayouts[anchorId];
+    const wmSize = layout?.wmSize ?? (isTwoPerSheet ? 160 : 230);
+    const centerOffset = layout?.centerOffset ?? (isTwoPerSheet ? 220 : 440);
+    const isSamePageHalfSheet = isTwoPerSheet && !pageBreakMap['copy2-root-start'];
 
     return (
       <div
+        data-page-anchor={anchorId}
         className="relative w-full h-0 overflow-visible pointer-events-none select-none z-0"
         dir="ltr"
         aria-hidden="true"
@@ -1156,15 +1276,15 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         <div
           style={{
             position: 'absolute',
-            top: `${wmTop}px`,
+            top: `${centerOffset}px`,
             left: '50%',
-            transform: 'translateX(-50%)',
+            transform: 'translate(-50%, -50%)',
             width: `${wmSize}px`,
             height: `${wmSize}px`,
             opacity: effectiveWatermarkPercent / 100,
             pointerEvents: 'none'
           }}
-          className="flex items-center justify-center"
+          className={`flex items-center justify-center ${isSamePageHalfSheet ? 'watermark-half-page' : 'watermark-full-page'}`}
         >
           <img
             src={displayWatermarkUrl}
@@ -1474,84 +1594,94 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
             isManual={bBreak.isManual}
           />
         )}
-        {bBreak && renderPageWatermark(bBreak.nextPage)}
         <div
-          data-block-id={blockId}
-          dir="ltr"
-          style={{ fontFamily: englishFontStack, lineHeight: '1.25' }}
-          className={`border-[1.5px] border-black rounded-sm px-1.5 py-1 my-1 bg-white text-black break-inside-avoid ${bBreak ? 'page-break-before print:pt-2' : ''}`}
+          style={bBreak ? { pageBreakBefore: 'always', breakBefore: 'page' } : undefined}
+          className={bBreak ? 'page-break-before print:pt-2 w-full' : 'w-full'}
         >
-          <div className="flex items-center justify-between border-b border-black pb-0.5 mb-1 gap-2">
-            <div className="flex items-center gap-2">
-              <span className="font-black uppercase tracking-wider text-[10px] text-black">
-                BUBBLE SHEET (MCQs: 1–{totalMCQCount})
-              </span>
-              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-black">
-                <span>Correct:</span>
-                <svg width="11" height="11" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                  <circle cx="6" cy="6" r="5" fill="#000000" stroke="#000000" strokeWidth="1" />
-                </svg>
-              </span>
+          {bBreak && renderPageWatermark(`break-${blockId}`)}
+          {bBreak && (
+            <div className="repeated-page-header mb-1.5">
+              {renderPaperHeader()}
             </div>
-            {medium === 'Urdu' || medium === 'Both' ? (
-              <span
-                dir="rtl"
-                style={{ fontFamily: urduFontStack, lineHeight: '1.35' }}
-                className="text-[11px] font-bold text-black text-right"
-              >
-                درست جواب کے دائرے کو نیلے یا کالے پین سے مکمل پر کریں۔
-              </span>
-            ) : (
-              <span className="text-[9px] font-bold text-black">
-                Fill the correct circle completely with blue or black ink.
-              </span>
-            )}
-          </div>
-
+          )}
           <div
-            className="grid gap-x-1 gap-y-1"
-            style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+            data-block-id={blockId}
             dir="ltr"
+            style={{ fontFamily: englishFontStack, lineHeight: '1.25' }}
+            className="border-[1.5px] border-black rounded-sm px-1.5 py-1 my-1 bg-white text-black break-inside-avoid"
           >
-            {Array.from({ length: totalMCQCount }).map((_, idx) => {
-              const qNum = idx + 1;
-              return (
-                <div
-                  key={qNum}
-                  className="inline-flex items-center justify-start gap-1 border border-black/30 rounded-[2px] px-1 py-0.5 bg-white"
+            <div className="flex items-center justify-between border-b border-black pb-0.5 mb-1 gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-black uppercase tracking-wider text-[10px] text-black">
+                  BUBBLE SHEET (MCQs: 1–{totalMCQCount})
+                </span>
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-black">
+                  <span>Correct:</span>
+                  <svg width="11" height="11" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <circle cx="6" cy="6" r="5" fill="#000000" stroke="#000000" strokeWidth="1" />
+                  </svg>
+                </span>
+              </div>
+              {medium === 'Urdu' || medium === 'Both' ? (
+                <span
+                  dir="rtl"
+                  style={{ fontFamily: urduFontStack, lineHeight: '1.35' }}
+                  className="text-[11px] font-bold text-black text-right"
                 >
-                  <span className="font-bold text-[9.5px] text-black shrink-0 text-left leading-none">
-                    {qNum}.
-                  </span>
-                  <div className="inline-flex items-center gap-[2px] shrink-0">
-                    {['A', 'B', 'C', 'D'].map(letter => (
-                      <svg
-                        key={letter}
-                        width="12.5"
-                        height="12.5"
-                        viewBox="0 0 16 16"
-                        xmlns="http://www.w3.org/2000/svg"
-                        style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
-                      >
-                        <circle cx="8" cy="8" r="6.8" fill="#ffffff" stroke="#000000" strokeWidth="1.25" />
-                        <text
-                          x="8"
-                          y="8.4"
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fontSize="8.5"
-                          fontWeight="bold"
-                          fontFamily="Times New Roman, serif"
-                          fill="#000000"
+                  درست جواب کے دائرے کو نیلے یا کالے پین سے مکمل پر کریں۔
+                </span>
+              ) : (
+                <span className="text-[9px] font-bold text-black">
+                  Fill the correct circle completely with blue or black ink.
+                </span>
+              )}
+            </div>
+
+            <div
+              className="grid gap-x-1 gap-y-1"
+              style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+              dir="ltr"
+            >
+              {Array.from({ length: totalMCQCount }).map((_, idx) => {
+                const qNum = idx + 1;
+                return (
+                  <div
+                    key={qNum}
+                    className="inline-flex items-center justify-start gap-1 border border-black/30 rounded-[2px] px-1 py-0.5 bg-white"
+                  >
+                    <span className="font-bold text-[9.5px] text-black shrink-0 text-left leading-none">
+                      {qNum}.
+                    </span>
+                    <div className="inline-flex items-center gap-[2px] shrink-0">
+                      {['A', 'B', 'C', 'D'].map(letter => (
+                        <svg
+                          key={letter}
+                          width="12.5"
+                          height="12.5"
+                          viewBox="0 0 16 16"
+                          xmlns="http://www.w3.org/2000/svg"
+                          style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
                         >
-                          {letter}
-                        </text>
-                      </svg>
-                    ))}
+                          <circle cx="8" cy="8" r="6.8" fill="#ffffff" stroke="#000000" strokeWidth="1.25" />
+                          <text
+                            x="8"
+                            y="8.4"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="8.5"
+                            fontWeight="bold"
+                            fontFamily="Times New Roman, serif"
+                            fill="#000000"
+                          >
+                            {letter}
+                          </text>
+                        </svg>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </React.Fragment>
@@ -1561,6 +1691,8 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
   const renderAnswerKeyBubbleSheet = (idPrefix: string = '') => {
     if (!showAnswerKey || orderedMCQQuestions.length === 0) return null;
 
+    const akBlockId = `${idPrefix}mcq-answer-key-block`;
+    const akBreak = pageBreakMap[akBlockId];
     const colCount =
       totalMCQCount <= 6
         ? Math.max(totalMCQCount, 6)
@@ -1569,95 +1701,126 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
         : 7;
 
     return (
-      <div
-        data-block-id={`${idPrefix}mcq-answer-key-block`}
-        dir="ltr"
-        style={{ fontFamily: englishFontStack, lineHeight: '1.25' }}
-        className="mt-1.5 border-[1.5px] border-black rounded-sm px-1.5 py-1 bg-white text-black break-inside-avoid z-10 relative"
-      >
-        <div className="flex items-center justify-between border-b border-black pb-0.5 mb-1 gap-2">
-          <span className="font-black uppercase tracking-wider text-[10px] text-black">
-            ANSWER KEY — BUBBLE SHEET (MCQs: 1–{totalMCQCount})
-          </span>
-          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-black">
-            <span>Correct Option:</span>
-            <svg width="11" height="11" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-              <circle cx="6" cy="6" r="5" fill="#000000" stroke="#000000" strokeWidth="1" />
-            </svg>
-          </span>
-        </div>
-
+      <React.Fragment key={akBlockId}>
+        {akBreak && (
+          <PageBoundaryBanner
+            endedPage={akBreak.endedPage}
+            nextPage={akBreak.nextPage}
+            isManual={akBreak.isManual}
+          />
+        )}
         <div
-          className="grid gap-x-1 gap-y-1"
-          style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
-          dir="ltr"
+          style={akBreak ? { pageBreakBefore: 'always', breakBefore: 'page' } : undefined}
+          className={akBreak ? 'page-break-before print:pt-2 w-full' : 'w-full'}
         >
-          {orderedMCQQuestions.map((mcq, idx) => {
-            const qNum = idx + 1;
-            const correctLetter = getCorrectBubbleLetter(mcq);
-            return (
-              <div
-                key={`${idPrefix}key-${mcq.id}-${qNum}`}
-                className="inline-flex items-center justify-start gap-1 border border-black/30 rounded-[2px] px-1 py-0.5 bg-white"
-              >
-                <span className="font-bold text-[9.5px] text-black shrink-0 text-left leading-none">
-                  {qNum}.
-                </span>
-                <div className="inline-flex items-center gap-[2px] shrink-0">
-                  {(['A', 'B', 'C', 'D'] as const).map(letter => {
-                    const isFilled = correctLetter === letter;
-                    return (
-                      <svg
-                        key={letter}
-                        width="12.5"
-                        height="12.5"
-                        viewBox="0 0 16 16"
-                        xmlns="http://www.w3.org/2000/svg"
-                        style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
-                      >
-                        <circle
-                          cx="8"
-                          cy="8"
-                          r="6.8"
-                          fill={isFilled ? '#000000' : '#ffffff'}
-                          stroke="#000000"
-                          strokeWidth="1.25"
-                        />
-                        <text
-                          x="8"
-                          y="8.4"
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fontSize="8.5"
-                          fontWeight="bold"
-                          fontFamily="Times New Roman, serif"
-                          fill={isFilled ? '#ffffff' : '#000000'}
-                        >
-                          {letter}
-                        </text>
-                      </svg>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          {akBreak && renderPageWatermark(`break-${akBlockId}`)}
+          {akBreak && (
+            <div className="repeated-page-header mb-1.5">
+              {renderPaperHeader()}
+            </div>
+          )}
+          <div
+            data-block-id={akBlockId}
+            dir="ltr"
+            style={{ fontFamily: englishFontStack, lineHeight: '1.25' }}
+            className="mt-1.5 border-[1.5px] border-black rounded-sm px-1.5 py-1 bg-white text-black break-inside-avoid z-10 relative"
+          >
+            <div className="flex items-center justify-between border-b border-black pb-0.5 mb-1 gap-2">
+              <span className="font-black uppercase tracking-wider text-[10px] text-black">
+                ANSWER KEY — BUBBLE SHEET (MCQs: 1–{totalMCQCount})
+              </span>
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-black">
+                <span>Correct Option:</span>
+                <svg width="11" height="11" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                  <circle cx="6" cy="6" r="5" fill="#000000" stroke="#000000" strokeWidth="1" />
+                </svg>
+              </span>
+            </div>
+
+            <div
+              className="grid gap-x-1 gap-y-1"
+              style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+              dir="ltr"
+            >
+              {orderedMCQQuestions.map((mcq, idx) => {
+                const qNum = idx + 1;
+                const correctLetter = getCorrectBubbleLetter(mcq);
+                return (
+                  <div
+                    key={`${idPrefix}key-${mcq.id}-${qNum}`}
+                    className="inline-flex items-center justify-start gap-1 border border-black/30 rounded-[2px] px-1 py-0.5 bg-white"
+                  >
+                    <span className="font-bold text-[9.5px] text-black shrink-0 text-left leading-none">
+                      {qNum}.
+                    </span>
+                    <div className="inline-flex items-center gap-[2px] shrink-0">
+                      {(['A', 'B', 'C', 'D'] as const).map(letter => {
+                        const isFilled = correctLetter === letter;
+                        return (
+                          <svg
+                            key={letter}
+                            width="12.5"
+                            height="12.5"
+                            viewBox="0 0 16 16"
+                            xmlns="http://www.w3.org/2000/svg"
+                            style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}
+                          >
+                            <circle
+                              cx="8"
+                              cy="8"
+                              r="6.8"
+                              fill={isFilled ? '#000000' : '#ffffff'}
+                              stroke="#000000"
+                              strokeWidth="1.25"
+                            />
+                            <text
+                              x="8"
+                              y="8.4"
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              fontSize="8.5"
+                              fontWeight="bold"
+                              fontFamily="Times New Roman, serif"
+                              fill={isFilled ? '#ffffff' : '#000000'}
+                            >
+                              {letter}
+                            </text>
+                          </svg>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </div>
+      </React.Fragment>
     );
   };
 
   const renderPaperCopy = (copyIndex: number) => {
     const idPrefix = copyIndex === 0 ? '' : `copy${copyIndex + 1}-`;
+    const isSecondCopy = copyIndex === 1;
+    const copy2Break = isSecondCopy ? pageBreakMap['copy2-root-start'] : undefined;
     let runningMCQCounter = 0;
 
     return (
-      <div className="relative w-full">
-        {/* PAGE 1 WATERMARK */}
-        {renderPageWatermark(1)}
+      <div
+        data-copy-wrapper={copyIndex}
+        style={copy2Break ? { pageBreakBefore: 'always', breakBefore: 'page' } : undefined}
+        className={`relative w-full ${copy2Break ? 'page-break-before print:pt-2' : ''}`}
+      >
+        {/* FIRST PAGE OF THIS COPY WATERMARK */}
+        {renderPageWatermark(`copy${copyIndex}-page1`)}
 
         {/* HEADER BLOCK */}
-        {renderPaperHeader()}
+        <div
+          data-block-id={isSecondCopy ? 'copy2-root-start' : 'copy1-root-start'}
+          data-main-paper-header={copyIndex === 0 ? 'true' : undefined}
+        >
+          {renderPaperHeader()}
+        </div>
 
         {/* QUESTIONS ENGINE */}
         <div className="z-10 relative mt-0.5" dir={baseDir}>
@@ -1698,8 +1861,306 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
               // 🔹 DYNAMIC FONT SIZE RESOLUTION
               const customTitleSize = section.titleFontSize ? `${section.titleFontSize}px` : styles.sectionTitle;
               const isBreakSection = Boolean(pageBreakAfterMCQ && section.id === firstSubjectiveSectionId);
+              const secIdKey = `${idPrefix}sec-${idx}`;
               const secHeaderBlockId = `${idPrefix}sec-header-${idx}`;
-              const secHeaderBreak = pageBreakMap[secHeaderBlockId];
+              const secHeaderBreak = pageBreakMap[secHeaderBlockId] || (isBreakSection ? { endedPage: 1, nextPage: 2, isManual: true } : undefined);
+
+              // Build flat list of question items for this section so mid-section page breaks close the border box cleanly and repeat the header on the new page
+              const questionItems: {
+                qBlockId: string;
+                qBreak?: { endedPage: number; nextPage: number; isManual?: boolean };
+                node: React.ReactNode;
+              }[] = [];
+
+              if (section.type === 'MCQ') {
+                if (section.subParts && section.subParts.length > 0) {
+                  let secMcqIndex = 0;
+                  section.subParts.forEach((part, pIdx) => {
+                    const start = section.subParts!.slice(0, pIdx).reduce((acc, p) => acc + (p.questionCount || 0), 0);
+                    const partQuestions = sectionQuestions.slice(start, start + (part.questionCount || 0));
+                    if (partQuestions.length === 0) return;
+                    const isPartUrdu = isUrduText(part.label);
+
+                    partQuestions.forEach((q, pqIdx) => {
+                      runningMCQCounter++;
+                      const isFirstInSec = secMcqIndex === 0;
+                      secMcqIndex++;
+                      const qBlockId = `${idPrefix}mcq-${idx}-${pIdx}-${q.id}-${runningMCQCounter}`;
+                      const qBreak = isFirstInSec ? undefined : pageBreakMap[qBlockId];
+                      const isLastInPart = pqIdx === partQuestions.length - 1;
+                      const activeOptions = (q.options && q.options.length > 0) ? q.options : (q.optionsUrdu || []);
+                      const hasLongOption = activeOptions.some((opt, oIdx) => {
+                        const engLen = cleanText(q.options?.[oIdx] || opt).length;
+                        const urdLen = cleanText(q.optionsUrdu?.[oIdx] || opt).length;
+                        const activeLen = medium === 'Urdu' ? (urdLen || engLen) : (engLen || urdLen);
+                        return activeLen > 24;
+                      });
+                      const singleMediumLayoutClass = hasLongOption
+                        ? 'flex flex-wrap items-baseline gap-x-12 gap-y-1'
+                        : 'grid grid-cols-4 gap-x-6 gap-y-1 w-full';
+
+                      questionItems.push({
+                        qBlockId,
+                        qBreak,
+                        node: (
+                          <div
+                            key={qBlockId}
+                            data-block-id={qBlockId}
+                            data-first-q-of={isFirstInSec ? secIdKey : undefined}
+                            style={{
+                              fontSize: styles.questionText,
+                              paddingBottom: isLastInPart ? '0px' : mcqPaddingBottom,
+                              marginBottom: isLastInPart ? '0px' : mcqMarginBottom
+                            }}
+                            className="break-inside-avoid"
+                          >
+                            {pqIdx === 0 && Boolean(part.label) && (
+                              <div
+                                style={{ fontSize: styles.questionText }}
+                                className={`font-bold italic mb-1 mt-0.5 opacity-90 border-l-4 border-black pl-2 text-black ${
+                                  isPartUrdu ? 'font-urdu text-right border-l-0 border-r-4 pr-2' : ''
+                                }`}
+                                dir={isPartUrdu ? 'rtl' : 'ltr'}
+                              >
+                                {renderFormattedText(part.label)}
+                              </div>
+                            )}
+                            <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
+                            <div
+                              className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : singleMediumLayoutClass} ${
+                                baseDir === 'rtl' ? 'pr-4' : 'pl-4'
+                              } mt-0.5`}
+                              dir={baseDir}
+                            >
+                              {activeOptions.map((_, oIdx) => (
+                                <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1.5">
+                                  <span
+                                    className="font-bold text-black shrink-0 inline-block"
+                                    dir="ltr"
+                                    style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}
+                                  >
+                                    ({String.fromCharCode(65 + oIdx)})
+                                  </span>
+                                  <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      });
+                    });
+                  });
+                } else {
+                  sectionQuestions.forEach((q, mqIdx) => {
+                    runningMCQCounter++;
+                    const isFirstInSec = mqIdx === 0;
+                    const qBlockId = `${idPrefix}mcq-${idx}-${q.id}-${runningMCQCounter}`;
+                    const qBreak = isFirstInSec ? undefined : pageBreakMap[qBlockId];
+                    const isLastMCQ = mqIdx === sectionQuestions.length - 1;
+                    const activeOptions = (q.options && q.options.length > 0) ? q.options : (q.optionsUrdu || []);
+                    const hasLongOption = activeOptions.some((opt, oIdx) => {
+                      const engLen = cleanText(q.options?.[oIdx] || opt).length;
+                      const urdLen = cleanText(q.optionsUrdu?.[oIdx] || opt).length;
+                      const activeLen = medium === 'Urdu' ? (urdLen || engLen) : (engLen || urdLen);
+                      return activeLen > 24;
+                    });
+                    const singleMediumLayoutClass = hasLongOption
+                      ? 'flex flex-wrap items-baseline gap-x-12 gap-y-1'
+                      : 'grid grid-cols-4 gap-x-6 gap-y-1 w-full';
+
+                    questionItems.push({
+                      qBlockId,
+                      qBreak,
+                      node: (
+                        <div
+                          key={qBlockId}
+                          data-block-id={qBlockId}
+                          data-first-q-of={isFirstInSec ? secIdKey : undefined}
+                          style={{
+                            fontSize: styles.questionText,
+                            paddingBottom: isLastMCQ ? '0px' : mcqPaddingBottom,
+                            marginBottom: isLastMCQ ? '0px' : mcqMarginBottom
+                          }}
+                          className="break-inside-avoid"
+                        >
+                          <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
+                          <div
+                            className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : singleMediumLayoutClass} ${
+                              baseDir === 'rtl' ? 'pr-4' : 'pl-4'
+                            } mt-0.5`}
+                            dir={baseDir}
+                          >
+                            {activeOptions.map((_, oIdx) => (
+                              <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1.5">
+                                <span
+                                  className="font-bold text-black shrink-0 inline-block"
+                                  dir="ltr"
+                                  style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}
+                                >
+                                  ({String.fromCharCode(65 + oIdx)})
+                                </span>
+                                <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    });
+                  });
+                }
+              } else {
+                const partsPerQuestion = (section.subParts && section.subParts.length > 0) ? section.subParts.length : 1;
+                const totalUnits = Math.floor(sectionQuestions.length / partsPerQuestion);
+                Array.from({ length: totalUnits }).forEach((_, qIdx) => {
+                  localQuestionCounter++;
+                  const isFirstInSec = qIdx === 0;
+                  const startIndex = qIdx * partsPerQuestion;
+                  const isLastUnit = qIdx === totalUnits - 1;
+
+                  const counterLabel = isIdioms
+                    ? `${toRoman(localQuestionCounter)}.`
+                    : (isSentences || isVoice)
+                    ? `(${toRoman(localQuestionCounter)})`
+                    : localQuestionCounter;
+
+                  const qBlockId = `${idPrefix}q-${idx}-${qIdx}`;
+                  const qBreak = isFirstInSec ? undefined : pageBreakMap[qBlockId];
+
+                  questionItems.push({
+                    qBlockId,
+                    qBreak,
+                    node: (
+                      <div
+                        key={qBlockId}
+                        data-block-id={qBlockId}
+                        data-first-q-of={isFirstInSec ? secIdKey : undefined}
+                        className="break-inside-avoid"
+                        style={{
+                          paddingBottom: (isGridSection || isLastUnit) ? '0px' : questionPaddingBottom,
+                          marginBottom: (isGridSection || isLastUnit) ? '0px' : questionMarginBottom
+                        }}
+                      >
+                        {section.subParts && section.subParts.length > 0 ? (
+                          <div className="space-y-0">
+                            {!skipNumbering && section.type.toUpperCase() !== 'LONG' && (
+                              <div className="font-bold text-black" style={{ fontSize: styles.questionText, lineHeight: dynamicLineHeight }}>
+                                {localQuestionCounter}.
+                              </div>
+                            )}
+
+                            {section.type === 'Passage' && (
+                              <div className="font-bold underline ml-4 mb-1 mt-1 text-[0.9em] text-black" style={{ fontSize: styles.questionText }}>
+                                Questions:
+                              </div>
+                            )}
+
+                            <div className={`${(skipNumbering || baseDir === 'rtl' || gridDir === 'rtl') ? 'pr-0' : 'pl-3'} space-y-0`}>
+                              {section.subParts.map((part, pIdx) => {
+                                const qPart = sectionQuestions[startIndex + pIdx];
+                                if (!qPart) return null;
+
+                                const isParaphrase = part.type === 'Paraphrase';
+                                const qWithMeta = { ...qPart, isParaphrase } as any;
+
+                                const isLong = section.type.toUpperCase() === 'LONG';
+                                const subLabel = (section as any).hideSubPartNumbering ? '' : part.label;
+                                const isLastSubPart = pIdx === section.subParts!.length - 1;
+
+                                let counter: any = subLabel;
+                                if (isLong) {
+                                  const titleStr = section.titleUrdu || section.title || '';
+                                  const titleMatch = titleStr.match(/(?:Q\.?\s*|سوال نمبر\s*|سوال\s*)(\d+)/i);
+                                  const qNum = titleMatch ? parseInt(titleMatch[1], 10) + localQuestionCounter - 1 : idx + localQuestionCounter;
+                                  const prefixEng = `Q${qNum}. `;
+                                  const prefixUrdu = `سوال ${qNum}: `;
+
+                                  if (pIdx === 0) {
+                                    counter = {
+                                      eng: <span className="flex gap-1 font-bold"><span>{prefixEng}</span><span>{subLabel}</span></span>,
+                                      urdu: <span className="flex gap-1 font-bold"><span>{prefixUrdu}</span><span>{subLabel}</span></span>
+                                    };
+                                  } else {
+                                    counter = {
+                                      eng: <span className="flex gap-1 font-bold"><span className="invisible">{prefixEng}</span><span>{subLabel}</span></span>,
+                                      urdu: <span className="flex gap-1 font-bold"><span className="invisible">{prefixUrdu}</span><span>{subLabel}</span></span>
+                                    };
+                                  }
+                                }
+
+                                return (
+                                  <React.Fragment key={pIdx}>
+                                    {part.isAlternative && pIdx > 0 && (
+                                      <div
+                                        className="w-full text-center my-1 font-black italic uppercase tracking-[0.4em] text-black"
+                                        style={{ fontSize: `calc(${styles.questionText} * 0.95)`, lineHeight: '1.15' }}
+                                      >
+                                        (OR)
+                                      </div>
+                                    )}
+                                    <div
+                                      style={{
+                                        fontSize: styles.questionText,
+                                        marginBottom: isLastSubPart ? '0px' : subPartMarginBottom
+                                      }}
+                                      className={`flex gap-1.5 items-start ${part.isAlternative ? 'mt-0.5' : ''}`}
+                                    >
+                                      <div className="flex-grow min-w-0">
+                                        {renderQuestionText(
+                                          qWithMeta,
+                                          part.isAlternative ? '' : counter,
+                                          undefined,
+                                          undefined,
+                                          part.isAlternative || (section as any).hideSubPartNumbering,
+                                          isGridSection
+                                        )}
+                                      </div>
+                                      {!section.hideSubPartMarks && (
+                                        <span className="text-[0.8em] font-bold whitespace-nowrap ml-2 text-black shrink-0" style={{ lineHeight: dynamicLineHeight }}>
+                                          ({part.marks})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: styles.questionText }} className="w-full flex justify-between items-start">
+                            <div className="flex-grow min-w-0">
+                              {renderQuestionText(sectionQuestions[startIndex], counterLabel, undefined, undefined, false, isGridSection)}
+                            </div>
+                            {!section.hideSubPartMarks && (subject || '').toLowerCase().includes('english') && !isGridSection && (
+                              <span className="text-[0.8em] font-bold ml-2 text-black shrink-0" style={{ lineHeight: dynamicLineHeight }}>
+                                ({section.marksPerQuestion})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  });
+                });
+              }
+
+              const chunks: typeof questionItems[] = [];
+              questionItems.forEach((item, itemIdx) => {
+                if (itemIdx === 0 || !item.qBreak) {
+                  if (chunks.length === 0) chunks.push([]);
+                  chunks[chunks.length - 1].push(item);
+                } else {
+                  chunks.push([item]);
+                }
+              });
+
+              const questionsWrapperClass =
+                section.type === 'MCQ'
+                  ? 'grid grid-cols-1 text-black'
+                  : isGridSection
+                  ? `grid ${gridCols} gap-x-4 gap-y-0.5`
+                  : 'text-black';
+              const questionsWrapperStyle = section.type === 'MCQ' ? { gap: mcqGapValue } : undefined;
+              const questionsWrapperDir = section.type === 'MCQ' ? baseDir : gridDir;
 
               return (
                 <React.Fragment key={`${idPrefix}${section.id || idx}`}>
@@ -1710,291 +2171,123 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
                       isManual={secHeaderBreak.isManual}
                     />
                   )}
-                  <div 
-                    style={{ 
+                  <div
+                    style={{
                       marginBottom: idx < sections.length - 1 ? sectionMarginBottom : '0px',
-                      ...((isBreakSection || secHeaderBreak) ? { pageBreakBefore: 'always', breakBefore: 'page' } : {})
+                      ...(secHeaderBreak ? { pageBreakBefore: 'always', breakBefore: 'page' } : {})
                     }}
-                    className={(isBreakSection || secHeaderBreak) ? 'page-break-before print:pt-2' : ''}
+                    className={secHeaderBreak ? 'page-break-before print:pt-2' : ''}
                   >
-                    {(secHeaderBreak || isBreakSection) && renderPageWatermark(secHeaderBreak?.nextPage || 2)}
+                    {secHeaderBreak && renderPageWatermark(`break-${secHeaderBlockId}`)}
+                    {secHeaderBreak && (
+                      <div className="repeated-page-header mb-1.5">
+                        {renderPaperHeader()}
+                      </div>
+                    )}
                     <div
                       data-block-id={secHeaderBlockId}
+                      data-section-header-for={secIdKey}
                       data-manual-break={isBreakSection ? 'true' : 'false'}
                     >
-                      {isBreakSection && renderPaperHeader()}
                       {showHeading && (
-                        <div className={`text-center mt-0.5 mb-0.5 font-bold tracking-widest py-0.5 text-black ${isUrduText(actualHeading) ? 'font-urdu' : ''}`} style={{ fontSize: styles.sectionTitle, lineHeight: '1.3', fontFamily: isUrduText(actualHeading) ? urduFontStack : englishFontStack }} dir={isUrduText(actualHeading) ? "rtl" : "ltr"}>
-                          ( {renderFormattedText(actualHeading)} {medium === 'Both' && translateHeadingToUrdu(actualHeading) ? `/ ${translateHeadingToUrdu(actualHeading)}` : ''} )
+                        <div
+                          className={`text-center mt-0.5 mb-0.5 font-bold tracking-widest py-0.5 text-black ${
+                            isUrduText(actualHeading) ? 'font-urdu' : ''
+                          }`}
+                          style={{
+                            fontSize: styles.sectionTitle,
+                            lineHeight: '1.3',
+                            fontFamily: isUrduText(actualHeading) ? urduFontStack : englishFontStack
+                          }}
+                          dir={isUrduText(actualHeading) ? 'rtl' : 'ltr'}
+                        >
+                          ( {renderFormattedText(actualHeading)}{' '}
+                          {medium === 'Both' && translateHeadingToUrdu(actualHeading) ? `/ ${translateHeadingToUrdu(actualHeading)}` : ''} )
                         </div>
                       )}
                     </div>
 
-                  {bubbleSheetPosition === 'above_mcq' && section.id === firstMCQSectionId && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-above`)}
-                  
-                  <div className="border-[1.5px] border-black px-2 py-1 rounded-sm">
-                    {/* 🔹 LANGUAGE-AWARE SECTION HEADING WITH AUTO MARKS */}
-                    {Boolean(section.title?.trim() || section.titleUrdu?.trim()) && (
-                    <div style={{ fontSize: customTitleSize, lineHeight: '1.45' }} className="font-bold mb-1 border-b-[1.5px] border-black pt-0.5 pb-1 text-black">
-                       {medium === 'Both' && section.titleUrdu ? (
-                        <div className="flex flex-col w-full">
-                           {/* 🔹 3-COLUMN GRID: English (Left) | Marks (Center) | Urdu (Right) */}
-                           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                              <div className="text-left" dir="ltr" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }}>
-                                 <h3 className="uppercase whitespace-pre-wrap m-0">{renderFormattedText(section.title?.trim())}</h3>
-                              </div>
-                              <div className="text-center font-bold whitespace-nowrap px-2" dir="ltr" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }}>
-                                 {getMarksCalc(section, false)}
-                              </div>
-                              <div className="text-right font-urdu whitespace-pre-wrap" style={{ fontFamily: urduFontStack, lineHeight: '1.5' }} dir="rtl">
-                                 {renderFormattedText(section.titleUrdu?.trim())}
-                              </div>
-                           </div>
-                        </div>
-                     ) : medium === 'Urdu' ? (
-                        <div className="flex justify-between items-center font-urdu" style={{ fontFamily: urduFontStack, lineHeight: '1.5' }} dir="rtl">
-                          <h3 className="uppercase whitespace-pre-wrap m-0">{renderFormattedText((section.titleUrdu || section.title)?.trim())}</h3>
-                          <div className="font-bold whitespace-nowrap" dir="ltr" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }}>
-                            {getMarksCalc(section, true)}
-                          </div>
-                        </div>
-                     ) : (
-                        <div className="flex justify-between items-center" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
-                          <h3 className="uppercase whitespace-pre-wrap m-0">{renderFormattedText(section.title?.trim())}</h3>
-                          <div className="font-bold whitespace-nowrap">
-                            {getMarksCalc(section, false)}
-                          </div>
-                        </div>
-                     )}
-                  </div>
-                  )}
-                  
-                  {section.type === 'MCQ' ? (
-                    <div className="grid grid-cols-1 text-black" style={{ gap: mcqGapValue }}>
-                      {section.subParts && section.subParts.length > 0 ? (
-                        section.subParts.map((part, pIdx) => {
-                           const start = section.subParts!.slice(0, pIdx).reduce((acc, p) => acc + (p.questionCount || 0), 0);
-                           const partQuestions = sectionQuestions.slice(start, start + (part.questionCount || 0));
-                           if (partQuestions.length === 0) return null;
-                           const isPartUrdu = isUrduText(part.label);
-                           return (
-                             <div key={pIdx} className={pIdx < section.subParts!.length - 1 ? "mb-1.5" : "mb-0"}>
-                                <div style={{ fontSize: styles.questionText }} className={`font-bold italic mb-1 opacity-90 border-l-4 border-black pl-2 text-black ${isPartUrdu ? 'font-urdu text-right border-l-0 border-r-4 pr-2' : ''}`} dir={isPartUrdu ? 'rtl' : 'ltr'}>{renderFormattedText(part.label)}</div>
-                                {partQuestions.map((q, pqIdx) => {
-                                  runningMCQCounter++;
-                                  const qBlockId = `${idPrefix}mcq-${idx}-${pIdx}-${q.id}-${runningMCQCounter}`;
-                                  const qBreak = pageBreakMap[qBlockId];
-                                  const isLastInPart = pqIdx === partQuestions.length - 1;
-                                  return (
-                                    <React.Fragment key={q.id}>
-                                      {qBreak && (
-                                        <PageBoundaryBanner
-                                          endedPage={qBreak.endedPage}
-                                          nextPage={qBreak.nextPage}
-                                          isManual={qBreak.isManual}
-                                        />
-                                      )}
-                                      <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: isLastInPart ? '0px' : mcqPaddingBottom, marginBottom: isLastInPart ? '0px' : mcqMarginBottom }} className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`}>
-                                        {qBreak && renderPageWatermark(qBreak.nextPage)}
-                                        <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
-                                        {/* 🔹 DYNAMIC OPTIONS LAYOUT WITH INCREASED SPACING & CAPITAL (A)(B)(C)(D) */}
-                                        {(() => {
-                                          const activeOptions = (q.options && q.options.length > 0) ? q.options : (q.optionsUrdu || []);
-                                          const hasLongOption = activeOptions.some((opt, idx) => {
-                                            const engLen = cleanText(q.options?.[idx] || opt).length;
-                                            const urdLen = cleanText(q.optionsUrdu?.[idx] || opt).length;
-                                            const activeLen = medium === 'Urdu' ? (urdLen || engLen) : (engLen || urdLen);
-                                            return activeLen > 24;
-                                          });
-                                          const singleMediumLayoutClass = hasLongOption
-                                            ? 'flex flex-wrap items-baseline gap-x-12 gap-y-1'
-                                            : 'grid grid-cols-4 gap-x-6 gap-y-1 w-full';
-                                          return (
-                                            <div 
-                                              className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : singleMediumLayoutClass} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0.5`} 
-                                              dir={baseDir}
-                                            >
-                                              {activeOptions.map((_, oIdx) => (
-                                                <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1.5">
-                                                  <span className="font-bold text-black shrink-0 inline-block" dir="ltr" style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}>({String.fromCharCode(65 + oIdx)})</span> 
-                                                  <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          );
-                                        })()}
-                                      </div>
-                                    </React.Fragment>
-                                  );
-                                })}
-                             </div>
-                           );
-                        })
-                      ) : (
-                        sectionQuestions.map((q, mqIdx) => {
-                          runningMCQCounter++;
-                          const qBlockId = `${idPrefix}mcq-${idx}-${q.id}-${runningMCQCounter}`;
-                          const qBreak = pageBreakMap[qBlockId];
-                          const isLastMCQ = mqIdx === sectionQuestions.length - 1;
-                          const activeOptions = (q.options && q.options.length > 0) ? q.options : (q.optionsUrdu || []);
-                          const hasLongOption = activeOptions.some((opt, oIdx) => {
-                            const engLen = cleanText(q.options?.[oIdx] || opt).length;
-                            const urdLen = cleanText(q.optionsUrdu?.[oIdx] || opt).length;
-                            const activeLen = medium === 'Urdu' ? (urdLen || engLen) : (engLen || urdLen);
-                            return activeLen > 24;
-                          });
-                          const singleMediumLayoutClass = hasLongOption
-                            ? 'flex flex-wrap items-baseline gap-x-12 gap-y-1'
-                            : 'grid grid-cols-4 gap-x-6 gap-y-1 w-full';
-                          return (
-                            <React.Fragment key={q.id}>
-                              {qBreak && (
-                                <PageBoundaryBanner
-                                  endedPage={qBreak.endedPage}
-                                  nextPage={qBreak.nextPage}
-                                  isManual={qBreak.isManual}
-                                />
-                              )}
-                              <div data-block-id={qBlockId} style={{ fontSize: styles.questionText, paddingBottom: isLastMCQ ? '0px' : mcqPaddingBottom, marginBottom: isLastMCQ ? '0px' : mcqMarginBottom }} className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`}>
-                                {qBreak && renderPageWatermark(qBreak.nextPage)}
-                                <div className="font-semibold w-full text-black">{renderQuestionText(q, runningMCQCounter)}</div>
-                                {/* 🔹 DYNAMIC OPTIONS LAYOUT WITH INCREASED SPACING & CAPITAL (A)(B)(C)(D) */}
-                                <div 
-                                  className={`${medium === 'Both' ? `grid ${styles.optionGrid}` : singleMediumLayoutClass} ${baseDir === 'rtl' ? 'pr-4' : 'pl-4'} mt-0.5`} 
-                                  dir={baseDir}
-                                >
-                                  {activeOptions.map((_, oIdx) => (
-                                    <div key={oIdx} style={{ fontSize: styles.optionText }} className="inline-flex items-baseline gap-1.5">
-                                      <span className="font-bold text-black shrink-0 inline-block" dir="ltr" style={{ fontFamily: englishFontStack, unicodeBidi: 'isolate' }}>({String.fromCharCode(65 + oIdx)})</span> 
-                                      <div className="inline-block">{renderOptionContent(q, oIdx)}</div>
-                                    </div>
-                                  ))}
+                    {bubbleSheetPosition === 'above_mcq' && section.id === firstMCQSectionId && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-above`)}
+
+                    {/* First page chunk of this section */}
+                    <div className="border-[1.5px] border-black px-2 py-1 rounded-sm">
+                      {Boolean(section.title?.trim() || section.titleUrdu?.trim()) && (
+                        <div
+                          style={{ fontSize: customTitleSize, lineHeight: '1.45' }}
+                          className="font-bold mb-1 border-b-[1.5px] border-black pt-0.5 pb-1 text-black"
+                        >
+                          {medium === 'Both' && section.titleUrdu ? (
+                            <div className="flex flex-col w-full">
+                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                <div className="text-left" dir="ltr" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }}>
+                                  <h3 className="uppercase whitespace-pre-wrap m-0">{renderFormattedText(section.title?.trim())}</h3>
+                                </div>
+                                <div className="text-center font-bold whitespace-nowrap px-2" dir="ltr" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }}>
+                                  {getMarksCalc(section, false)}
+                                </div>
+                                <div className="text-right font-urdu whitespace-pre-wrap" style={{ fontFamily: urduFontStack, lineHeight: '1.5' }} dir="rtl">
+                                  {renderFormattedText(section.titleUrdu?.trim())}
                                 </div>
                               </div>
-                            </React.Fragment>
-                          );
-                        })
-                      )}
-                    </div>
-                  ) : (
-                    <div className={isGridSection ? `grid ${gridCols} gap-x-4 gap-y-0.5` : 'text-black'} dir={gridDir}>
-                      {(() => {
-                        const partsPerQuestion = (section.subParts && section.subParts.length > 0) ? section.subParts.length : 1;
-                        const totalUnits = Math.floor(sectionQuestions.length / partsPerQuestion);
-                        return Array.from({ length: totalUnits }).map((_, qIdx) => {
-                          localQuestionCounter++;
-                          const startIndex = qIdx * partsPerQuestion;
-                          const isLastUnit = qIdx === totalUnits - 1;
-                          
-                          const counterLabel = isIdioms 
-                            ? `${toRoman(localQuestionCounter)}.` 
-                            : ((isSentences || isVoice) ? `(${toRoman(localQuestionCounter)})` : localQuestionCounter);
-
-                          const qBlockId = `${idPrefix}q-${idx}-${qIdx}`;
-                          const qBreak = pageBreakMap[qBlockId];
-
-                          return (
-                            <React.Fragment key={qIdx}>
-                              {qBreak && (
-                                <PageBoundaryBanner
-                                  endedPage={qBreak.endedPage}
-                                  nextPage={qBreak.nextPage}
-                                  isManual={qBreak.isManual}
-                                />
-                              )}
-                              <div 
-                                data-block-id={qBlockId}
-                                className={`break-inside-avoid ${qBreak ? 'page-break-before print:pt-2' : ''}`} 
-                                style={{ 
-                                  paddingBottom: (isGridSection || isLastUnit) ? '0px' : questionPaddingBottom, 
-                                  marginBottom: (isGridSection || isLastUnit) ? '0px' : questionMarginBottom 
-                                }}
-                              >
-                              {qBreak && renderPageWatermark(qBreak.nextPage)}
-                              {section.subParts && section.subParts.length > 0 ? (
-                                 <div className="space-y-0">
-                                    {!skipNumbering && section.type.toUpperCase() !== 'LONG' && <div className="font-bold text-black" style={{ fontSize: styles.questionText, lineHeight: dynamicLineHeight }}>{localQuestionCounter}.</div>}
-                                    
-                                    {section.type === 'Passage' && (
-                                       <div className="font-bold underline ml-4 mb-1 mt-1 text-[0.9em] text-black" style={{ fontSize: styles.questionText }}>Questions:</div>
-                                    )}
-
-                                    <div className={`${(skipNumbering || baseDir === 'rtl' || gridDir === 'rtl') ? 'pr-0' : 'pl-3'} space-y-0`}>
-                                      {section.subParts.map((part, pIdx) => {
-                                        const qPart = sectionQuestions[startIndex + pIdx];
-                                        if (!qPart) return null;
-                                        
-                                        const isParaphrase = part.type === 'Paraphrase';
-                                        const qWithMeta = { ...qPart, isParaphrase } as any;
-
-                                        const isLong = section.type.toUpperCase() === 'LONG';
-                                        const subLabel = (section as any).hideSubPartNumbering ? "" : part.label;
-                                        const isLastSubPart = pIdx === section.subParts!.length - 1;
-                                        
-                                        let counter: any = subLabel;
-                                        if (isLong) {
-                                           const titleStr = section.titleUrdu || section.title || '';
-                                           const titleMatch = titleStr.match(/(?:Q\.?\s*|سوال نمبر\s*|سوال\s*)(\d+)/i);
-                                           const qNum = titleMatch ? parseInt(titleMatch[1], 10) + localQuestionCounter - 1 : idx + localQuestionCounter;
-                                           const prefixEng = `Q${qNum}. `;
-                                           const prefixUrdu = `سوال ${qNum}: `;
-                                           
-                                           if (pIdx === 0) {
-                                              counter = {
-                                                eng: <span className="flex gap-1 font-bold"><span>{prefixEng}</span><span>{subLabel}</span></span>,
-                                                urdu: <span className="flex gap-1 font-bold"><span>{prefixUrdu}</span><span>{subLabel}</span></span>
-                                              };
-                                           } else {
-                                              counter = {
-                                                eng: <span className="flex gap-1 font-bold"><span className="invisible">{prefixEng}</span><span>{subLabel}</span></span>,
-                                                urdu: <span className="flex gap-1 font-bold"><span className="invisible">{prefixUrdu}</span><span>{subLabel}</span></span>
-                                              };
-                                           }
-                                        }
-
-                                        return (
-                                          <React.Fragment key={pIdx}>
-                                            {part.isAlternative && pIdx > 0 && (
-                                              <div className="w-full text-center my-1 font-black italic uppercase tracking-[0.4em] text-black" style={{ fontSize: `calc(${styles.questionText} * 0.95)`, lineHeight: '1.15' }}>(OR)</div>
-                                            )}
-                                            <div
-                                              style={{
-                                                fontSize: styles.questionText,
-                                                marginBottom: isLastSubPart ? '0px' : subPartMarginBottom
-                                              }}
-                                              className={`flex gap-1.5 items-start ${part.isAlternative ? 'mt-0.5' : ''}`}
-                                            >
-                                               <div className="flex-grow min-w-0">
-                                                  {renderQuestionText(qWithMeta, part.isAlternative ? "" : counter, undefined, undefined, part.isAlternative || (section as any).hideSubPartNumbering, isGridSection)}
-                                               </div>
-                                               {!section.hideSubPartMarks && <span className="text-[0.8em] font-bold whitespace-nowrap ml-2 text-black shrink-0" style={{ lineHeight: dynamicLineHeight }}>({part.marks})</span>}
-                                            </div>
-                                          </React.Fragment>
-                                        );
-                                      })}
-                                    </div>
-                                 </div>
-                              ) : (
-                                 <div style={{ fontSize: styles.questionText }} className="w-full flex justify-between items-start">
-                                   <div className="flex-grow min-w-0">
-                                     {renderQuestionText(sectionQuestions[startIndex], counterLabel, undefined, undefined, false, isGridSection)}
-                                   </div>
-                                   {!section.hideSubPartMarks && (subject || '').toLowerCase().includes('english') && !isGridSection && <span className="text-[0.8em] font-bold ml-2 text-black shrink-0" style={{ lineHeight: dynamicLineHeight }}>({section.marksPerQuestion})</span>}
-                                 </div>
-                              )}
                             </div>
-                            </React.Fragment>
-                          );
-                        });
-                      })()}
+                          ) : medium === 'Urdu' ? (
+                            <div className="flex justify-between items-center font-urdu" style={{ fontFamily: urduFontStack, lineHeight: '1.5' }} dir="rtl">
+                              <h3 className="uppercase whitespace-pre-wrap m-0">{renderFormattedText((section.titleUrdu || section.title)?.trim())}</h3>
+                              <div className="font-bold whitespace-nowrap" dir="ltr" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }}>
+                                {getMarksCalc(section, true)}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-between items-center" style={{ fontFamily: englishFontStack, lineHeight: '1.35' }} dir="ltr">
+                              <h3 className="uppercase whitespace-pre-wrap m-0">{renderFormattedText(section.title?.trim())}</h3>
+                              <div className="font-bold whitespace-nowrap">
+                                {getMarksCalc(section, false)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className={questionsWrapperClass} style={questionsWrapperStyle} dir={questionsWrapperDir}>
+                        {(chunks[0] || []).map(it => it.node)}
+                      </div>
                     </div>
-                  )}
+
+                    {/* Subsequent page chunks when a section spans across pages */}
+                    {chunks.slice(1).map((chunk, chunkIdx) => {
+                      const firstItem = chunk[0];
+                      const qBreak = firstItem?.qBreak;
+                      if (!firstItem || !qBreak) return null;
+                      return (
+                        <React.Fragment key={`${secIdKey}-chunk-${chunkIdx + 1}`}>
+                          <PageBoundaryBanner
+                            endedPage={qBreak.endedPage}
+                            nextPage={qBreak.nextPage}
+                            isManual={qBreak.isManual}
+                          />
+                          <div
+                            style={{ pageBreakBefore: 'always', breakBefore: 'page' }}
+                            className="page-break-before print:pt-2 mt-1 w-full"
+                          >
+                            {renderPageWatermark(`break-${firstItem.qBlockId}`)}
+                            <div className="repeated-page-header mb-1.5">
+                              {renderPaperHeader()}
+                            </div>
+                            <div className="border-[1.5px] border-black px-2 py-1 rounded-sm">
+                              <div className={questionsWrapperClass} style={questionsWrapperStyle} dir={questionsWrapperDir}>
+                                {chunk.map(it => it.node)}
+                              </div>
+                            </div>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {bubbleSheetPosition === 'below_mcq' && section.id === lastMCQSectionId && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-below`)}
                   </div>
-                  {bubbleSheetPosition === 'below_mcq' && section.id === lastMCQSectionId && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-below`)}
-                </div>
-              </React.Fragment>
-            );
-          })
+                </React.Fragment>
+              );
+            })
           )}
           {hasQuestions && bubbleSheetPosition === 'paper_end' && renderBubbleSheet(`${idPrefix}mcq-bubble-sheet-end`)}
         </div>
@@ -2014,6 +2307,8 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
       </div>
     );
   };
+
+  const copy2BreakInfo = isTwoPerSheet ? pageBreakMap['copy2-root-start'] : undefined;
 
   return (
     <div className="print-container">
@@ -2043,12 +2338,20 @@ export const PrintablePaper: React.FC<PrintablePaperProps> = ({
 
         {isTwoPerSheet && (
           <>
-            <div data-block-id="two-per-sheet-cut-line" className="my-2.5 py-0.5 flex items-center gap-2 text-black select-none z-10 relative" dir="ltr">
-              <span className="text-[11px] leading-none font-bold">✂</span>
-              <div className="flex-grow border-t-[1.5px] border-dashed border-black" />
-              <span className="text-[8px] font-black uppercase tracking-widest">Cut Here (2nd Test Copy)</span>
-              <div className="flex-grow border-t-[1.5px] border-dashed border-black" />
-            </div>
+            {copy2BreakInfo ? (
+              <PageBoundaryBanner
+                endedPage={copy2BreakInfo.endedPage}
+                nextPage={copy2BreakInfo.nextPage}
+                isManual={copy2BreakInfo.isManual}
+              />
+            ) : (
+              <div data-cut-line="true" className="my-2.5 py-0.5 flex items-center gap-2 text-black select-none z-10 relative" dir="ltr">
+                <span className="text-[11px] leading-none font-bold">✂</span>
+                <div className="flex-grow border-t-[1.5px] border-dashed border-black" />
+                <span className="text-[8px] font-black uppercase tracking-widest">Cut Here (2nd Test Copy)</span>
+                <div className="flex-grow border-t-[1.5px] border-dashed border-black" />
+              </div>
+            )}
             {renderPaperCopy(1)}
           </>
         )}

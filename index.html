@@ -234,9 +234,13 @@
       @media print {
         @page {
           size: A4 portrait;
-          margin: 4mm;
+          margin: 5mm;
         }
-        html, body, #root, #root > div, main {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        html, body, #root, #root > div, main, main > div, main > div > div, .print-container, #printable-section {
           display: block !important;
           background-color: white !important;
           color: black !important;
@@ -244,6 +248,11 @@
           padding: 0 !important;
           width: 100% !important;
           max-width: none !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          transform: none !important;
+          animation: none !important;
         }
         .print-hidden,
         .print\:hidden,
@@ -251,15 +260,23 @@
           display: none !important;
         }
         .page-break-before {
+          display: block !important;
           page-break-before: always !important;
           break-before: page !important;
         }
+        .watermark-full-page {
+          top: 132mm !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+        }
         .a4-preview-outer {
+          display: block !important;
           width: 100% !important;
           height: auto !important;
           overflow: visible !important;
         }
         .a4-preview-scaler {
+          display: block !important;
           transform: none !important;
           width: 100% !important;
           max-width: 210mm !important;
