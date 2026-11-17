@@ -88,7 +88,7 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
           <div className="text-center">
             <div className="text-xl font-bold text-theme-text-main tracking-wider uppercase">Saved Papers</div>
             <div className="text-[10px] text-gold-400 font-bold tracking-wide">
-              {isAdmin ? "Admin View • All System Papers" : `Personal View • ${user.name}'s Papers`}
+              {`Personal View • ${user.name}'s Saved Papers`}
             </div>
           </div>
           <button 
@@ -112,11 +112,7 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
               <UserIcon size={18} className="text-emerald-400 flex-shrink-0" />
             )}
             <div className="text-theme-text-muted">
-              {isAdmin ? (
-                <span><strong className="text-gold-400">Master Admin View:</strong> Showing all papers across all registered schools & teachers.</span>
-              ) : (
-                <span><strong className="text-emerald-400">Personal View ({user.name}):</strong> Showing your saved papers ({papers.length}). Master Admin accounts view all system papers.</span>
-              )}
+              <span><strong className={isAdmin ? "text-gold-400" : "text-emerald-400"}>My Saved Papers ({user.name}):</strong> Showing only papers saved by your account ({papers.length}).</span>
             </div>
           </div>
           <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-gray-400">
@@ -149,7 +145,7 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
             <div className="w-12 h-12 border-4 border-gold-500 border-t-transparent rounded-full animate-spin"></div>
             <div className="text-center">
               <p className="font-bold uppercase tracking-wider text-gold-500 text-sm">Syncing with Cloud Database...</p>
-              <p className="text-xs text-gray-400 mt-1">Connecting to live papers for {isAdmin ? "all schools" : user.name}</p>
+              <p className="text-xs text-gray-400 mt-1">Connecting to saved papers for {user.name}</p>
             </div>
           </div>
         ) : filteredPapers.length === 0 ? (

@@ -25,30 +25,15 @@ const isUrduStyleSubject = (subject: string) => {
   return s.includes('urdu') || s.includes('islam') || s.includes('pak study') || s.includes('pak studies') || s.includes('arab') || s.includes('per') || s.includes('ethic') || s.includes('quran') || /[\u0600-\u06FF]/.test(subject || '');
 };
 
-// Internal utility to render formatted text in management UI
+import { renderFormattedTextWithLatex, validateQuestionLatex } from '../services/latexTableRenderer';
+
+// Internal utility to render formatted text, equations, and LaTeX tables in management UI
 const renderFormattedText = (text: string) => {
   if (!text) return null;
   const isUrdu = /[\u0600-\u06FF]/.test(text);
-  const normalized = text
-    .replace(/<\/?b>/gi, '@@')
-    .replace(/\*\*([^*]+)\*\*/g, '@@$1@@')
-    .replace(/\*([^*]+)\*/g, '@@$1@@')
-    .replace(/:([^:]+):/g, '##$1##')
-    .replace(/@@/g, '**')
-    .replace(/##/g, '++');
-
-  const parts = normalized.split(/(\*\*.*?\*\*|\+\+.*?\+\+)/g);
   return (
-    <span className={isUrdu ? 'font-urdu text-right block text-lg' : ''} dir={isUrdu ? 'rtl' : 'ltr'}>
-      {parts.map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-gold-500 font-bold [.light-theme_&]:text-gold-700">{part.slice(2, -2)}</strong>;
-        }
-        if (part.startsWith('++') && part.endsWith('++')) {
-          return <u key={i} className="underline decoration-gold-500/40 [.light-theme_&]:decoration-gold-500/60">{part.slice(2, -2)}</u>;
-        }
-        return part;
-      })}
+    <span className={`${isUrdu ? 'font-urdu text-right block text-lg' : ''} whitespace-pre-wrap`} dir={isUrdu ? 'rtl' : 'ltr'}>
+      {renderFormattedTextWithLatex(text, { variant: 'preview', isUrduContext: isUrdu })}
     </span>
   );
 };
@@ -260,6 +245,16 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
 
   const handleSaveEdit = async () => {
     if (!editingQuestion || (!editForm.text && !editForm.textUrdu)) return;
+    const latexErrors = validateQuestionLatex({
+      text: editForm.text,
+      textUrdu: editForm.textUrdu,
+      options: editForm.options,
+      optionsUrdu: editForm.optionsUrdu
+    });
+    if (latexErrors.length > 0) {
+      alert(`LaTeX Validation Error in ${latexErrors[0].field}:\n${latexErrors[0].message}`);
+      return;
+    }
     setIsSaving(true);
     
     const updatedQuestion: Question = {

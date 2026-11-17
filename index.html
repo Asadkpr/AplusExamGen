@@ -70,10 +70,15 @@
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>
       window.MathJax = {
+        loader: {
+          load: ['[tex]/ams']
+        },
         tex: {
+          packages: { '[+]': ['ams'] },
           inlineMath: [['$', '$'], ['\\(', '\\)']],
           displayMath: [['$$', '$$'], ['\\[', '\\]']],
-          processEscapes: true
+          processEscapes: true,
+          processEnvironments: true
         },
         options: {
           ignoreHtmlClass: 'tex2jax_ignore',
@@ -228,6 +233,32 @@
       }
       mjx-assistive-mml {
         display: none !important;
+      }
+
+      /* LaTeX Table Width & Page Margin Protection */
+      .latex-table-container {
+        display: block;
+        width: 100%;
+        max-width: 100% !important;
+        overflow-x: auto;
+        margin: 4px 0;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .latex-array-table {
+        border-collapse: collapse !important;
+        max-width: 100% !important;
+        width: auto;
+        table-layout: auto;
+        direction: ltr !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .latex-array-table td,
+      .latex-array-table th {
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        vertical-align: middle !important;
       }
 
       /* PRINT OPTIMIZATION */

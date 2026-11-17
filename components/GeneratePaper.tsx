@@ -8,11 +8,13 @@ import { getPatterns, getPatternsByClassAndSubject } from '../services/patternSe
 import { getQuestionsForChapters } from '../services/questionService';
 import { BubbleSheetPosition, Chapter, QuestionType, Question, PaperPatternSection, User, PaperPattern, Subtopic, SavedPaper, PaperPatternSectionPart } from '../types';
 import { savePaper, updatePaper } from '../services/paperService';
+import { syncService } from '../services/syncService';
 import { updateUser } from '../services/authService';
 import { PrintablePaper } from './PrintablePaper';
 import { CustomPatternModal } from './CustomPatternModal';
 import { sortSectionsByStandardSequence } from './PaperPatterns';
 import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
+import { renderFormattedTextWithLatex } from '../services/latexTableRenderer';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { 
@@ -53,30 +55,13 @@ const isEnglishSubject = (subject: string) => {
   return (subject || '').toLowerCase().includes('english');
 };
 
-// Internal utility to render formatted text in selection UI
+// Internal utility to render formatted text, equations, and LaTeX tables in selection UI
 const renderFormattedPreview = (text: string) => {
   if (!text) return null;
-  const isUrdu = /[\u0600-\u06FF]/.test(text);
-  const normalized = text
-    .replace(/<\/?b>/gi, '@@')
-    .replace(/\*\*([^*]+)\*\*/g, '@@$1@@')
-    .replace(/\*([^*]+)\*/g, '@@$1@@')
-    .replace(/:([^:]+):/g, '##$1##')
-    .replace(/@@/g, '**')
-    .replace(/##/g, '++');
-
-  const parts = normalized.split(/(\*\*.*?\*\*|\+\+.*?\+\+)/g);
+  const hasUrdu = /[\u0600-\u06FF]/.test(text);
   return (
-    <span className={`${isUrdu ? 'font-urdu text-right block' : ''} whitespace-pre-wrap`} dir={isUrdu ? 'rtl' : 'ltr'}>
-      {parts.map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-gold-500 font-bold [.light-theme_&]:text-gold-700">{part.slice(2, -2)}</strong>;
-        }
-        if (part.startsWith('++') && part.endsWith('++')) {
-          return <u key={i} className="underline decoration-gold-500/40 [.light-theme_&]:decoration-gold-500/60">{part.slice(2, -2)}</u>;
-        }
-        return part;
-      })}
+    <span className={`${hasUrdu ? 'font-urdu text-right block' : ''} whitespace-pre-wrap`} dir={hasUrdu ? 'rtl' : 'ltr'}>
+      {renderFormattedTextWithLatex(text, { variant: 'preview', isUrduContext: hasUrdu })}
     </span>
   );
 };
@@ -244,6 +229,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
   const [mandatoryChapterIds, setMandatoryChapterIds] = useState<string[]>([]);
   const [saveStatusMessage, setSaveStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [savedPaperId, setSavedPaperId] = useState<string | null>(initialPaper?.id || null);
+  const hasRecordedTodayGenRef = React.useRef<boolean>(Boolean(initialPaper?.id));
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const actionsMenuRef = React.useRef<HTMLDivElement>(null);
@@ -798,6 +784,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         const code = Math.floor(1000 + Math.random() * 9000).toString();
         setPaperCode(code);
       }
+      if (!hasRecordedTodayGenRef.current && !savedPaperId && !initialPaper) {
+        hasRecordedTodayGenRef.current = true;
+        syncService.optimisticTodayPaperGenerated();
+      }
       setStep(7);
     }
   };
@@ -901,7 +891,9 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         isSuccess = result.success;
         msg = result.success ? (customSuccessMsg || "Paper updated successfully! پیپر کامیابی سے اپڈیٹ ہو گیا ہے۔") : (result.message || "Failed to update paper");
       } else {
-        const result = await savePaper(paperData);
+        const alreadyCountedToday = hasRecordedTodayGenRef.current;
+        hasRecordedTodayGenRef.current = true;
+        const result = await savePaper(paperData, alreadyCountedToday);
         isSuccess = result.success;
         if (result.id) {
           setSavedPaperId(result.id);
@@ -1212,6 +1204,117 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     }
   };
 
+  const handleDownloadWord = () => {
+    setIsActionsMenuOpen(false);
+    const cleanFileName = `${selectedClass}_${selectedSubject}_Exam_Paper`.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
+    const sourceElement = document.getElementById('printable-section');
+    if (!sourceElement) return;
+
+    const cloned = sourceElement.cloneNode(true) as HTMLElement;
+    cloned.querySelectorAll('.page-boundary-marker, .print\\:hidden, .print-hidden, .watermark-full-page').forEach(el => el.remove());
+
+    // Ensure all LaTeX tables and HTML tables have explicit Word-compatible attributes
+    cloned.querySelectorAll('table').forEach(tbl => {
+      const htmlTbl = tbl as HTMLTableElement;
+      if (htmlTbl.classList.contains('latex-array-table')) {
+        htmlTbl.setAttribute('border', '1');
+        htmlTbl.setAttribute('cellspacing', '0');
+        htmlTbl.setAttribute('cellpadding', '4');
+        htmlTbl.style.borderCollapse = 'collapse';
+        htmlTbl.style.maxWidth = '100%';
+        htmlTbl.style.margin = '4pt 0';
+      }
+    });
+
+    // Convert stacked fraction spans into inline fraction tables or clean (num/den) for Word compatibility
+    cloned.querySelectorAll('.inline-flex.flex-col.items-center').forEach(frac => {
+      const children = frac.children;
+      if (children.length === 2) {
+        const numHtml = children[0].innerHTML;
+        const denHtml = children[1].innerHTML;
+        const spanReplacement = document.createElement('span');
+        spanReplacement.style.cssText = 'display:inline-block; vertical-align:middle; text-align:center; margin:0 2pt;';
+        spanReplacement.innerHTML = `<span style="border-bottom:1pt solid #000; padding:0 2pt;">${numHtml}</span>/<span style="padding:0 2pt;">${denHtml}</span>`;
+        frac.replaceWith(spanReplacement);
+      }
+    });
+
+    // Convert page-break-before elements to explicit Word page breaks
+    cloned.querySelectorAll('.page-break-before').forEach(pb => {
+      const wordBreak = document.createElement('br');
+      wordBreak.setAttribute('clear', 'all');
+      wordBreak.style.cssText = 'page-break-before:always; mso-break-type:section-break;';
+      pb.parentNode?.insertBefore(wordBreak, pb);
+    });
+
+    const wordHtml = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8" />
+  <title>${cleanFileName}</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    @page {
+      size: 210mm 297mm;
+      margin: 10mm 10mm 10mm 10mm;
+    }
+    body {
+      font-family: "Times New Roman", serif;
+      color: #000000;
+      background: #ffffff;
+      font-size: ${fontSize}px;
+      margin: 0;
+      padding: 0;
+    }
+    [dir="rtl"], .font-urdu {
+      font-family: "Jameel Noori Nastaleeq", "Noto Nastaliq Urdu", "Traditional Arabic", serif;
+    }
+    table.latex-array-table {
+      border-collapse: collapse !important;
+      max-width: 100% !important;
+      margin: 4pt 0 !important;
+      direction: ltr !important;
+    }
+    table.latex-array-table td, table.latex-array-table th {
+      border: 1pt solid #000000 !important;
+      padding: 3pt 6pt !important;
+      vertical-align: middle !important;
+      word-wrap: break-word !important;
+    }
+  </style>
+</head>
+<body>
+  ${cloned.innerHTML}
+</body>
+</html>`;
+
+    const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cleanFileName}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setSaveStatusMessage({
+      type: 'success',
+      text: "Word file downloaded successfully! (ورڈ فائل کامیابی سے ڈاؤن لوڈ ہو گئی ہے)"
+    });
+    setTimeout(() => setSaveStatusMessage(null), 4000);
+  };
+
   const handleSaveOrUpdate = () => executeSave(true);
   const getClassIcon = (cls: string) => <GraduationCap size={32} />;
   const activeSection = originalSections.find(s => s.id === activeTabId);
@@ -1327,9 +1430,9 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
             <div className="flex-grow overflow-hidden">
               {question ? (
                 <div>
-                  <p className="text-[11px] text-theme-text-main line-clamp-2 leading-tight font-medium whitespace-pre-wrap">{renderFormattedPreview(question.text || question.textUrdu || '')}</p>
+                  <div className={`text-[11px] text-theme-text-main leading-tight font-medium whitespace-pre-wrap ${(question.text || question.textUrdu || '').includes('\\begin{') ? '' : 'line-clamp-2'}`}>{renderFormattedPreview(question.text || question.textUrdu || '')}</div>
                   {question.text && question.textUrdu && (
-                    <p className="text-[11px] text-right text-theme-text-muted line-clamp-1 font-urdu mt-0.5 whitespace-pre-wrap" dir="rtl">{renderFormattedPreview(question.textUrdu)}</p>
+                    <div className={`text-[11px] text-right text-theme-text-muted font-urdu mt-0.5 whitespace-pre-wrap ${question.textUrdu.includes('\\begin{') ? '' : 'line-clamp-1'}`} dir="rtl">{renderFormattedPreview(question.textUrdu)}</div>
                   )}
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[8px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border border-gold-500/20 [.light-theme_&]:bg-gold-100 [.light-theme_&]:text-gold-700 [.light-theme_&]:border-gold-200">{question.type}</span>
@@ -1539,6 +1642,18 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                       <span>{isDownloadingPdf ? 'PDF...' : 'PDF'}</span>
                     </Button>
 
+                    {/* Direct Word Download Button */}
+                    <Button 
+                      onClick={handleDownloadWord} 
+                      disabled={isDownloadingPdf || isSavingPaper}
+                      variant="secondary" 
+                      className="!w-auto !h-6 sm:!h-9 !py-0.5 sm:!py-1.5 !px-2 sm:!px-3 !text-[8px] sm:!text-[10px] flex items-center font-bold whitespace-nowrap bg-surface-700 hover:bg-surface-600 text-theme-text-main border-surface-600 shrink-0"
+                      title="Download paper as Word (.doc)"
+                    >
+                      <FileText size={11} className="mr-1 text-gold-400 sm:w-3.5 sm:h-3.5" /> 
+                      <span>Word</span>
+                    </Button>
+
                     {/* Setting Toggle Dropdown (Word 'Setting' instead of icon) */}
                     <div className="relative shrink-0" ref={actionsMenuRef}>
                       <Button 
@@ -1567,6 +1682,13 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                             >
                               <FileDown size={15} className="text-gold-500" /> 
                               Download PDF
+                            </button>
+                            <button 
+                              onClick={handleDownloadWord} 
+                              className="w-full text-left px-4 py-3 text-[11px] text-theme-text-muted hover:bg-gold-500 hover:text-black flex items-center gap-3 transition-colors font-black uppercase"
+                            >
+                              <FileText size={15} className="text-gold-500" /> 
+                              Download Word (.doc)
                             </button>
                             <button 
                               onClick={handlePrint} 

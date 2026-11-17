@@ -7,12 +7,14 @@ import { getChapters, addChapter, deleteChapter, renameChapter } from '../servic
 import { saveUploadedChapterContent } from '../services/questionService';
 import { useBackHandler, pushBackGuard } from '../services/backNavigationService';
 import { GoogleGenAI } from "@google/genai";
+import * as XLSX from 'xlsx';
 import { 
   ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, X, Info, 
   GraduationCap, FileText, ChevronRight, Plus, Trash2, Edit, RefreshCw, 
   Database, ListChecks, AlertTriangle, FileDown, BookText, Layers
 } from 'lucide-react';
 import { Chapter, User, Question, Subtopic, QuestionType } from '../types';
+import { renderFormattedTextWithLatex, validateQuestionLatex, LatexValidationError } from '../services/latexTableRenderer';
 
 interface UploadPaperProps {
   user: User;
@@ -32,6 +34,11 @@ const isEnglishSubject = (subject: string) => {
   return subject.toLowerCase().includes('english');
 };
 
+const isMathOrStatsSubject = (subject: string) => {
+  const s = (subject || '').toLowerCase();
+  return s.includes('math') || s.includes('stat') || s.includes('hisab') || s.includes('حساب') || s.includes('ریاضی') || s.includes('شماریات');
+};
+
 const ENGLISH_SUBTYPES = [
   'Verb', 'Spelling', 'Meaning', 'Grammar', 
   'Translate', 'Summary', 'Paraphrase', 'Idioms', 
@@ -42,35 +49,13 @@ const ENGLISH_SUBTYPES = [
 // Utility to detect if text contains Urdu characters
 const isUrduText = (text: string) => /[\u0600-\u06FF]/.test(text || '');
 
-// Utility to render text with support for *bold*, **bold**, <b>bold</b> and :underline: in preview
+// Utility to render text with support for LaTeX tables (\begin{array}), equations, *bold*, **bold**, <b>bold</b> and :underline: in preview
 const renderFormattedTextPreview = (text: string) => {
   if (!text) return null;
-  
   const isUrdu = isUrduText(text);
-
-  // Normalize: 
-  // 1. Convert bold markers (*, **, <b>) to a unified @@marker@@
-  // 2. Convert colon markers (:text:) to a unified ##marker##
-  const normalized = text
-    .replace(/<\/?b>/gi, '@@')
-    .replace(/\*\*([^*]+)\*\*/g, '@@$1@@')
-    .replace(/\*([^*]+)\*/g, '@@$1@@')
-    .replace(/:([^:]+):/g, '##$1##')
-    .replace(/@@/g, '**')
-    .replace(/##/g, '++');
-
-  const parts = normalized.split(/(\*\*.*?\*\*|\+\+.*?\+\+)/g);
   return (
     <span className={`${isUrdu ? 'font-urdu text-right block text-lg' : ''} whitespace-pre-wrap`} dir={isUrdu ? 'rtl' : 'ltr'}>
-      {parts.map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i} className="text-gold-500 font-bold [.light-theme_&]:text-gold-700">{part.slice(2, -2)}</strong>;
-        }
-        if (part.startsWith('++') && part.endsWith('++')) {
-          return <u key={i} className="underline decoration-gold-500/50 [.light-theme_&]:decoration-gold-500/70">{part.slice(2, -2)}</u>;
-        }
-        return part;
-      })}
+      {renderFormattedTextWithLatex(text, { variant: 'preview', isUrduContext: isUrdu })}
     </span>
   );
 };
@@ -105,10 +90,13 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [parsedCount, setParsedCount] = useState(0);
   const [isConvertingMath, setIsConvertingMath] = useState(false);
+  const [latexValidationErrors, setLatexValidationErrors] = useState<LatexValidationError[]>([]);
+  const [invalidQuestionIds, setInvalidQuestionIds] = useState<Set<string>>(new Set());
 
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
   const isUrduPaper = isUrduStyleSubject(selectedSubject);
   const isEnglish = isEnglishSubject(selectedSubject);
+  const isMathOrStats = isMathOrStatsSubject(selectedSubject);
 
   useEffect(() => {
     if (parsedQuestions.length > 0 && window.MathJax && window.MathJax.typesetPromise) {
@@ -173,6 +161,8 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     setParsedQuestions([]);
     setUploadSuccess(false);
     setIsConvertingMath(false);
+    setLatexValidationErrors([]);
+    setInvalidQuestionIds(new Set());
   };
 
   const [newSubjectName, setNewSubjectName] = useState('');
@@ -310,14 +300,80 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    const headers = [
-      "Subtopic", "Type", "Question(Eng)", "Question(Urdu)", 
-      "OptA(Eng)", "OptB(Eng)", "OptC(Eng)", "OptD(Eng)", 
-      "OptA(Urdu)", "OptB(Urdu)", "OptC(Urdu)", "OptD(Urdu)", 
-      "CorrectAnswer", "Marks"
-    ];
+  const TEMPLATE_HEADERS = [
+    "Subtopic", "Type", "Question(Eng)", "Question(Urdu)", 
+    "OptA(Eng)", "OptB(Eng)", "OptC(Eng)", "OptD(Eng)", 
+    "OptA(Urdu)", "OptB(Urdu)", "OptC(Urdu)", "OptD(Urdu)", 
+    "CorrectAnswer", "Marks"
+  ];
 
+  const getMathStatsTableSampleRows = (): string[][] => [
+    [
+      "Frequency Distribution",
+      "SHORT",
+      "Find the arithmetic mean $\\bar{X} = \\frac{\\sum fx}{\\sum f}$ from the following frequency table: @ $$\\begin{array}{|c|c|c|c|c|c|} \\hline x & 10 & 20 & 30 & 40 & 50 \\\\ \\hline f & 4 & 6 & 10 & 7 & 3 \\\\ \\hline \\end{array}$$",
+      "درج ذیل تعددی جدول سے حسابی اوسط $\\bar{X} = \\frac{\\sum fx}{\\sum f}$ معلوم کریں: @ $$\\begin{array}{|c|c|c|c|c|c|} \\hline x & 10 & 20 & 30 & 40 & 50 \\\\ \\hline f & 4 & 6 & 10 & 7 & 3 \\\\ \\hline \\end{array}$$",
+      "", "", "", "", "", "", "", "", "", "2"
+    ],
+    [
+      "Grouped Data & Median",
+      "LONG",
+      "Compute the *Median* and *Mode* from the grouped frequency distribution given below: @ $$\\begin{array}{|c|c|c|} \\hline \\multicolumn{3}{|c|}{\\textbf{Grouped Marks Distribution}} \\\\ \\hline \\text{Class Interval} & \\text{Midpoint } (x_i) & \\text{Frequency } (f_i) \\\\ \\hline 0 - 10 & 5 & 4 \\\\ \\hline 10 - 20 & 15 & 8 \\\\ \\hline 20 - 30 & 25 & 12 \\\\ \\hline 30 - 40 & 35 & 6 \\\\ \\hline \\end{array}$$",
+      "نیچے دیے گئے گروہی تعددی جدول سے *وسطانیہ* اور *عادہ* معلوم کریں: @ $$\\begin{array}{|c|c|c|} \\hline \\multicolumn{3}{|c|}{\\textbf{Marks Distribution}} \\\\ \\hline \\text{Class Interval} & x_i & f_i \\\\ \\hline 0 - 10 & 5 & 4 \\\\ \\hline 10 - 20 & 15 & 8 \\\\ \\hline 20 - 30 & 25 & 12 \\\\ \\hline 30 - 40 & 35 & 6 \\\\ \\hline \\end{array}$$",
+      "", "", "", "", "", "", "", "", "", "5"
+    ],
+    [
+      "Probability Distribution",
+      "MCQ",
+      "For the probability distribution table below, find the value of $k$: @ $$\\begin{array}{|c|c|c|c|c|} \\hline X & 0 & 1 & 2 & 3 \\\\ \\hline P(X) & 0.1 & k & 0.4 & 0.2 \\\\ \\hline \\end{array}$$",
+      "درج ذیل احتمالی جدول کے لیے $k$ کی قیمت معلوم کریں: @ $$\\begin{array}{|c|c|c|c|c|} \\hline X & 0 & 1 & 2 & 3 \\\\ \\hline P(X) & 0.1 & k & 0.4 & 0.2 \\\\ \\hline \\end{array}$$",
+      "$0.1$", "$0.2$", "$0.3$", "$0.5$",
+      "$0.1$", "$0.2$", "$0.3$", "$0.5$",
+      "C", "1"
+    ],
+    [
+      "Variance & Standard Deviation",
+      "LONG",
+      "Complete the following table and calculate the variance $S^2 = \\frac{\\sum f(x - \\bar{x})^2}{\\sum f}$: @ $$\\begin{array}{|l|c|c|r|} \\hline \\text{Category} & x & f & f \\cdot x \\\\ \\hline \\text{Group A} & 12 & 5 & 60 \\\\ \\hline \\text{Group B} & 18 & 8 & 144 \\\\ \\hline \\text{Group C} & 24 & 7 & 168 \\\\ \\hline \\multicolumn{2}{|r|}{\\textbf{Total}} & \\sum f = 20 & \\sum fx = 372 \\\\ \\hline \\end{array}$$",
+      "درج ذیل جدول کو مکمل کریں اور تغیر $S^2 = \\frac{\\sum f(x - \\bar{x})^2}{\\sum f}$ معلوم کریں: @ $$\\begin{array}{|l|c|c|r|} \\hline \\text{Group} & x & f & f \\cdot x \\\\ \\hline \\text{Group A} & 12 & 5 & 60 \\\\ \\hline \\text{Group B} & 18 & 8 & 144 \\\\ \\hline \\text{Group C} & 24 & 7 & 168 \\\\ \\hline \\multicolumn{2}{|r|}{\\textbf{Total}} & \\sum f = 20 & \\sum fx = 372 \\\\ \\hline \\end{array}$$",
+      "", "", "", "", "", "", "", "", "", "5"
+    ]
+  ];
+
+  const handleDownloadSampleExcel = (format: 'xlsx' | 'csv' = 'xlsx') => {
+    const rows = getMathStatsTableSampleRows();
+    const sheetData = [TEMPLATE_HEADERS, ...rows];
+
+    if (format === 'xlsx') {
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      ws['!cols'] = [
+        { wch: 22 }, { wch: 10 }, { wch: 65 }, { wch: 65 },
+        { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+        { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+        { wch: 14 }, { wch: 8 }
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Questions_Template');
+      XLSX.writeFile(wb, `APLUS_${selectedSubject || 'Math_Statistics'}_LaTeX_Table_Sample.xlsx`);
+      return;
+    }
+
+    const csvContent = [
+      TEMPLATE_HEADERS.join(","),
+      ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `APLUS_${selectedSubject || 'Math_Statistics'}_LaTeX_Table_Sample.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadTemplate = () => {
     let rows: string[][] = [];
 
     if (isEnglish) {
@@ -332,6 +388,8 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
          ["Composition", "Dialogue", "Write a dialogue between two friends on the importance of time.", "", "", "", "", "", "", "", "", "", "", "8"],
          ["Poetry", "Paraphrase", "The waves beside them danced; @ but they Out-did the sparkling waves in glee.", "", "", "", "", "", "", "", "", "", "", "5"]
        ];
+    } else if (isMathOrStats) {
+       rows = getMathStatsTableSampleRows();
     } else {
        rows = [
          ["Atomic Structure", "MCQ", "Who discovered the :electron:?", "الیکٹران کس نے دریافت کیا؟", "J.J. Thomson", "Rutherford", "Bohr", "Dalton", "جے جے ثامسن", "ردرفورڈ", "بوہر", "ڈالٹن", "A", "1"],
@@ -341,11 +399,11 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     }
 
     const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+      TEMPLATE_HEADERS.join(","),
+      ...rows.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(","))
     ].join("\n");
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -355,20 +413,47 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     document.body.removeChild(link);
   };
 
-  const parseCSVLine = (text: string): string[] => {
-    const result: string[] = [];
+  // Multi-line-safe RFC 4180 CSV parser so multi-line LaTeX tables inside CSV quotes never split mid-cell
+  const parseCSVRows = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
     let cell = '';
     let inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
+
+    const cleanInput = text.replace(/^\uFEFF/, '');
+    for (let i = 0; i < cleanInput.length; i++) {
+      const char = cleanInput[i];
       if (char === '"') {
-        if (inQuotes && text[i+1] === '"') { cell += '"'; i++; } else { inQuotes = !inQuotes; }
+        if (inQuotes && cleanInput[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (char === ',' && !inQuotes) {
-        result.push(cell.trim()); cell = '';
-      } else { cell += char; }
+        currentRow.push(cell.trim());
+        cell = '';
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && cleanInput[i + 1] === '\n') {
+          i++;
+        }
+        currentRow.push(cell.trim());
+        cell = '';
+        if (currentRow.some(c => c !== '')) {
+          rows.push(currentRow);
+        }
+        currentRow = [];
+      } else {
+        cell += char;
+      }
     }
-    result.push(cell.trim());
-    return result;
+    if (cell.trim() !== '' || currentRow.length > 0) {
+      currentRow.push(cell.trim());
+      if (currentRow.some(c => c !== '')) {
+        rows.push(currentRow);
+      }
+    }
+    return rows;
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,29 +461,53 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
       setUploadSuccess(false);
-      const text = await selectedFile.text();
-      const rows = text.split(/\r?\n/);
+      setLatexValidationErrors([]);
+      setInvalidQuestionIds(new Set());
+
+      let allRows: string[][] = [];
+      const lowerFileName = selectedFile.name.toLowerCase();
+      if (lowerFileName.endsWith('.xlsx') || lowerFileName.endsWith('.xls')) {
+        try {
+          const arrayBuffer = await selectedFile.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rawJson = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '', raw: false });
+          allRows = rawJson.map(r => (Array.isArray(r) ? r.map(c => String(c ?? '').trim()) : []));
+        } catch (xlsxErr) {
+          alert("Could not read Excel file. Please verify the file format (.xlsx or .csv).");
+          setFile(null);
+          return;
+        }
+      } else {
+        const text = await selectedFile.text();
+        allRows = parseCSVRows(text);
+      }
+
       const questions: Question[] = [];
       const subtopicsSet = new Set<string>();
+      const collectedLatexErrors: LatexValidationError[] = [];
+      const badIds = new Set<string>();
+
       let startIndex = 0;
-      if (rows.length > 0) {
-         const firstRow = rows[0].toLowerCase();
-         if (firstRow.includes('subtopic') || firstRow.includes('type') || firstRow.includes('question')) startIndex = 1;
+      if (allRows.length > 0) {
+        const firstRowJoined = allRows[0].join(' ').toLowerCase();
+        if (firstRowJoined.includes('subtopic') || firstRowJoined.includes('type') || firstRowJoined.includes('question')) {
+          startIndex = 1;
+        }
       }
 
       // Helper to process text and replace '@' with '\n'
       const processValue = (val: string) => (val || '').replace(/@/g, '\n').trim();
 
-      for (let i = startIndex; i < rows.length; i++) {
-          const row = rows[i].trim();
-          if (!row) continue;
-          const cleanCols = parseCSVLine(row);
-          if (cleanCols.length < 3) continue;
+      for (let i = startIndex; i < allRows.length; i++) {
+          const cleanCols = allRows[i];
+          if (!cleanCols || cleanCols.length < 3) continue;
           
           const rawSubtopic = cleanCols[0] ? processValue(cleanCols[0]) : '';
           let typeStr = cleanCols[1] ? cleanCols[1].trim() : 'MCQ';
 
-          // Skip repeated header rows inside CSV
+          // Skip repeated header rows inside CSV/Excel
           if (rawSubtopic.toLowerCase() === 'subtopic' && typeStr.toLowerCase() === 'type') continue;
 
           let textEng = cleanCols[2] ? processValue(cleanCols[2]) : ''; 
@@ -455,7 +564,6 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
           const type = normalizedType as QuestionType;
           
           if (isEnglish && type === 'Paraphrase') {
-             // Backward compatibility for '/' as line break in paraphrases, plus the new '@' support
              textEng = textEng.replace(/\//g, '\n');
           }
           
@@ -483,7 +591,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
           const marks = (cleanCols.length > marksIndex ? parseInt(cleanCols[marksIndex]) : NaN) || (isObjective ? 1 : (type === 'LONG' ? 5 : 2));
           
           if (subtopicName) subtopicsSet.add(subtopicName);
-          questions.push({ 
+          const qObj: Question = { 
             id: generateId(), 
             chapterId: selectedChapter!.id, 
             subtopic: subtopicName, 
@@ -494,26 +602,57 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
             optionsUrdu: isObjective ? optionsUrdu : undefined, 
             correctAnswer, 
             marks 
-          });
+          };
+
+          const rowErrors = validateQuestionLatex(qObj, i + 1);
+          if (rowErrors.length > 0) {
+            collectedLatexErrors.push(...rowErrors);
+            badIds.add(qObj.id);
+          }
+
+          questions.push(qObj);
       }
       if (questions.length > 0 && subtopicsSet.size === 0) {
         subtopicsSet.add('General');
       }
       setParsedQuestions(questions);
       setParsedSubtopics(Array.from(subtopicsSet).map(name => ({ id: name, name: name })));
+      setLatexValidationErrors(collectedLatexErrors);
+      setInvalidQuestionIds(badIds);
     }
+  };
+
+  const handleRemoveInvalidQuestions = () => {
+    const validQuestions = parsedQuestions.filter(q => !invalidQuestionIds.has(q.id));
+    const remainingSubtopics = Array.from(new Set(validQuestions.map(q => q.subtopic || 'General'))).map(name => ({ id: name, name }));
+    setParsedQuestions(validQuestions);
+    setParsedSubtopics(remainingSubtopics);
+    setLatexValidationErrors([]);
+    setInvalidQuestionIds(new Set());
+  };
+
+  const hasExplicitLatexOrTable = (q: Question): boolean => {
+    const combined = [q.text, q.textUrdu, ...(q.options || []), ...(q.optionsUrdu || [])]
+      .filter(Boolean)
+      .join(' ');
+    return /(\\begin\{|\\hline|\\multicolumn|\\frac|\\sqrt|\$)/.test(combined);
   };
 
   const convertMathToLatex = async (questions: Question[]) => {
     if (!process.env.API_KEY) {
-      console.warn("API Key missing. Uploading without auto-conversion.");
+      return questions;
+    }
+
+    // Never alter questions that already contain LaTeX tables (\begin{array}) or explicit LaTeX math
+    const questionsNeedingConversion = questions.filter(q => !hasExplicitLatexOrTable(q));
+    if (questionsNeedingConversion.length === 0) {
       return questions;
     }
 
     setIsConvertingMath(true);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const batch = questions.map(q => ({
+    const batch = questionsNeedingConversion.map(q => ({
       id: q.id,
       text: q.text,
       textUrdu: q.textUrdu,
@@ -522,13 +661,13 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
     }));
 
     const prompt = `You are an expert Mathematics Professor and LaTeX specialist. 
-    Your mission: Transform all complex LaTeX mathematical structures in the provided JSON array into a simplified, linear 'pure math' format that uses slashes for fractions.
+    Your mission: Wrap mathematical expressions in single dollar signs '$' for inline rendering while preserving all tables and existing LaTeX.
     
     STRICT RULES:
-    1. CONVERT all fractions: Change any instance of \\frac{a}{b} into (a/b) or a/b. 
-    2. DELIMITERS: Wrap ALL mathematical expressions in single dollar signs '$' for inline rendering.
+    1. NEVER alter or strip \\begin{array}...\\end{array}, \\hline, \\multicolumn, or \\frac{a}{b}.
+    2. DELIMITERS: Wrap mathematical expressions in single dollar signs '$' for inline rendering.
     3. LANGUAGES: Process both 'text' (English) and 'textUrdu' (Urdu) fields. Do NOT translate natural language.
-    4. FORMATTING: If you see bold markers like *text*, **text** or <b>text</b>, YOU MUST PRESERVE THEM EXACTLY. DO NOT STRIP THEM OUT.
+    4. FORMATTING: If you see bold markers like *text*, **text** or <b>text</b>, YOU MUST PRESERVE THEM EXACTLY.
     5. OUTPUT: Return ONLY a valid JSON array of objects.
 
     Input JSON: ${JSON.stringify(batch)}`;
@@ -545,8 +684,9 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       const jsonStr = response.text?.trim() || '[]';
       const convertedBatch = JSON.parse(jsonStr);
       
-      return questions.map((q, i) => {
-        const converted = convertedBatch.find((c: any) => c.id === q.id) || convertedBatch[i];
+      return questions.map((q) => {
+        if (hasExplicitLatexOrTable(q)) return q;
+        const converted = convertedBatch.find((c: any) => c.id === q.id);
         return {
           ...q,
           text: converted?.text || q.text,
@@ -565,11 +705,15 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
   const handleConfirmUpload = async () => {
     if (!selectedChapter || parsedQuestions.length === 0) return;
+    if (latexValidationErrors.length > 0) {
+      alert(`Cannot upload while ${latexValidationErrors.length} LaTeX syntax error(s) exist. Please fix the errors in your Excel file or click "Remove Invalid Questions" before uploading.`);
+      return;
+    }
     
     setIsUploading(true);
     try {
         let finalQuestions = parsedQuestions;
-        const isMath = selectedSubject.toLowerCase().includes('math') || selectedSubject.toLowerCase().includes('hisab');
+        const isMath = isMathOrStatsSubject(selectedSubject);
         
         if (isMath) {
           finalQuestions = await convertMathToLatex(parsedQuestions);
@@ -847,24 +991,47 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                         {!file ? (
                           <div className="space-y-6">
                             <div className="flex flex-col items-center gap-4">
-                              <button 
-                                onClick={handleDownloadTemplate}
-                                className="flex items-center gap-2 text-emerald-500 hover:text-emerald-400 text-sm font-bold uppercase tracking-widest border border-emerald-500/30 px-6 py-3 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 transition-all shadow-lg group"
-                              >
-                                <FileDown size={20} className="group-hover:translate-y-1 transition-transform" />
-                                Download {isEnglish ? 'English Specialized' : 'Generic'} Template
-                              </button>
+                              <div className="flex flex-wrap items-center justify-center gap-3">
+                                <button 
+                                  onClick={handleDownloadTemplate}
+                                  className="flex items-center gap-2 text-emerald-500 hover:text-emerald-400 text-xs sm:text-sm font-bold uppercase tracking-widest border border-emerald-500/30 px-5 py-3 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 transition-all shadow-lg group"
+                                >
+                                  <FileDown size={18} className="group-hover:translate-y-0.5 transition-transform" />
+                                  Download {isEnglish ? 'English Specialized' : isMathOrStats ? 'Math/Stats Table' : 'Standard'} CSV Template
+                                </button>
+                                <button 
+                                  onClick={() => handleDownloadSampleExcel('xlsx')}
+                                  className="flex items-center gap-2 text-gold-500 hover:text-gold-400 text-xs sm:text-sm font-bold uppercase tracking-widest border border-gold-500/40 px-5 py-3 rounded-xl bg-gold-500/10 hover:bg-gold-500/20 transition-all shadow-lg group"
+                                >
+                                  <FileSpreadsheet size={18} className="group-hover:translate-y-0.5 transition-transform" />
+                                  Download Sample Excel (.xlsx) – LaTeX Tables
+                                </button>
+                              </div>
                               {isEnglish && <p className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest bg-emerald-500/5 px-4 py-1 rounded-full border border-emerald-500/10 flex items-center gap-2"><BookText size={12}/> English board-specific types supported</p>}
                               <p className="text-[10px] text-gold-500 uppercase font-bold tracking-widest text-center px-4">
-                                Use the <b>*asterisks*</b> for bold, <b>:colons:</b> for underlined words, and the <b>@</b> symbol for line breaks.
+                                Use <b>*asterisks*</b> for bold, <b>:colons:</b> for underlined words, <b>@</b> for line breaks, and <b>\begin&#123;array&#125;...&#92;end&#123;array&#125;</b> for tables.
                               </p>
+
+                              {/* Quick LaTeX Table Reference for Math & Statistics */}
+                              <div className="w-full max-w-3xl bg-gray-900/80 border border-gray-700 rounded-xl p-4 text-left space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-black uppercase tracking-wider text-gold-500 flex items-center gap-1.5">
+                                    <Info size={14} /> LaTeX Table & Equation Format (14-Column Excel Compatible)
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-mono">Supports \begin&#123;array&#125;, \hline, &amp;, \\, \multicolumn</span>
+                                </div>
+                                <pre className="text-[11px] text-emerald-300 bg-black/40 p-2.5 rounded-lg overflow-x-auto font-mono leading-relaxed select-all">
+{`Find the mean $\\bar{X} = \\frac{\\sum fx}{\\sum f}$ from the table: @ $$\\begin{array}{|c|c|c|c|} \\hline \\multicolumn{4}{|c|}{\\textbf{Frequency Table}} \\\\ \\hline x & 10 & 20 & 30 \\\\ \\hline f & 4 & 6 & 10 \\\\ \\hline \\end{array}$$`}
+                                </pre>
+                              </div>
                             </div>
                             
                             <div className="border-2 border-dashed border-gray-600 rounded-2xl p-12 text-center hover:border-gold-500 bg-gray-900/50 cursor-pointer transition-all group relative">
                               <label className="cursor-pointer flex flex-col items-center">
                                 <FileSpreadsheet className="text-gray-600 group-hover:text-gold-500 mb-4 transition-colors" size={64} />
-                                <span className="text-gold-500 font-extrabold text-xl uppercase tracking-tighter">Select CSV File</span>
-                                <input type="file" className="sr-only" accept=".csv" onChange={handleFileChange} />
+                                <span className="text-gold-500 font-extrabold text-xl uppercase tracking-tighter">Select Excel (.xlsx) or CSV File</span>
+                                <span className="text-xs text-gray-400 mt-1">14-Column APlus Question Bank Format (.xlsx, .xls, .csv)</span>
+                                <input type="file" className="sr-only" accept=".csv,.xlsx,.xls" onChange={handleFileChange} />
                               </label>
                             </div>
                           </div>
@@ -874,12 +1041,56 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                <div className="flex items-center gap-3">
                                  <div className="bg-gold-500 p-2 rounded-lg text-black"><FileSpreadsheet size={20} /></div>
                                  <div className="text-left">
-                                   <p className="text-white font-bold text-sm truncate max-w-[200px]">{file.name}</p>
+                                   <p className="text-white font-bold text-sm truncate max-w-[260px]">{file.name}</p>
                                    <p className="text-[10px] text-gray-500">Total Found: <span className="text-gold-500 font-bold">{parsedQuestions.length} Questions</span></p>
                                  </div>
                                </div>
-                               <button onClick={() => { setFile(null); setParsedQuestions([]); }} className="p-2 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"><X size={20} /></button>
+                               <button onClick={resetUploadState} className="p-2 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"><X size={20} /></button>
                              </div>
+
+                             {/* LaTeX Validation Error Panel */}
+                             {latexValidationErrors.length > 0 && (
+                               <div className="bg-red-950/60 border-2 border-red-500 rounded-xl p-4 space-y-3 animate-fadeIn">
+                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-red-500/30 pb-3">
+                                   <div className="flex items-center gap-2.5 text-red-400">
+                                     <AlertTriangle size={22} className="shrink-0 text-red-500" />
+                                     <div>
+                                       <h4 className="text-sm font-black uppercase tracking-wider text-red-300">
+                                         LaTeX Validation Failed ({latexValidationErrors.length} {latexValidationErrors.length === 1 ? 'Error' : 'Errors'} Found)
+                                       </h4>
+                                       <p className="text-xs text-red-200/80">
+                                         Malformed LaTeX was detected in your file. Please fix the rows below in Excel and re-upload, or remove the invalid questions.
+                                       </p>
+                                     </div>
+                                   </div>
+                                   {parsedQuestions.length > invalidQuestionIds.size && (
+                                     <button
+                                       type="button"
+                                       onClick={handleRemoveInvalidQuestions}
+                                       className="px-3 py-1.5 bg-red-500 hover:bg-red-400 text-black font-black text-[10px] uppercase tracking-wider rounded-lg transition-colors shrink-0"
+                                     >
+                                       Remove {invalidQuestionIds.size} Invalid {invalidQuestionIds.size === 1 ? 'Question' : 'Questions'}
+                                     </button>
+                                   )}
+                                 </div>
+                                 <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                   {latexValidationErrors.map((err, eIdx) => (
+                                     <div key={eIdx} className="bg-black/40 border border-red-500/30 rounded-lg p-2.5 text-xs">
+                                       <div className="flex items-center gap-2 font-bold text-red-300">
+                                         <span className="bg-red-500/20 border border-red-500/40 px-1.5 py-0.5 rounded text-[10px]">
+                                           Row {err.row ?? '?'}
+                                         </span>
+                                         <span className="text-gold-400">{err.field}</span>
+                                         <span>— {err.message}</span>
+                                       </div>
+                                       {err.snippet && (
+                                         <pre className="mt-1 text-[10px] text-gray-400 font-mono truncate">{err.snippet}</pre>
+                                       )}
+                                     </div>
+                                   ))}
+                                 </div>
+                               </div>
+                             )}
 
                              <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden flex flex-col shadow-inner">
                                 <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center gap-2">
@@ -889,18 +1100,24 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                 <div className="max-h-[400px] overflow-y-auto custom-scrollbar divide-y divide-gray-800 p-2">
                                    {parsedQuestions.map((q, idx) => {
                                      const isSpecialType = isEnglish && ENGLISH_SUBTYPES.some(s => s.toLowerCase() === q.type.toLowerCase());
+                                     const hasError = invalidQuestionIds.has(q.id);
                                      return (
-                                       <div key={idx} className="p-4 hover:bg-gray-800/30 transition-colors flex flex-col gap-2 tex2jax_process">
+                                       <div key={idx} className={`p-4 transition-colors flex flex-col gap-2 tex2jax_process ${hasError ? 'bg-red-950/30 border border-red-500/50 rounded-lg my-1' : 'hover:bg-gray-800/30'}`}>
                                           <div className="flex items-center gap-2">
                                             <span className="text-[10px] font-bold bg-gray-800 text-gold-500 px-1.5 py-0.5 rounded border border-gray-700">Q.{idx+1}</span>
                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-tighter ${isSpecialType ? getSubtypeColor(q.type) : getTypeColor(q.type)}`}>
                                               {q.type}
                                             </span>
+                                            {hasError && (
+                                              <span className="text-[9px] font-black px-2 py-0.5 rounded bg-red-500 text-black uppercase">
+                                                Malformed LaTeX
+                                              </span>
+                                            )}
                                             <span className={`text-[9px] text-gray-500 ml-auto italic ${isUrduPaper ? 'font-urdu' : ''}`}>{renderFormattedTextPreview(q.subtopic || '')}</span>
                                           </div>
                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="text-[12px] text-white leading-relaxed">{renderFormattedTextPreview(q.text)}</div>
-                                            {q.textUrdu && <div className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu" dir="rtl">{renderFormattedTextPreview(q.textUrdu)}</div>}
+                                            <div className="text-[12px] text-white leading-relaxed overflow-x-auto">{renderFormattedTextPreview(q.text)}</div>
+                                            {q.textUrdu && <div className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu overflow-x-auto" dir="rtl">{renderFormattedTextPreview(q.textUrdu)}</div>}
                                           </div>
                                           
                                           {((q.options && q.options.length > 0) || (q.optionsUrdu && q.optionsUrdu.length > 0)) && (
@@ -934,10 +1151,10 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                              </div>
 
                              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-700">
-                               <Button onClick={handleConfirmUpload} isLoading={isUploading || isConvertingMath} disabled={parsedQuestions.length === 0} className="flex-grow py-4 text-lg shadow-xl">
-                                 {isConvertingMath ? "Optimizing Math Notation..." : `Confirm & Save ${parsedQuestions.length} Questions`}
+                               <Button onClick={handleConfirmUpload} isLoading={isUploading || isConvertingMath} disabled={parsedQuestions.length === 0 || latexValidationErrors.length > 0} className="flex-grow py-4 text-lg shadow-xl">
+                                 {isConvertingMath ? "Optimizing Math Notation..." : latexValidationErrors.length > 0 ? `Fix ${latexValidationErrors.length} LaTeX Error(s) to Upload` : `Confirm & Save ${parsedQuestions.length} Questions`}
                                 </Button>
-                                <Button variant="secondary" onClick={() => { setFile(null); setParsedQuestions([]); }} className="!w-auto px-8">Cancel</Button>
+                                <Button variant="secondary" onClick={resetUploadState} className="!w-auto px-8">Cancel</Button>
                              </div>
                           </div>
                         )}

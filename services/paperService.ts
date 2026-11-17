@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { SavedPaper } from '../types';
 import { executeAsAdmin } from './authService';
-import { syncService } from './syncService';
+import { syncService, getStartOfTodayMs, getTodayDateKey } from './syncService';
 
 const COLLECTION = 'papers';
 const LOCAL_STORAGE_KEY = 'aplus_papers_v1';
@@ -72,6 +72,16 @@ export const getCachedPaperCountSync = (userId?: string): number | null => {
     if (!isNaN(val)) return val;
   }
   return null;
+};
+
+export const getCachedTodayPaperCountSync = (): number => {
+  const todayKey = getTodayDateKey();
+  const storedDate = localStorage.getItem('today_papers_date');
+  if (storedDate === todayKey) {
+    const val = parseInt(localStorage.getItem('today_papers_count') || '0', 10);
+    if (!isNaN(val) && val >= 0) return val;
+  }
+  return 0;
 };
 
 export const getPaperCount = async (userId?: string, forceRefresh: boolean = false): Promise<number> => {
@@ -132,7 +142,10 @@ export const getPaperCount = async (userId?: string, forceRefresh: boolean = fal
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-export const savePaper = async (paper: Omit<SavedPaper, 'id' | 'createdAt'>): Promise<{ success: boolean; message: string; id: string }> => {
+export const savePaper = async (
+  paper: Omit<SavedPaper, 'id' | 'createdAt'>,
+  skipTodayIncrement: boolean = false
+): Promise<{ success: boolean; message: string; id: string }> => {
   const id = generateId();
   const newPaper: SavedPaper = {
     ...paper,
@@ -176,7 +189,7 @@ export const savePaper = async (paper: Omit<SavedPaper, 'id' | 'createdAt'>): Pr
     }
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(papers));
     savedLocally = true;
-    syncService.optimisticPaperAdded(paper.userId);
+    syncService.optimisticPaperAdded(paper.userId, skipTodayIncrement);
   } catch (localError) {
     console.warn("Local storage save failed", localError);
   }
@@ -283,6 +296,13 @@ export const updatePaper = async (id: string, paperUpdate: Partial<SavedPaper>):
   }
 };
 
+const isUserOwnPaper = (p: SavedPaper, userId: string, isAdmin: boolean): boolean => {
+  if (!p) return false;
+  if (p.userId === userId) return true;
+  if (isAdmin && (p.userId === 'admin' || p.userId === 'local-admin')) return true;
+  return false;
+};
+
 export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefresh: boolean = false): Promise<SavedPaper[]> => {
   const cacheKey = `${userId}-${isAdmin}`;
   const now = Date.now();
@@ -294,32 +314,32 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
     return cachedPapers[cacheKey];
   }
 
-  // 1. Always load LocalStorage papers (Guaranteed instant availability)
+  // 1. Always load LocalStorage papers filtered strictly to this user's own saved papers
   let localPapers: SavedPaper[] = [];
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (stored) {
       const parsed: SavedPaper[] = JSON.parse(stored);
-      localPapers = isAdmin ? parsed : parsed.filter((p: SavedPaper) => p.userId === userId);
+      localPapers = parsed.filter((p: SavedPaper) => isUserOwnPaper(p, userId, isAdmin));
     }
   } catch (e) {
     console.warn("Local papers fetch failed", e);
   }
 
-  // 2. Fetch from Firebase Cloud
+  // 2. Fetch from Firebase Cloud (strictly scoped to the current user's own papers)
   let cloudPapers: SavedPaper[] = [];
+  const adminIds = Array.from(new Set([userId, 'admin', 'local-admin'].filter(Boolean)));
   const fetchOp = async () => {
     let q;
     if (isAdmin) {
       try {
-        q = query(collection(db, COLLECTION), orderBy("createdAt", "desc"), limit(250)); 
+        q = query(collection(db, COLLECTION), where("userId", "in", adminIds), limit(250));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data() as SavedPaper);
-      } catch (orderErr) {
-        console.warn("Ordered admin query failed, falling back to simple query", orderErr);
-        q = query(collection(db, COLLECTION), limit(250));
+        return snapshot.docs.map(doc => doc.data() as SavedPaper).filter(p => isUserOwnPaper(p, userId, isAdmin));
+      } catch (err) {
+        q = query(collection(db, COLLECTION), where("userId", "==", userId), limit(250));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => doc.data() as SavedPaper);
+        return snapshot.docs.map(doc => doc.data() as SavedPaper).filter(p => isUserOwnPaper(p, userId, isAdmin));
       }
     } else {
       try {
@@ -351,11 +371,11 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
     if (!cloudFetchSucceeded) {
       try {
         const cacheQ = isAdmin
-          ? query(collection(db, COLLECTION))
+          ? query(collection(db, COLLECTION), where("userId", "in", adminIds))
           : query(collection(db, COLLECTION), where("userId", "==", userId));
         const cacheSnap = await getDocsFromCache(cacheQ);
         if (!cacheSnap.empty) {
-          cloudPapers = cacheSnap.docs.map(doc => doc.data() as SavedPaper);
+          cloudPapers = cacheSnap.docs.map(doc => doc.data() as SavedPaper).filter(p => isUserOwnPaper(p, userId, isAdmin));
         }
       } catch (_) {}
     }
@@ -365,34 +385,34 @@ export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefr
   const paperMap = new Map<string, SavedPaper>();
   if (cloudFetchSucceeded) {
     localPapers.forEach(p => {
-      if (p && p.id && (now - (p.createdAt || 0) < 30000)) {
+      if (p && p.id && isUserOwnPaper(p, userId, isAdmin) && (now - (p.createdAt || 0) < 30000)) {
         paperMap.set(p.id, p);
       }
     });
-    cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+    cloudPapers.forEach(p => { if (p && p.id && isUserOwnPaper(p, userId, isAdmin)) paperMap.set(p.id, p); });
   } else {
-    localPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
-    cloudPapers.forEach(p => { if (p && p.id) paperMap.set(p.id, p); });
+    localPapers.forEach(p => { if (p && p.id && isUserOwnPaper(p, userId, isAdmin)) paperMap.set(p.id, p); });
+    cloudPapers.forEach(p => { if (p && p.id && isUserOwnPaper(p, userId, isAdmin)) paperMap.set(p.id, p); });
   }
 
   const mergedPapers = Array.from(paperMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-  // Sync to device localStorage & Dashboard counter so offline storage matches authoritative state
+  // Sync to device localStorage while preserving other users' local papers if any
   if (cloudFetchSucceeded || mergedPapers.length > localPapers.length) {
     try {
-      if (isAdmin) {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mergedPapers));
-      } else {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-        const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
-        const otherUsersPapers = allLocal.filter(p => p && p.userId !== userId);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([...mergedPapers, ...otherUsersPapers]));
-      }
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const allLocal: SavedPaper[] = stored ? JSON.parse(stored) : [];
+      const otherUsersPapers = allLocal.filter(p => p && !isUserOwnPaper(p, userId, isAdmin));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([...mergedPapers, ...otherUsersPapers]));
     } catch (_) {}
   }
 
+  const startOfToday = getStartOfTodayMs();
+  const todayMergedCount = mergedPapers.filter(p => (p.createdAt || 0) >= startOfToday).length;
+
+  // Only update personal paper counter for non-admin teachers; Admin Dashboard counters show global generated counts
   if (!isAdmin && (mergedPapers.length > 0 || cloudFetchSucceeded)) {
-    syncService.setExactPaperCount(mergedPapers.length, userId, isAdmin);
+    syncService.setExactPaperCount(mergedPapers.length, userId, isAdmin, todayMergedCount);
   }
   
   // Update memory cache
@@ -421,10 +441,12 @@ export const deletePaper = async (id: string): Promise<void> => {
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (stored) {
-      const papers = JSON.parse(stored);
+      const papers: SavedPaper[] = JSON.parse(stored);
+      const targetPaper = papers.find((p: SavedPaper) => p.id === id);
+      const wasCreatedToday = Boolean(targetPaper && (targetPaper.createdAt || 0) >= getStartOfTodayMs());
       const updatedPapers = papers.filter((p: SavedPaper) => p.id !== id);
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedPapers));
-      syncService.optimisticPaperDeleted();
+      syncService.optimisticPaperDeleted(undefined, wasCreatedToday);
     }
   } catch (e) {
     console.warn("Local delete failed", e);
@@ -463,7 +485,7 @@ export const subscribeToSavedPapers = (
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (stored) {
         const parsed: SavedPaper[] = JSON.parse(stored);
-        localPapers = isAdmin ? parsed : parsed.filter((p: SavedPaper) => p.userId === userId);
+        localPapers = parsed.filter((p: SavedPaper) => isUserOwnPaper(p, userId, isAdmin));
       }
     } catch (_) {}
 

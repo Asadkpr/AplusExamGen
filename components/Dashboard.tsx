@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { User, ViewState } from '../types';
 import { getAllUsers, getUserCount, getCachedUserCountSync, resetUserCache } from '../services/authService';
 import { getAnnouncements, getCachedAnnouncementsSync, subscribeToAnnouncements, resetAnnouncementCache } from '../services/announcementService';
-import { getPaperCount, getCachedPaperCountSync, resetPaperCache, getSavedPapers } from '../services/paperService';
+import { getPaperCount, getCachedPaperCountSync, getCachedTodayPaperCountSync, resetPaperCache, getSavedPapers } from '../services/paperService';
 import { getPatternCount, getCachedPatternCountSync, resetPatternCache, getPatterns } from '../services/patternService';
 import { resetChapterCache } from '../services/chapterService';
 import { resetSubjectCache } from '../services/subjectService';
 import { resetQuestionCache } from '../services/questionService';
-import { syncService, DashboardStats } from '../services/syncService';
+import { syncService, DashboardStats, getStartOfTodayMs } from '../services/syncService';
 import { APP_NAME, COPYRIGHT_TEXT } from '../constants';
 import { useTheme } from '../context/ThemeContext';
 import { FilePlus2, FolderOpen, UserCog, HelpCircle, LogOut, Menu, X, ChevronRight, UploadCloud, Users, School, Mail, Phone, Layout, Moon, Sun, Info, Wifi, WifiOff, AlertTriangle, Database, Megaphone, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
@@ -42,6 +42,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Initialize with cached sync count so page displays INSTANTLY without delay or '...'
   const [userCount, setUserCount] = useState<number | null>(() => getCachedUserCountSync());
   const [paperCount, setPaperCount] = useState<number | null>(() => getCachedPaperCountSync(isAdmin ? undefined : user.id));
+  const [todayPaperCount, setTodayPaperCount] = useState<number>(() => getCachedTodayPaperCountSync());
   const [patternCount, setPatternCount] = useState<number | null>(() => getCachedPatternCountSync());
   const [newsList, setNewsList] = useState(() => getCachedAnnouncementsSync());
   const [latestAnnouncement, setLatestAnnouncement] = useState<string | null>(() => {
@@ -53,13 +54,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { isDarkMode, toggleTheme } = useTheme();
 
   const hydrateFallbackCounts = async (force: boolean = false) => {
-    try {
-      const papers = await getSavedPapers(user.id, isAdmin, force);
-      if (papers.length > 0) {
-        setPaperCount(papers.length);
-        syncService.setExactPaperCount(papers.length, user.id, isAdmin);
-      }
-    } catch (_) {}
+    if (!isAdmin) {
+      try {
+        const papers = await getSavedPapers(user.id, isAdmin, force);
+        if (papers.length > 0) {
+          setPaperCount(papers.length);
+          const startOfToday = getStartOfTodayMs();
+          const todayLen = papers.filter(p => (p.createdAt || 0) >= startOfToday).length;
+          syncService.setExactPaperCount(papers.length, user.id, isAdmin, todayLen);
+        }
+      } catch (_) {}
+    }
 
     if (isAdmin) {
       try {
@@ -100,6 +105,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     // Automatically fetches 1-read cloud metadata (`visibility_settings/dashboard_stats`) on cold domains!
     const unsubStats = syncService.subscribe(user.id, isAdmin, (stats: DashboardStats) => {
       setPaperCount(stats.papersCount);
+      setTodayPaperCount(stats.todayPapersCount ?? 0);
       setPatternCount(stats.patternsCount);
       if (isAdmin) {
         setUserCount(stats.schoolsCount);
@@ -287,7 +293,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 </div>
               )}
-              <div onClick={() => onNavigate('SAVED_PAPERS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
+              <div
+                onClick={!isAdmin ? () => onNavigate('SAVED_PAPERS') : undefined}
+                className={`bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg transition-colors group ${!isAdmin ? 'hover:border-gold-500/50 cursor-pointer' : 'cursor-default'}`}
+              >
                 <div className="bg-blue-500/10 p-2 md:p-2.5 rounded-full text-blue-400 shrink-0 group-hover:scale-110 transition-transform"><FolderOpen size={16} /></div>
                 <div>
                   <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{paperCount !== null ? paperCount : 0}</h3>
@@ -295,11 +304,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
               {isAdmin && (
-                <div onClick={() => onNavigate('PAPER_PATTERNS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
-                  <div className="bg-emerald-500/10 p-2 md:p-2.5 rounded-full text-emerald-400 shrink-0 group-hover:scale-110 transition-transform"><Layout size={16} /></div>
+                <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg transition-colors group cursor-default">
+                  <div className="bg-emerald-500/10 p-2 md:p-2.5 rounded-full text-emerald-400 shrink-0 group-hover:scale-110 transition-transform"><FilePlus2 size={16} /></div>
                   <div>
-                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{patternCount !== null ? patternCount : 0}</h3>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Patterns <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
+                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{todayPaperCount}</h3>
+                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Today Generated Papers <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Daily generated papers count"></span></p>
                   </div>
                 </div>
               )}

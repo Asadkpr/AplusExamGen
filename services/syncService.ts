@@ -16,9 +16,24 @@ import {
   Unsubscribe 
 } from 'firebase/firestore';
 
+export const getTodayDateKey = (): string => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+export const getStartOfTodayMs = (): number => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now.getTime();
+};
+
 export interface DashboardStats {
   schoolsCount: number;
   papersCount: number;
+  todayPapersCount: number;
   patternsCount: number;
   announcementsCount: number;
 }
@@ -33,6 +48,7 @@ class SyncService {
   private stats: DashboardStats = {
     schoolsCount: 0,
     papersCount: 0,
+    todayPapersCount: 0,
     patternsCount: 0,
     announcementsCount: 1,
   };
@@ -78,6 +94,20 @@ class SyncService {
     const storedPatterns = localStorage.getItem('total_patterns_count');
     const storedAnnounce = localStorage.getItem('aplus_announcements_cache_v1');
 
+    const todayKey = getTodayDateKey();
+    const startOfToday = getStartOfTodayMs();
+    const storedTodayDate = localStorage.getItem('today_papers_date');
+    let todayCount = 0;
+    if (storedTodayDate === todayKey) {
+      const tp = parseInt(localStorage.getItem('today_papers_count') || '0', 10);
+      if (!isNaN(tp) && tp >= 0) todayCount = tp;
+    } else {
+      try {
+        localStorage.setItem('today_papers_date', todayKey);
+        localStorage.setItem('today_papers_count', '0');
+      } catch (_) {}
+    }
+
     let pCount = 0;
     if (storedPapers !== null) {
       const p = parseInt(storedPapers, 10);
@@ -88,12 +118,19 @@ class SyncService {
       if (rawPapers) {
         const arr = JSON.parse(rawPapers);
         if (Array.isArray(arr)) {
-          const filteredLen = effectiveAdmin
-            ? arr.length
-            : arr.filter((item: any) => item && item.userId === effectiveUserId).length;
+          const filtered = effectiveAdmin
+            ? arr
+            : arr.filter((item: any) => item && item.userId === effectiveUserId);
+          const filteredLen = filtered.length;
           if (filteredLen > pCount) {
             pCount = filteredLen;
             localStorage.setItem(`total_papers_count_${key}`, pCount.toString());
+          }
+          const localTodayLen = filtered.filter((item: any) => item && (item.createdAt || 0) >= startOfToday).length;
+          if (localTodayLen > todayCount) {
+            todayCount = localTodayLen;
+            localStorage.setItem('today_papers_date', todayKey);
+            localStorage.setItem('today_papers_count', todayCount.toString());
           }
         }
       }
@@ -101,6 +138,7 @@ class SyncService {
     if (pCount > 0 || storedPapers !== null) {
       this.stats.papersCount = pCount;
     }
+    this.stats.todayPapersCount = todayCount;
 
     let uCount = 0;
     if (storedUsers !== null) {
@@ -211,6 +249,14 @@ class SyncService {
           this.stats.papersCount = count;
           localStorage.setItem(`total_papers_count_${key}`, count.toString());
         }
+        const startOfToday = getStartOfTodayMs();
+        const todayKey = getTodayDateKey();
+        const todayCacheCount = cacheSnap.docs.filter(d => (d.data()?.createdAt || 0) >= startOfToday).length;
+        if (todayCacheCount > this.stats.todayPapersCount) {
+          this.stats.todayPapersCount = todayCacheCount;
+          localStorage.setItem('today_papers_date', todayKey);
+          localStorage.setItem('today_papers_count', todayCacheCount.toString());
+        }
       }
     } catch (_) {}
 
@@ -278,6 +324,8 @@ class SyncService {
     try {
       // STEP A: 1-Read Fast Cloud Metadata Document (`visibility_settings/dashboard_stats`)
       // Works even when RunAggregationQuery (getCountFromServer) is throttled on Spark plan!
+      const todayKey = getTodayDateKey();
+      const startOfToday = getStartOfTodayMs();
       try {
         const metaSnap = await safeTimeout(getDoc(doc(db, STATS_COLLECTION, STATS_DOC)), 5000);
         if (metaSnap.exists()) {
@@ -297,6 +345,11 @@ class SyncService {
             this.stats.papersCount = data.papersCount;
             localStorage.setItem('total_papers_count_admin', data.papersCount.toString());
           }
+          if (data.todayPapersDate === todayKey && typeof data.todayPapersCount === 'number' && data.todayPapersCount >= 0) {
+            this.stats.todayPapersCount = Math.max(this.stats.todayPapersCount, data.todayPapersCount);
+            localStorage.setItem('today_papers_date', todayKey);
+            localStorage.setItem('today_papers_count', this.stats.todayPapersCount.toString());
+          }
           this.notify();
         }
       } catch (_) {}
@@ -308,6 +361,12 @@ class SyncService {
           const snap = await safeTimeout(getDocs(teacherQuery), 8000);
           this.stats.papersCount = snap.size;
           localStorage.setItem(`total_papers_count_${key}`, snap.size.toString());
+          const teacherToday = snap.docs.filter(d => (d.data()?.createdAt || 0) >= startOfToday).length;
+          if (teacherToday >= this.stats.todayPapersCount) {
+            this.stats.todayPapersCount = teacherToday;
+            localStorage.setItem('today_papers_date', todayKey);
+            localStorage.setItem('today_papers_count', teacherToday.toString());
+          }
           this.notify();
         } catch (_) {}
       }
@@ -315,17 +374,33 @@ class SyncService {
       if (Date.now() < this.quotaCooldownUntil) return;
 
       // STEP B: Server-side count aggregation if quota permits
-      let updatedCloudMeta: Partial<DashboardStats> = {};
+      let updatedCloudMeta: Record<string, any> = {};
 
       if (effectiveAdmin) {
         try {
           const papersSnap = await safeTimeout(getCountFromServer(collection(db, 'papers')), 4500);
           const exactPapers = papersSnap.data().count;
           if (exactPapers > 0) {
-            this.stats.papersCount = exactPapers;
-            localStorage.setItem('total_papers_count_admin', exactPapers.toString());
-            updatedCloudMeta.papersCount = exactPapers;
+            this.stats.papersCount = Math.max(this.stats.papersCount, exactPapers);
+            localStorage.setItem('total_papers_count_admin', this.stats.papersCount.toString());
+            updatedCloudMeta.papersCount = this.stats.papersCount;
           }
+        } catch (e: any) {
+          if (this.isQuotaError(e)) {
+            this.triggerQuotaCooldown();
+            return;
+          }
+        }
+
+        try {
+          const todayPapersQuery = query(collection(db, 'papers'), where('createdAt', '>=', startOfToday));
+          const todaySnap = await safeTimeout(getCountFromServer(todayPapersQuery), 4500);
+          const exactTodayPapers = todaySnap.data().count;
+          this.stats.todayPapersCount = Math.max(this.stats.todayPapersCount, exactTodayPapers);
+          localStorage.setItem('today_papers_date', todayKey);
+          localStorage.setItem('today_papers_count', this.stats.todayPapersCount.toString());
+          updatedCloudMeta.todayPapersCount = this.stats.todayPapersCount;
+          updatedCloudMeta.todayPapersDate = todayKey;
         } catch (e: any) {
           if (this.isQuotaError(e)) {
             this.triggerQuotaCooldown();
@@ -382,16 +457,26 @@ class SyncService {
     this.stats = {
       schoolsCount: 0,
       papersCount: 0,
+      todayPapersCount: 0,
       patternsCount: 0,
       announcementsCount: 1,
     };
   }
 
-  public setExactPaperCount(count: number, userId?: string, isAdmin?: boolean) {
+  public setExactPaperCount(count: number, userId?: string, isAdmin?: boolean, todayCount?: number) {
     const effectiveAdmin = isAdmin ?? this.currentIsAdmin;
     const key = effectiveAdmin ? 'admin' : (userId || this.currentUserId || 'admin');
+    if (typeof todayCount === 'number' && todayCount >= 0) {
+      const todayKey = getTodayDateKey();
+      this.stats.todayPapersCount = Math.max(this.stats.todayPapersCount, todayCount);
+      try {
+        localStorage.setItem('today_papers_date', todayKey);
+        localStorage.setItem('today_papers_count', this.stats.todayPapersCount.toString());
+      } catch (_) {}
+    }
     if (effectiveAdmin && count < this.stats.papersCount) {
       // Do not overwrite global total with a paginated subset
+      this.notify();
       return;
     }
     this.stats.papersCount = count;
@@ -424,19 +509,52 @@ class SyncService {
   }
 
   // --- Optimistic Instant Mutators ---
-  public optimisticPaperAdded(userId?: string) {
-    this.stats.papersCount += 1;
-    const key = this.currentIsAdmin ? 'admin' : (userId || this.currentUserId || 'admin');
-    localStorage.setItem(`total_papers_count_${key}`, this.stats.papersCount.toString());
-    const adminStored = parseInt(localStorage.getItem('total_papers_count_admin') || '0', 10);
-    if (adminStored > 0 && !this.currentIsAdmin) {
-      localStorage.setItem('total_papers_count_admin', (adminStored + 1).toString());
+  public optimisticTodayPaperGenerated() {
+    const todayKey = getTodayDateKey();
+    const storedDate = localStorage.getItem('today_papers_date');
+    if (storedDate !== todayKey) {
+      this.stats.todayPapersCount = 0;
     }
-    this.incrementCloudStatsField('papersCount', 1);
+    this.stats.todayPapersCount += 1;
+    if (this.currentIsAdmin) {
+      this.stats.papersCount += 1;
+    }
+    try {
+      localStorage.setItem('today_papers_date', todayKey);
+      localStorage.setItem('today_papers_count', this.stats.todayPapersCount.toString());
+      const adminStored = parseInt(localStorage.getItem('total_papers_count_admin') || '0', 10);
+      const nextAdminTotal = Math.max(this.stats.papersCount, adminStored + 1);
+      localStorage.setItem('total_papers_count_admin', nextAdminTotal.toString());
+      if (this.currentIsAdmin) {
+        this.stats.papersCount = nextAdminTotal;
+      }
+    } catch (_) {}
+    try {
+      const ref = doc(db, STATS_COLLECTION, STATS_DOC);
+      setDoc(ref, {
+        papersCount: increment(1),
+        todayPapersCount: this.stats.todayPapersCount,
+        todayPapersDate: todayKey,
+        updatedAt: Date.now()
+      }, { merge: true }).catch(() => {});
+    } catch (_) {}
     this.notify();
   }
 
-  public optimisticPaperDeleted(userId?: string) {
+  public optimisticPaperAdded(userId?: string, skipTodayIncrement: boolean = false) {
+    const key = this.currentIsAdmin ? 'admin' : (userId || this.currentUserId || 'admin');
+    if (!this.currentIsAdmin) {
+      this.stats.papersCount += 1;
+      localStorage.setItem(`total_papers_count_${key}`, this.stats.papersCount.toString());
+    }
+    if (!skipTodayIncrement) {
+      this.optimisticTodayPaperGenerated();
+    } else {
+      this.notify();
+    }
+  }
+
+  public optimisticPaperDeleted(userId?: string, wasCreatedToday: boolean = false) {
     this.stats.papersCount = Math.max(0, this.stats.papersCount - 1);
     const key = this.currentIsAdmin ? 'admin' : (userId || this.currentUserId || 'admin');
     localStorage.setItem(`total_papers_count_${key}`, this.stats.papersCount.toString());
@@ -445,6 +563,20 @@ class SyncService {
       localStorage.setItem('total_papers_count_admin', Math.max(0, adminStored - 1).toString());
     }
     this.incrementCloudStatsField('papersCount', -1);
+    if (wasCreatedToday) {
+      const todayKey = getTodayDateKey();
+      this.stats.todayPapersCount = Math.max(0, this.stats.todayPapersCount - 1);
+      try {
+        localStorage.setItem('today_papers_date', todayKey);
+        localStorage.setItem('today_papers_count', this.stats.todayPapersCount.toString());
+        const ref = doc(db, STATS_COLLECTION, STATS_DOC);
+        setDoc(ref, {
+          todayPapersCount: this.stats.todayPapersCount,
+          todayPapersDate: todayKey,
+          updatedAt: Date.now()
+        }, { merge: true }).catch(() => {});
+      } catch (_) {}
+    }
     this.notify();
   }
 
@@ -521,6 +653,16 @@ class SyncService {
           if (isAdmin && typeof data.papersCount === 'number' && data.papersCount > 0) {
             this.stats.papersCount = data.papersCount;
             localStorage.setItem('total_papers_count_admin', data.papersCount.toString());
+          }
+          const todayKey = getTodayDateKey();
+          if (data.todayPapersDate === todayKey && typeof data.todayPapersCount === 'number' && data.todayPapersCount >= 0) {
+            this.stats.todayPapersCount = data.todayPapersCount;
+            localStorage.setItem('today_papers_date', todayKey);
+            localStorage.setItem('today_papers_count', data.todayPapersCount.toString());
+          } else if (data.todayPapersDate && data.todayPapersDate !== todayKey) {
+            this.stats.todayPapersCount = 0;
+            localStorage.setItem('today_papers_date', todayKey);
+            localStorage.setItem('today_papers_count', '0');
           }
           this.notify();
         }
