@@ -1,15 +1,15 @@
 import { Chapter, QuestionType, PaperPattern, Question } from './types';
 
-// Vibrant Colors for Cards (Classes & Subjects)
+// Vibrant High-Contrast Colors for Cards (Classes & Subjects on Light/Warm-Bronze Theme)
 export const CARD_COLORS = [
-  { from: 'from-blue-500/20', to: 'to-indigo-500/20', border: 'border-blue-500/30', hoverBorder: 'hover:border-blue-500', icon: 'text-blue-500', groupHoverIcon: 'group-hover:text-blue-400', shadow: 'hover:shadow-[0_8px_30px_rgba(59,130,246,0.2)]' },
-  { from: 'from-emerald-500/20', to: 'to-teal-500/20', border: 'border-emerald-500/30', hoverBorder: 'hover:border-emerald-500', icon: 'text-emerald-500', groupHoverIcon: 'group-hover:text-emerald-400', shadow: 'hover:shadow-[0_8px_30px_rgba(16,185,129,0.2)]' },
-  { from: 'from-purple-500/20', to: 'to-fuchsia-500/20', border: 'border-purple-500/30', hoverBorder: 'hover:border-purple-500', icon: 'text-purple-500', groupHoverIcon: 'group-hover:text-purple-400', shadow: 'hover:shadow-[0_8px_30px_rgba(168,85,247,0.2)]' },
-  { from: 'from-orange-500/20', to: 'to-red-500/20', border: 'border-orange-500/30', hoverBorder: 'hover:border-orange-500', icon: 'text-orange-500', groupHoverIcon: 'group-hover:text-orange-400', shadow: 'hover:shadow-[0_8px_30px_rgba(249,115,22,0.2)]' },
-  { from: 'from-cyan-500/20', to: 'to-blue-500/20', border: 'border-cyan-500/30', hoverBorder: 'hover:border-cyan-500', icon: 'text-cyan-500', groupHoverIcon: 'group-hover:text-cyan-400', shadow: 'hover:shadow-[0_8px_30px_rgba(6,182,212,0.2)]' },
-  { from: 'from-pink-500/20', to: 'to-rose-500/20', border: 'border-pink-500/30', hoverBorder: 'hover:border-pink-500', icon: 'text-pink-500', groupHoverIcon: 'group-hover:text-pink-400', shadow: 'hover:shadow-[0_8px_30px_rgba(236,72,153,0.2)]' },
-  { from: 'from-yellow-500/20', to: 'to-orange-500/20', border: 'border-yellow-500/30', hoverBorder: 'hover:border-yellow-500', icon: 'text-yellow-500', groupHoverIcon: 'group-hover:text-yellow-400', shadow: 'hover:shadow-[0_8px_30px_rgba(234,179,8,0.2)]' },
-  { from: 'from-green-500/20', to: 'to-emerald-500/20', border: 'border-green-500/30', hoverBorder: 'hover:border-green-500', icon: 'text-green-500', groupHoverIcon: 'group-hover:text-green-400', shadow: 'hover:shadow-[0_8px_30px_rgba(34,197,94,0.2)]' }
+  { from: 'from-[#C29B61]/10', to: 'to-[#B0894F]/15', border: 'border-[#E6D5B8]', hoverBorder: 'hover:border-[#C29B61]', icon: 'text-[#B0894F]', groupHoverIcon: 'group-hover:text-[#94703C]', shadow: 'hover:shadow-[0_8px_25px_rgba(194,155,97,0.18)]' },
+  { from: 'from-slate-500/10', to: 'to-slate-600/15', border: 'border-slate-300', hoverBorder: 'hover:border-slate-600', icon: 'text-slate-700', groupHoverIcon: 'group-hover:text-slate-900', shadow: 'hover:shadow-[0_8px_25px_rgba(71,85,105,0.15)]' },
+  { from: 'from-amber-500/10', to: 'to-orange-500/15', border: 'border-amber-300', hoverBorder: 'hover:border-[#B0894F]', icon: 'text-[#B0894F]', groupHoverIcon: 'group-hover:text-[#785A31]', shadow: 'hover:shadow-[0_8px_25px_rgba(194,155,97,0.18)]' },
+  { from: 'from-emerald-500/10', to: 'to-teal-500/15', border: 'border-emerald-300', hoverBorder: 'hover:border-emerald-600', icon: 'text-emerald-700', groupHoverIcon: 'group-hover:text-emerald-800', shadow: 'hover:shadow-[0_8px_25px_rgba(16,185,129,0.15)]' },
+  { from: 'from-blue-500/10', to: 'to-indigo-500/15', border: 'border-blue-300', hoverBorder: 'hover:border-blue-600', icon: 'text-blue-700', groupHoverIcon: 'group-hover:text-blue-800', shadow: 'hover:shadow-[0_8px_25px_rgba(59,130,246,0.15)]' },
+  { from: 'from-purple-500/10', to: 'to-fuchsia-500/15', border: 'border-purple-300', hoverBorder: 'hover:border-purple-600', icon: 'text-purple-700', groupHoverIcon: 'group-hover:text-purple-800', shadow: 'hover:shadow-[0_8px_25px_rgba(168,85,247,0.15)]' },
+  { from: 'from-cyan-500/10', to: 'to-sky-500/15', border: 'border-cyan-300', hoverBorder: 'hover:border-cyan-600', icon: 'text-cyan-700', groupHoverIcon: 'group-hover:text-cyan-800', shadow: 'hover:shadow-[0_8px_25px_rgba(6,182,212,0.15)]' },
+  { from: 'from-rose-500/10', to: 'to-pink-500/15', border: 'border-rose-300', hoverBorder: 'hover:border-rose-600', icon: 'text-rose-700', groupHoverIcon: 'group-hover:text-rose-800', shadow: 'hover:shadow-[0_8px_25px_rgba(244,63,94,0.15)]' }
 ];
 
 export const APP_NAME = "APLUS ExamGen";

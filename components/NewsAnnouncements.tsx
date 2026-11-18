@@ -85,10 +85,10 @@ export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBa
 
   const getTypeStyles = (type: Announcement['type']) => {
     switch (type) {
-      case 'urgent': return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'update': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'maintenance': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      default: return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'urgent': return 'bg-red-100 text-red-700 border-red-200';
+      case 'update': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'maintenance': return 'bg-amber-100 text-amber-800 border-amber-200';
+      default: return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     }
   };
 
@@ -96,11 +96,11 @@ export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBa
     <div className="min-h-screen bg-gray-900 flex flex-col font-sans transition-colors duration-300">
       <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button onClick={onBack} className="text-gray-400 hover:text-gold-500 flex items-center transition-colors">
-            <ArrowLeft size={20} className="mr-1" /><span className="font-medium">Dashboard</span>
+          <button onClick={onBack} className="text-[#475569] hover:text-[#B0894F] flex items-center transition-colors font-semibold">
+            <ArrowLeft size={20} className="mr-1" /><span className="font-semibold">Dashboard</span>
           </button>
-          <div className="text-xl font-bold text-white tracking-wider flex items-center gap-2">
-            <Megaphone className="text-gold-500" /> NEWS & UPDATES
+          <div className="text-xl font-extrabold text-[#0F172A] tracking-wider flex items-center gap-2">
+            <Megaphone className="text-[#C29B61]" /> NEWS & UPDATES
           </div>
           <div className="w-20"></div>
         </div>
@@ -168,8 +168,8 @@ export const NewsAnnouncements: React.FC<NewsAnnouncementsProps> = ({ user, onBa
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-scaleIn">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white uppercase tracking-wider">{editingAnnouncement ? 'Edit' : 'Create'} Broadcast</h3>
-              <button onClick={() => { setShowModal(false); setEditingAnnouncement(null); }} className="text-gray-400 hover:text-white"><X size={24} /></button>
+              <h3 className="text-xl font-extrabold text-[#0F172A] uppercase tracking-wider">{editingAnnouncement ? 'Edit' : 'Create'} Broadcast</h3>
+              <button onClick={() => { setShowModal(false); setEditingAnnouncement(null); }} className="text-[#64748B] hover:text-[#0F172A]"><X size={24} /></button>
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-4">

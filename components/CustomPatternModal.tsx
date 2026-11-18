@@ -453,7 +453,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
           <button 
             type="button"
             onClick={onClose} 
-            className="p-1.5 rounded-lg text-theme-text-muted hover:text-white hover:bg-gray-700/60 transition-colors shrink-0"
+            className="p-1.5 rounded-lg text-theme-text-muted hover:text-[#0F172A] hover:bg-gray-700/60 transition-colors shrink-0"
           >
             <X size={20} />
           </button>
@@ -492,7 +492,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
             <div className="col-span-1 md:col-span-4 flex items-center justify-end gap-2.5 sm:gap-3 pl-2 md:border-l border-gray-700">
               <div className="text-right">
                 <span className="text-[8px] sm:text-[9px] uppercase font-black tracking-widest text-theme-text-muted block">Total Qs</span>
-                <span className="text-base sm:text-lg font-black text-white">{totalQuestionsCount}</span>
+                <span className="text-base sm:text-lg font-black text-[#0F172A]">{totalQuestionsCount}</span>
               </div>
               <div className="h-7 sm:h-8 w-px bg-gray-700" />
               <div className="text-right">
@@ -649,7 +649,7 @@ export const CustomPatternModal: React.FC<CustomPatternModalProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setCustomTitleModes(prev => ({ ...prev, [s.id]: false }))}
-                                className="p-1 text-gold-500 hover:text-white shrink-0"
+                                className="p-1 text-gold-500 hover:text-[#0F172A] shrink-0"
                                 title="Switch back to preset titles"
                               >
                                 <X size={12} />

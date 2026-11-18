@@ -740,7 +740,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       {addSubjectModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Add New Subject</h3>
+            <h3 className="text-xl font-bold text-[#0F172A] mb-4">Add New Subject</h3>
             <form onSubmit={handleSaveNewSubject}>
               <Input label="Subject Name" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="e.g. Physics" autoFocus />
               <div className="flex gap-3 mt-6">
@@ -755,10 +755,10 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       {editSubjectModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Edit Subject</h3>
+            <h3 className="text-xl font-bold text-[#0F172A] mb-4">Edit Subject</h3>
             <form onSubmit={handleUpdateSubject}>
               <div className="mb-4">
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Original: {editingSubjectOriginalName}</label>
+                <label className="block text-xs font-bold text-[#475569] uppercase mb-2">Original: {editingSubjectOriginalName}</label>
                 <Input label="New Subject Name" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="e.g. Physics" autoFocus />
               </div>
               <div className="flex gap-3 mt-6">
@@ -774,7 +774,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       {addChapterModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Add New Chapter</h3>
+            <h3 className="text-xl font-bold text-[#0F172A] mb-4">Add New Chapter</h3>
             <form onSubmit={handleSaveNewChapter}>
               <Input label="Chapter Name" value={newChapterName} onChange={(e) => setNewChapterName(e.target.value)} placeholder="e.g. Chapter 1: Introduction" autoFocus />
               <div className="flex gap-3 mt-6">
@@ -789,7 +789,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
       {editChapterModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-m-md shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4">Edit Chapter Name</h3>
+            <h3 className="text-xl font-bold text-[#0F172A] mb-4">Edit Chapter Name</h3>
             <form onSubmit={handleUpdateChapter}>
               <Input label="New Chapter Name" value={newChapterName} onChange={(e) => setNewChapterName(e.target.value)} placeholder="e.g. Chapter 1: Updated Title" autoFocus />
               <div className="flex gap-3 mt-6">
@@ -833,7 +833,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
           {step === 2 && (
             <div className="animate-fadeIn space-y-6">
               <div className="flex justify-between items-center">
-                 <h2 className="text-2xl font-bold text-white uppercase tracking-widest">{selectedClass} Subjects</h2>
+                 <h2 className="text-2xl font-extrabold text-[#0F172A] uppercase tracking-widest"><span className="text-[#B0894F]">{selectedClass}</span> Subjects</h2>
                  {isAdmin && (
                    <Button onClick={() => setAddSubjectModal(true)} className="!w-auto text-xs py-2 px-4">
                      <Plus size={16} className="mr-2" /> Add Subject
@@ -842,7 +842,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                 {isActionLoading && availableSubjects.length === 0 ? (
-                  <div className="col-span-full py-12 text-center text-gray-500 flex flex-col items-center">
+                  <div className="col-span-full py-12 text-center text-[#475569] flex flex-col items-center">
                      <RefreshCw className="animate-spin mb-2" />
                      <span>Loading Subjects...</span>
                   </div>
@@ -853,40 +853,40 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                       return (
                       <div 
                         key={subj} 
-                        className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 overflow-hidden w-full h-36 ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow} ${isEnglishSubject(subj) ? 'ring-2 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : ''}`}
+                        className={`group relative cursor-pointer rounded-2xl border-2 bg-white p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 overflow-hidden w-full h-36 ${color.border} ${color.hoverBorder} hover:bg-[#FBF9F5] hover:-translate-y-1 shadow-sm ${color.shadow} ${isEnglishSubject(subj) ? 'ring-2 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : ''}`}
                         onClick={() => { setSelectedSubject(subj); loadChapters(subj, selectedClass); setStep(3); }}
                       >
                         <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                        <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300`}>
+                        <div className={`relative z-10 ${color.icon} ${color.groupHoverIcon} transition-colors duration-300`}>
                             <Layers size={28} className="transition-transform duration-300 group-hover:scale-110" />
                         </div>
                         {isAdmin && (
                           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                             <button 
                               onClick={(e) => { e.stopPropagation(); setEditingSubjectOriginalName(subj); setNewSubjectName(subj); setEditSubjectModal(true); }}
-                              className="p-1.5 bg-gray-900/80 text-blue-400 rounded hover:bg-blue-900/40 transition-colors"
+                              className="p-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-600 hover:text-white transition-colors"
                             >
                               <Edit size={14} />
                             </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleDeleteSubject(subj); }}
-                              className="p-1.5 bg-red-900/80 text-red-400 rounded hover:bg-red-900/40 transition-colors"
+                              className="p-1.5 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-600 hover:text-white transition-colors"
                             >
                               <Trash2 size={14} />
                             </button>
                           </div>
                         )}
-                        {isEnglishSubject(subj) && <div className="absolute -top-2 -right-2 bg-emerald-500 text-black px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-tighter shadow-lg z-20">Specialized Parsing</div>}
-                        <h3 className="relative z-10 font-bold text-theme-text-sub group-hover:text-theme-text-main text-base md:text-lg leading-tight transition-all duration-300 group-hover:tracking-wide">{subj}</h3>
+                        {isEnglishSubject(subj) && <div className="absolute -top-2 -right-2 bg-emerald-600 text-white px-2 py-0.5 rounded font-black text-[8px] uppercase tracking-tighter shadow-lg z-20">Specialized Parsing</div>}
+                        <h3 className="relative z-10 font-extrabold text-[#0F172A] group-hover:text-[#94703C] text-base md:text-lg leading-tight transition-all duration-300 group-hover:tracking-wide">{subj}</h3>
                       </div>
                     )})}
                     {isAdmin && (
                       <div 
                         onClick={() => setAddSubjectModal(true)}
-                        className="group relative cursor-pointer rounded-2xl border-2 border-dashed border-surface-700 bg-surface-900/50 hover:bg-surface-800 backdrop-blur-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 hover:border-gold-500 hover:-translate-y-1 w-full h-36"
+                        className="group relative cursor-pointer rounded-2xl border-2 border-dashed border-gray-700 bg-white/70 hover:bg-white p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 hover:border-[#C29B61] hover:-translate-y-1 w-full h-36"
                       >
-                        <Plus size={32} className="text-gray-500 group-hover:text-gold-500 mb-2 transition-transform group-hover:scale-110" />
-                        <span className="text-xs font-bold text-gray-500 group-hover:text-gold-500 uppercase">Add New</span>
+                        <Plus size={32} className="text-[#64748B] group-hover:text-[#B0894F] mb-2 transition-transform group-hover:scale-110" />
+                        <span className="text-xs font-bold text-[#475569] group-hover:text-[#B0894F] uppercase">Add New</span>
                       </div>
                     )}
                   </>
@@ -898,7 +898,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
           {step === 3 && (
             <div className="animate-fadeIn space-y-6">
               <div className="flex justify-between items-center">
-                 <h2 className="text-2xl font-bold text-white uppercase tracking-widest">{selectedSubject} Chapters</h2>
+                 <h2 className="text-2xl font-extrabold text-[#0F172A] uppercase tracking-widest"><span className="text-[#B0894F]">{selectedSubject}</span> Chapters</h2>
                  {isAdmin && (
                    <Button onClick={() => setAddChapterModal(true)} className="!w-auto text-xs py-2 px-4">
                      <Plus size={16} className="mr-2" /> Add Chapter
@@ -907,7 +907,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {isActionLoading && availableChapters.length === 0 ? (
-                  <div className="col-span-full py-12 text-center text-gray-500 flex flex-col items-center">
+                  <div className="col-span-full py-12 text-center text-[#475569] flex flex-col items-center">
                      <RefreshCw className="animate-spin mb-2" />
                      <span>Loading Chapters...</span>
                   </div>
@@ -917,32 +917,32 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                       <div 
                         key={chapter.id} 
                         onClick={() => { setSelectedChapter(chapter); setStep(4); }} 
-                        className={`p-5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition-all relative group ${chapter.subtopics.length > 0 ? 'bg-gold-500 text-black border-gold-500' : 'bg-gray-800 border-gray-700 hover:border-gold-500'}`}
+                        className={`p-5 rounded-xl border-2 flex items-center justify-between cursor-pointer transition-all relative group shadow-sm ${chapter.subtopics.length > 0 ? 'bg-[#FBF6EE] text-[#0F172A] border-[#C29B61]' : 'bg-white border-gray-700 hover:border-[#C29B61]'}`}
                       >
                           <div>
-                            <h3 className={`font-bold text-lg ${chapter.subtopics.length > 0 ? 'text-black' : 'text-white'} ${isUrduPaper ? 'font-urdu' : ''}`}>{chapter.name}</h3>
-                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${chapter.subtopics.length > 0 ? 'bg-black text-gold-500' : 'text-gray-500 bg-gray-900'}`}>
+                            <h3 className={`font-extrabold text-lg text-[#0F172A] ${isUrduPaper ? 'font-urdu' : ''}`}>{chapter.name}</h3>
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded inline-block mt-1 ${chapter.subtopics.length > 0 ? 'bg-[#C29B61] text-white' : 'text-[#475569] bg-slate-100 border border-slate-200'}`}>
                               {chapter.subtopics.length > 0 ? 'Content Uploaded' : 'Empty'}
                             </span>
                           </div>
                           <div className="flex items-center gap-3">
                             {isAdmin && (
                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={(e) => { e.stopPropagation(); setEditingChapter(chapter); setNewChapterName(chapter.name); setEditChapterModal(true); }} className={`p-2 rounded transition-all ${chapter.subtopics.length > 0 ? 'bg-black/20 text-black hover:bg-black/40' : 'bg-gray-900/80 text-blue-400 hover:bg-blue-900/40'}`}><Edit size={16} /></button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteChapterAction(chapter.id, chapter.name); }} className={`p-2 rounded transition-all ${chapter.subtopics.length > 0 ? 'bg-black/20 text-black hover:bg-black/40' : 'bg-gray-900/80 text-red-400 hover:bg-red-900/40'}`}><Trash2 size={16} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setEditingChapter(chapter); setNewChapterName(chapter.name); setEditChapterModal(true); }} className="p-2 rounded transition-all bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-600 hover:text-white"><Edit size={16} /></button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteChapterAction(chapter.id, chapter.name); }} className="p-2 rounded transition-all bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white"><Trash2 size={16} /></button>
                               </div>
                             )}
-                            <div className={chapter.subtopics.length > 0 ? 'text-black' : 'text-gold-500'}>
+                            <div className={chapter.subtopics.length > 0 ? 'text-[#B0894F]' : 'text-[#64748B]'}>
                               {chapter.subtopics.length > 0 ? <CheckCircle size={28} /> : <ChevronRight size={28} />}
                             </div>
                           </div>
                       </div>
                     ))}
                     {availableChapters.length === 0 && (
-                      <div className="col-span-full py-10 px-6 text-center border-2 border-dashed border-gray-700 rounded-2xl bg-gray-800/40 flex flex-col items-center">
-                        <BookText size={40} className="text-gray-500 mb-3" />
-                        <p className="text-gray-300 font-semibold mb-1">No chapters added yet for {selectedSubject}.</p>
-                        <p className="text-gray-500 text-xs mb-4">Add your first chapter to upload questions or papers.</p>
+                      <div className="col-span-full py-10 px-6 text-center border-2 border-dashed border-gray-700 rounded-2xl bg-white flex flex-col items-center">
+                        <BookText size={40} className="text-[#64748B] mb-3" />
+                        <p className="text-[#0F172A] font-bold mb-1">No chapters added yet for {selectedSubject}.</p>
+                        <p className="text-[#475569] text-xs mb-4">Add your first chapter to upload questions or papers.</p>
                         {isAdmin && (
                           <Button onClick={() => setAddChapterModal(true)} className="!w-auto text-xs py-2 px-5">
                             <Plus size={16} className="mr-1.5" /> Add First Chapter
@@ -953,10 +953,10 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                     {isAdmin && availableChapters.length > 0 && (
                       <div 
                         onClick={() => setAddChapterModal(true)}
-                        className="group relative cursor-pointer rounded-xl border-2 border-dashed border-gray-700 bg-gray-900/50 hover:bg-gray-800 p-5 flex items-center justify-center gap-3 text-center transition-all duration-300 hover:border-gold-500 hover:-translate-y-0.5 min-h-[80px]"
+                        className="group relative cursor-pointer rounded-xl border-2 border-dashed border-gray-700 bg-white/70 hover:bg-white p-5 flex items-center justify-center gap-3 text-center transition-all duration-300 hover:border-[#C29B61] hover:-translate-y-0.5 min-h-[80px]"
                       >
-                        <Plus size={24} className="text-gray-400 group-hover:text-gold-500 transition-transform group-hover:scale-110" />
-                        <span className="text-sm font-bold text-gray-300 group-hover:text-gold-500 uppercase tracking-wider">+ Add New Chapter</span>
+                        <Plus size={24} className="text-[#64748B] group-hover:text-[#B0894F] transition-transform group-hover:scale-110" />
+                        <span className="text-sm font-bold text-[#0F172A] group-hover:text-[#B0894F] uppercase tracking-wider">+ Add New Chapter</span>
                       </div>
                     )}
                   </>
@@ -972,15 +972,15 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                       <div className="bg-gold-500/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 border border-gold-500/30">
                         <UploadCloud className="text-gold-500" size={24} />
                       </div>
-                      <h2 className="text-xl font-bold text-white uppercase tracking-widest">Verify & Upload</h2>
-                      <p className="text-gray-400 text-xs mt-1">{selectedSubject} / {selectedChapter?.name}</p>
+                      <h2 className="text-xl font-extrabold text-[#0F172A] uppercase tracking-widest">Verify & Upload</h2>
+                      <p className="text-[#B0894F] font-bold text-xs mt-1">{selectedSubject} / {selectedChapter?.name}</p>
                     </div>
 
                     {uploadSuccess ? (
-                      <div className="bg-green-900/20 border border-green-500 rounded-xl p-10 text-center animate-scaleIn">
-                        <CheckCircle className="text-green-500 mx-auto mb-4" size={56} />
-                        <h3 className="text-2xl font-bold text-green-400">Upload Successful!</h3>
-                        <p className="text-white mt-2 font-medium">{parsedCount} Questions saved to database.</p>
+                      <div className="bg-emerald-50 border border-emerald-400 rounded-xl p-10 text-center animate-scaleIn">
+                        <CheckCircle className="text-emerald-600 mx-auto mb-4" size={56} />
+                        <h3 className="text-2xl font-bold text-emerald-700">Upload Successful!</h3>
+                        <p className="text-[#0F172A] mt-2 font-bold">{parsedCount} Questions saved to database.</p>
                         <div className="mt-8 flex gap-4 justify-center">
                           <Button onClick={resetUploadState} className="!w-auto px-8">Upload More</Button>
                           <Button onClick={() => setStep(3)} variant="secondary" className="!w-auto px-8">Back to Chapters</Button>
@@ -1039,26 +1039,26 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                           <div className="space-y-6 animate-fadeIn">
                              <div className="flex items-center justify-between bg-gray-900/80 p-4 rounded-xl border border-gray-700">
                                <div className="flex items-center gap-3">
-                                 <div className="bg-gold-500 p-2 rounded-lg text-black"><FileSpreadsheet size={20} /></div>
+                                 <div className="bg-[#C29B61] p-2 rounded-lg text-white"><FileSpreadsheet size={20} /></div>
                                  <div className="text-left">
-                                   <p className="text-white font-bold text-sm truncate max-w-[260px]">{file.name}</p>
-                                   <p className="text-[10px] text-gray-500">Total Found: <span className="text-gold-500 font-bold">{parsedQuestions.length} Questions</span></p>
+                                   <p className="text-[#0F172A] font-bold text-sm truncate max-w-[260px]">{file.name}</p>
+                                   <p className="text-[10px] text-[#475569]">Total Found: <span className="text-[#B0894F] font-bold">{parsedQuestions.length} Questions</span></p>
                                  </div>
                                </div>
-                               <button onClick={resetUploadState} className="p-2 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"><X size={20} /></button>
+                               <button onClick={resetUploadState} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><X size={20} /></button>
                              </div>
 
                              {/* LaTeX Validation Error Panel */}
                              {latexValidationErrors.length > 0 && (
-                               <div className="bg-red-950/60 border-2 border-red-500 rounded-xl p-4 space-y-3 animate-fadeIn">
-                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-red-500/30 pb-3">
-                                   <div className="flex items-center gap-2.5 text-red-400">
-                                     <AlertTriangle size={22} className="shrink-0 text-red-500" />
+                               <div className="bg-red-50 border-2 border-red-500 rounded-xl p-4 space-y-3 animate-fadeIn">
+                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-red-200 pb-3">
+                                   <div className="flex items-center gap-2.5 text-red-700">
+                                     <AlertTriangle size={22} className="shrink-0 text-red-600" />
                                      <div>
-                                       <h4 className="text-sm font-black uppercase tracking-wider text-red-300">
+                                       <h4 className="text-sm font-black uppercase tracking-wider text-red-800">
                                          LaTeX Validation Failed ({latexValidationErrors.length} {latexValidationErrors.length === 1 ? 'Error' : 'Errors'} Found)
                                        </h4>
-                                       <p className="text-xs text-red-200/80">
+                                       <p className="text-xs text-red-700">
                                          Malformed LaTeX was detected in your file. Please fix the rows below in Excel and re-upload, or remove the invalid questions.
                                        </p>
                                      </div>
@@ -1067,7 +1067,7 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                      <button
                                        type="button"
                                        onClick={handleRemoveInvalidQuestions}
-                                       className="px-3 py-1.5 bg-red-500 hover:bg-red-400 text-black font-black text-[10px] uppercase tracking-wider rounded-lg transition-colors shrink-0"
+                                       className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-wider rounded-lg transition-colors shrink-0"
                                      >
                                        Remove {invalidQuestionIds.size} Invalid {invalidQuestionIds.size === 1 ? 'Question' : 'Questions'}
                                      </button>
@@ -1075,16 +1075,16 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
                                  </div>
                                  <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                                    {latexValidationErrors.map((err, eIdx) => (
-                                     <div key={eIdx} className="bg-black/40 border border-red-500/30 rounded-lg p-2.5 text-xs">
-                                       <div className="flex items-center gap-2 font-bold text-red-300">
-                                         <span className="bg-red-500/20 border border-red-500/40 px-1.5 py-0.5 rounded text-[10px]">
+                                     <div key={eIdx} className="bg-white border border-red-200 rounded-lg p-2.5 text-xs">
+                                       <div className="flex items-center gap-2 font-bold text-red-700">
+                                         <span className="bg-red-100 border border-red-300 px-1.5 py-0.5 rounded text-[10px] text-red-800">
                                            Row {err.row ?? '?'}
                                          </span>
-                                         <span className="text-gold-400">{err.field}</span>
+                                         <span className="text-[#94703C]">{err.field}</span>
                                          <span>— {err.message}</span>
                                        </div>
                                        {err.snippet && (
-                                         <pre className="mt-1 text-[10px] text-gray-400 font-mono truncate">{err.snippet}</pre>
+                                         <pre className="mt-1 text-[10px] text-[#475569] font-mono truncate">{err.snippet}</pre>
                                        )}
                                      </div>
                                    ))}
@@ -1094,49 +1094,49 @@ export const UploadPaper: React.FC<UploadPaperProps> = ({ user, onBack }) => {
 
                              <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden flex flex-col shadow-inner">
                                 <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center gap-2">
-                                  <Database size={16} className="text-gold-500" />
-                                  <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Question Bank Preview</span>
+                                  <Database size={16} className="text-[#C29B61]" />
+                                  <span className="text-[10px] font-black uppercase text-[#0F172A] tracking-widest">Question Bank Preview</span>
                                 </div>
-                                <div className="max-h-[400px] overflow-y-auto custom-scrollbar divide-y divide-gray-800 p-2">
+                                <div className="max-h-[400px] overflow-y-auto custom-scrollbar divide-y divide-gray-700 p-2 bg-white">
                                    {parsedQuestions.map((q, idx) => {
                                      const isSpecialType = isEnglish && ENGLISH_SUBTYPES.some(s => s.toLowerCase() === q.type.toLowerCase());
                                      const hasError = invalidQuestionIds.has(q.id);
                                      return (
-                                       <div key={idx} className={`p-4 transition-colors flex flex-col gap-2 tex2jax_process ${hasError ? 'bg-red-950/30 border border-red-500/50 rounded-lg my-1' : 'hover:bg-gray-800/30'}`}>
+                                       <div key={idx} className={`p-4 transition-colors flex flex-col gap-2 tex2jax_process ${hasError ? 'bg-red-50 border border-red-300 rounded-lg my-1' : 'hover:bg-[#FBF9F5]'}`}>
                                           <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-bold bg-gray-800 text-gold-500 px-1.5 py-0.5 rounded border border-gray-700">Q.{idx+1}</span>
+                                            <span className="text-[10px] font-bold bg-[#FBF6EE] text-[#94703C] px-1.5 py-0.5 rounded border border-[#E6D5B8]">Q.{idx+1}</span>
                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-tighter ${isSpecialType ? getSubtypeColor(q.type) : getTypeColor(q.type)}`}>
                                               {q.type}
                                             </span>
                                             {hasError && (
-                                              <span className="text-[9px] font-black px-2 py-0.5 rounded bg-red-500 text-black uppercase">
+                                              <span className="text-[9px] font-black px-2 py-0.5 rounded bg-red-600 text-white uppercase">
                                                 Malformed LaTeX
                                               </span>
                                             )}
-                                            <span className={`text-[9px] text-gray-500 ml-auto italic ${isUrduPaper ? 'font-urdu' : ''}`}>{renderFormattedTextPreview(q.subtopic || '')}</span>
+                                            <span className={`text-[9px] text-[#475569] font-semibold ml-auto italic ${isUrduPaper ? 'font-urdu' : ''}`}>{renderFormattedTextPreview(q.subtopic || '')}</span>
                                           </div>
                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="text-[12px] text-white leading-relaxed overflow-x-auto">{renderFormattedTextPreview(q.text)}</div>
-                                            {q.textUrdu && <div className="text-[12px] text-right text-gray-100 leading-relaxed font-urdu overflow-x-auto" dir="rtl">{renderFormattedTextPreview(q.textUrdu)}</div>}
+                                            <div className="text-[12px] text-[#0F172A] font-medium leading-relaxed overflow-x-auto">{renderFormattedTextPreview(q.text)}</div>
+                                            {q.textUrdu && <div className="text-[13px] text-right text-[#0F172A] leading-relaxed font-urdu overflow-x-auto" dir="rtl">{renderFormattedTextPreview(q.textUrdu)}</div>}
                                           </div>
                                           
                                           {((q.options && q.options.length > 0) || (q.optionsUrdu && q.optionsUrdu.length > 0)) && (
-                                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-800 pt-3">
+                                            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-gray-700 pt-3">
                                               {q.options && q.options.length > 0 && (
                                                 <div className="space-y-1.5">
                                                   {q.options.map((opt, oIdx) => (
-                                                    <div key={oIdx} className={`text-[12px] text-gray-400 flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500' : ''}`}>
-                                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
+                                                    <div key={oIdx} className={`text-[12px] text-[#0F172A] flex items-center gap-1.5 px-1.5 py-0.5 rounded ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-[#FBF6EE] text-[#94703C] font-bold' : ''}`}>
+                                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-[#C29B61] border-[#C29B61] text-white font-black' : 'border-slate-300 text-[#475569]'}`}>{String.fromCharCode(65+oIdx)}</span>
                                                       <div className="truncate">{renderFormattedTextPreview(opt)}</div>
                                                     </div>
                                                   ))}
                                                 </div>
                                               )}
                                               {q.optionsUrdu && q.optionsUrdu.length > 0 && (
-                                                <div className="space-y-0.5" dir="rtl">
+                                                <div className="space-y-1" dir="rtl">
                                                   {q.optionsUrdu.map((opt, oIdx) => (
-                                                    <div key={oIdx} className={`text-[12px] text-gray-100 opacity-80 font-urdu flex items-center gap-1.5 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'text-gold-500 opacity-100 font-bold' : ''}`}>
-                                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-gold-500 border-gold-500 text-black font-black' : 'border-gray-700 text-gray-500'}`}>{String.fromCharCode(65+oIdx)}</span>
+                                                    <div key={oIdx} className={`text-[13px] text-[#0F172A] font-urdu flex items-center gap-1.5 px-1.5 py-0.5 rounded ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-[#FBF6EE] text-[#94703C] font-bold' : ''}`}>
+                                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${q.correctAnswer === String.fromCharCode(65+oIdx) ? 'bg-[#C29B61] border-[#C29B61] text-white font-black' : 'border-slate-300 text-[#475569]'}`}>{String.fromCharCode(65+oIdx)}</span>
                                                       <div>{renderFormattedTextPreview(opt)}</div>
                                                     </div>
                                                   ))}

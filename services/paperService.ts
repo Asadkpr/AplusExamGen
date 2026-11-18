@@ -296,11 +296,40 @@ export const updatePaper = async (id: string, paperUpdate: Partial<SavedPaper>):
   }
 };
 
+const ADMIN_CREATOR_NAMES = new Set([
+  'master admin',
+  'system admin',
+  'system admin (local)',
+  'admin',
+  'admin access'
+]);
+
+const isPaperCreatedByAdmin = (p: SavedPaper): boolean => {
+  if (!p) return false;
+  const creator = String(p.createdBy || '').trim().toLowerCase();
+  const uid = String(p.userId || '').trim();
+  if (uid === 'admin' || uid === 'local-admin') {
+    if (creator && !ADMIN_CREATOR_NAMES.has(creator)) {
+      return false;
+    }
+    return true;
+  }
+  if (creator && ADMIN_CREATOR_NAMES.has(creator)) {
+    return true;
+  }
+  return false;
+};
+
 const isUserOwnPaper = (p: SavedPaper, userId: string, isAdmin: boolean): boolean => {
   if (!p) return false;
-  if (p.userId === userId) return true;
-  if (isAdmin && (p.userId === 'admin' || p.userId === 'local-admin')) return true;
-  return false;
+  if (isAdmin) {
+    return isPaperCreatedByAdmin(p) && (p.userId === userId || p.userId === 'admin' || p.userId === 'local-admin');
+  }
+  if (!userId || p.userId !== userId) return false;
+  if (p.userId === 'admin' || p.userId === 'local-admin') return false;
+  const creator = String(p.createdBy || '').trim().toLowerCase();
+  if (creator && ADMIN_CREATOR_NAMES.has(creator)) return false;
+  return true;
 };
 
 export const getSavedPapers = async (userId: string, isAdmin: boolean, forceRefresh: boolean = false): Promise<SavedPaper[]> => {

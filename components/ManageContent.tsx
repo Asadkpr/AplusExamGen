@@ -284,10 +284,10 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
 
   const getTypeColor = (type: string) => {
     switch(type) {
-        case 'MCQ': return 'bg-blue-900/50 text-blue-300 border-blue-500/30 [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
-        case 'SHORT': return 'bg-green-900/50 text-green-300 border-green-500/30 [.light-theme_&]:bg-green-100 [.light-theme_&]:text-green-700 [.light-theme_&]:border-green-200';
-        case 'LONG': return 'bg-purple-900/50 text-purple-300 border-purple-500/30 [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
-        default: return 'bg-gray-800 text-gray-400 border-gray-600 [.light-theme_&]:bg-gray-100 [.light-theme_&]:text-gray-700 [.light-theme_&]:border-gray-200';
+        case 'MCQ': return 'bg-blue-100 text-blue-700 border-blue-200';
+        case 'SHORT': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        case 'LONG': return 'bg-purple-100 text-purple-700 border-purple-200';
+        default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
@@ -325,12 +325,12 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                       else if (step === 2) { setSelectedClass(''); setStep(1); }
                       else if (step === 3) { setSelectedSubject(''); setStep(2); setActiveTab('QUESTIONS'); }
                   }} 
-                  className="text-gray-400 hover:text-gold-500 flex items-center transition-colors"
+                  className="text-[#475569] hover:text-[#B0894F] flex items-center transition-colors font-semibold"
                 >
-                    <ArrowLeft size={20} className="mr-1" /><span className="font-medium">{step === 1 ? 'Dashboard' : 'Back'}</span>
+                    <ArrowLeft size={20} className="mr-1" /><span className="font-semibold">{step === 1 ? 'Dashboard' : 'Back'}</span>
                 </button>
-                <div className="text-xl font-bold text-white tracking-wider flex items-center gap-2">
-                    <Database className="text-gold-500" /> QUESTION BANK
+                <div className="text-xl font-extrabold text-[#0F172A] tracking-wider flex items-center gap-2">
+                    <Database className="text-[#C29B61]" /> QUESTION BANK
                 </div>
                 <div className="w-20"></div>
             </div>
@@ -339,17 +339,17 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
         <main className="flex-grow p-4 sm:p-8 max-w-7xl mx-auto w-full pb-24">
             {step === 1 && (
                 <div className="animate-fadeIn">
-                    <h2 className="text-2xl font-bold text-theme-text-main text-center mb-8 uppercase tracking-widest">Select Class</h2>
+                    <h2 className="text-2xl font-extrabold text-[#0F172A] text-center mb-8 uppercase tracking-widest">Select Class</h2>
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
                         {CLASSES.map((cls, idx) => {
                             const color = CARD_COLORS[idx % CARD_COLORS.length];
                             return (
-                            <div key={cls} onClick={() => { setSelectedClass(cls); setStep(2); }} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+                            <div key={cls} onClick={() => { setSelectedClass(cls); setStep(2); }} className={`group relative cursor-pointer rounded-2xl border-2 bg-white p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-[#FBF9F5] hover:-translate-y-1 shadow-sm ${color.shadow}`}>
                                 <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                                <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
+                                <div className={`relative z-10 ${color.icon} ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
                                     <BookOpen size={40} />
                                 </div>
-                                <span className="relative z-10 font-black text-theme-text-main text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</span>
+                                <span className="relative z-10 font-black text-[#0F172A] group-hover:text-[#94703C] text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</span>
                             </div>
                         )})}
                     </div>
@@ -358,23 +358,23 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
 
             {step === 2 && (
                 <div className="animate-fadeIn">
-                    <h2 className="text-2xl font-bold text-theme-text-main text-center mb-2">Select Subject</h2>
-                    <p className="text-center text-gold-500 mb-8 font-semibold">{selectedClass}</p>
+                    <h2 className="text-2xl font-extrabold text-[#0F172A] text-center mb-1 uppercase tracking-wider">Select Subject</h2>
+                    <p className="text-center text-[#B0894F] mb-8 font-extrabold text-base uppercase tracking-widest">{selectedClass}</p>
                     {isLoading ? (
-                        <div className="text-center py-12"><RefreshCw className="animate-spin mx-auto text-gold-500" size={32} /></div>
+                        <div className="text-center py-12"><RefreshCw className="animate-spin mx-auto text-[#C29B61]" size={32} /></div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                             {availableSubjects.map((subj, idx) => {
                                 const count = subjectCounts[subj] || 0;
                                 const color = CARD_COLORS[idx % CARD_COLORS.length];
                                 return (
-                                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`group relative cursor-pointer rounded-2xl border-2 p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 hover:-translate-y-1 w-full h-36 overflow-hidden ${count > 0 ? `bg-surface-800/80 ${color.border} ${color.hoverBorder} ${color.shadow}` : 'bg-surface-800/40 border-surface-700/50 hover:border-surface-600 opacity-80'}`}>
-                                        <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 transition-opacity duration-500 ${count > 0 ? 'group-hover:opacity-100' : ''}`} />
-                                        <div className={`relative z-10 transition-colors duration-300 ${count > 0 ? `text-theme-text-muted ${color.groupHoverIcon}` : 'text-surface-600'}`}>
+                                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`group relative cursor-pointer rounded-2xl border-2 p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 hover:-translate-y-1 w-full h-36 overflow-hidden bg-white shadow-sm ${count > 0 ? `${color.border} ${color.hoverBorder} ${color.shadow}` : 'border-slate-200 hover:border-[#C29B61]'}`}>
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 transition-opacity duration-500 group-hover:opacity-100`} />
+                                        <div className={`relative z-10 transition-colors duration-300 ${count > 0 ? `${color.icon} ${color.groupHoverIcon}` : 'text-slate-500 group-hover:text-[#B0894F]'}`}>
                                             <Layers size={28} className="transition-transform duration-300 group-hover:scale-110" />
                                         </div>
-                                        <span className={`relative z-10 font-bold text-base md:text-lg leading-tight transition-all duration-300 ${count > 0 ? 'text-theme-text-sub group-hover:text-theme-text-main group-hover:tracking-wide' : 'text-theme-text-muted'}`}>{subj}</span>
-                                        <span className={`relative z-10 mt-1 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-widest transition-colors ${count > 0 ? `bg-surface-900 text-theme-text-muted border ${color.border} group-hover:bg-white/10 ${color.groupHoverIcon} group-hover:${color.border.replace('border-','border-')}` : 'bg-surface-900 text-theme-text-muted border border-surface-700'}`}>{count > 0 ? `${count} Chapters` : 'Empty'}</span>
+                                        <span className="relative z-10 font-extrabold text-base md:text-lg leading-tight transition-all duration-300 text-[#0F172A] group-hover:text-[#94703C] group-hover:tracking-wide">{subj}</span>
+                                        <span className={`relative z-10 mt-1 text-[10px] px-2.5 py-0.5 rounded-md font-black uppercase tracking-widest transition-colors ${count > 0 ? 'bg-[#FBF6EE] text-[#94703C] border border-[#E6D5B8]' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{count > 0 ? `${count} Chapters` : 'Empty'}</span>
                                     </div>
                                 );
                             })}
@@ -387,32 +387,32 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                 <div className="animate-fadeIn h-full flex flex-col">
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
                         <div>
-                            <h2 className="text-2xl font-bold text-theme-text-main flex items-center gap-2">
-                                <span className="text-gold-500">{selectedSubject}</span>
-                                <span className="text-gray-500 text-lg">/</span>
-                                <span className="text-gray-500">{selectedClass}</span>
+                            <h2 className="text-2xl font-extrabold text-[#0F172A] flex items-center gap-2">
+                                <span className="text-[#B0894F]">{selectedSubject}</span>
+                                <span className="text-slate-400 text-lg">/</span>
+                                <span className="text-[#0F172A]">{selectedClass}</span>
                             </h2>
-                            <p className="text-sm text-theme-text-muted mt-1">{filteredQuestions.length} Questions found</p>
+                            <p className="text-sm text-[#475569] font-medium mt-1">{filteredQuestions.length} Questions found</p>
                         </div>
                         {activeTab === 'QUESTIONS' && (
                           <div className="relative w-full md:w-96">
-                              <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-800 border border-gray-700 text-theme-text-main pl-10 pr-4 py-2 rounded-lg focus:border-gold-500 focus:outline-none" />
-                              <Search className="absolute left-3 top-2.5 text-gray-500" size={18} />
+                              <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white border border-gray-700 text-[#0F172A] pl-10 pr-4 py-2 rounded-lg focus:border-[#C29B61] focus:outline-none shadow-sm" />
+                              <Search className="absolute left-3 top-2.5 text-[#64748B]" size={18} />
                           </div>
                         )}
                     </div>
 
                     {isAdmin && (
-                      <div className="flex bg-gray-800 p-1 rounded-xl mb-6 w-full max-w-md mx-auto border border-gray-700 shadow-inner">
+                      <div className="flex bg-white p-1 rounded-xl mb-6 w-full max-w-md mx-auto border border-gray-700 shadow-sm">
                         <button 
                           onClick={() => setActiveTab('QUESTIONS')}
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'QUESTIONS' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-theme-text-muted hover:text-theme-text-main'}`}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'QUESTIONS' ? 'bg-[#C29B61] text-white shadow-md scale-105' : 'text-[#475569] hover:text-[#0F172A]'}`}
                         >
                           <Database size={14} /> Questions
                         </button>
                         <button 
                           onClick={() => setActiveTab('VISIBILITY')}
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'VISIBILITY' ? 'bg-gold-500 text-black shadow-lg scale-105' : 'text-theme-text-muted hover:text-theme-text-main'}`}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'VISIBILITY' ? 'bg-[#C29B61] text-white shadow-md scale-105' : 'text-[#475569] hover:text-[#0F172A]'}`}
                         >
                           <Eye size={14} /> Visibility & Deletion
                         </button>
@@ -477,24 +477,24 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                             </div>
                                             
                                             <p className="text-theme-text-main font-medium text-[12px] leading-relaxed whitespace-pre-wrap">{renderFormattedText(q.text)}</p>
-                                            {q.textUrdu && <p className="text-[12px] text-right text-theme-text-muted mt-3 font-urdu leading-loose whitespace-pre-wrap" dir="rtl">{renderFormattedText(q.textUrdu)}</p>}
+                                            {q.textUrdu && <p className="text-[13px] text-right text-[#0F172A] mt-3 font-urdu leading-loose whitespace-pre-wrap" dir="rtl">{renderFormattedText(q.textUrdu)}</p>}
 
                                             {q.type === 'MCQ' && (
                                               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                                                  {q.options && (
                                                    <div className="space-y-1.5">
                                                       {q.options.map((opt, oIdx) => (
-                                                        <div key={oIdx} className={`px-2 py-1 rounded text-[12px] flex items-center gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-theme-text-muted border-gray-700/50'}`}>
-                                                           <span className="font-black opacity-50">{String.fromCharCode(65 + oIdx)}.</span> {renderFormattedText(opt)}
+                                                        <div key={oIdx} className={`px-2.5 py-1 rounded text-[12px] flex items-center gap-2 border ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-[#FBF6EE] text-[#94703C] font-bold border-[#C29B61]' : 'bg-slate-50 text-[#0F172A] border-slate-200'}`}>
+                                                           <span className="font-black text-[#475569]">{String.fromCharCode(65 + oIdx)}.</span> {renderFormattedText(opt)}
                                                         </div>
                                                       ))}
                                                    </div>
                                                  )}
                                                  {q.optionsUrdu && (
-                                                   <div className="space-y-1">
+                                                   <div className="space-y-1.5">
                                                       {q.optionsUrdu.map((opt, oIdx) => (
-                                                        <div key={oIdx} className={`px-2 py-0.5 rounded text-[12px] text-right font-urdu flex items-center justify-end gap-2 ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-gold-500/10 text-gold-500 border border-gold-500/20' : 'bg-gray-900 text-theme-text-muted opacity-60 border border-gray-700/50'}`} dir="rtl">
-                                                           <span className="font-black opacity-30 text-xs">({String.fromCharCode(65 + oIdx)})</span> {renderFormattedText(opt)}
+                                                        <div key={oIdx} className={`px-2.5 py-1 rounded text-[13px] text-right font-urdu flex items-center justify-end gap-2 border ${q.correctAnswer === String.fromCharCode(65 + oIdx) ? 'bg-[#FBF6EE] text-[#94703C] font-bold border-[#C29B61]' : 'bg-slate-50 text-[#0F172A] border-slate-200'}`} dir="rtl">
+                                                           <span className="font-black text-[#475569] text-xs">({String.fromCharCode(65 + oIdx)})</span> {renderFormattedText(opt)}
                                                         </div>
                                                       ))}
                                                    </div>
@@ -503,8 +503,8 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                                             )}
                                         </div>
                                         <div className="flex flex-col gap-2 border-l border-gray-700 pl-4 justify-center">
-                                            <button onClick={(e) => { e.stopPropagation(); handleEditClick(q); }} className="p-2 bg-blue-900/20 text-blue-400 rounded hover:bg-blue-500 hover:text-white transition-all shadow-sm"><Edit size={16} /></button>
-                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(q); }} className="p-2 bg-red-900/20 text-red-400 rounded hover:bg-red-500 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleEditClick(q); }} className="p-2 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit size={16} /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(q); }} className="p-2 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
                                         </div>
                                     </div>
                                   );
@@ -624,8 +624,8 @@ export const ManageContent: React.FC<ManageContentProps> = ({ user, onBack }) =>
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
                     <div className="bg-gray-800 rounded-xl shadow-2xl border border-gold-500 max-w-4xl w-full p-6 animate-scaleIn max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-2">
-                            <h3 className="text-xl font-bold text-theme-text-main">Edit Question</h3>
-                            <button onClick={() => setEditingQuestion(null)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+                            <h3 className="text-xl font-bold text-[#0F172A]">Edit Question</h3>
+                            <button onClick={() => setEditingQuestion(null)} className="text-gray-400 hover:text-[#0F172A]"><X size={24} /></button>
                         </div>
                         
                         <div className="space-y-4">

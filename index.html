@@ -127,16 +127,16 @@
                 900: '#0c4a6e',
               },
               gold: {
-                50: '#fffbeb',
-                100: '#fef3c7',
-                200: '#fde68a',
-                300: '#fcd34d',
-                400: '#fbbf24',
-                500: '#f59e0b',
-                600: '#d97706',
-                700: '#b45309',
-                800: '#92400e',
-                900: '#78350f',
+                50: '#fbf6ee',
+                100: '#f5ead8',
+                200: '#ead5b3',
+                300: '#dcba87',
+                400: '#cea266',
+                500: '#c29b61',
+                600: '#b0894f',
+                700: '#94703c',
+                800: '#785a31',
+                900: '#624a29',
               }
             }
           }
@@ -144,50 +144,27 @@
       }
     </script>
     <style>
-      :root {
-        /* DARK MODE DEFAULTS */
-        --gray-950: #0a0f1a;
-        --gray-900: #111827; 
-        --gray-850: #1a2233;
-        --gray-800: #1f2937;
-        --gray-750: #2d3748;
-        --gray-700: #374151;
-        --gray-600: #4b5563;
-        --gray-500: #6b7280;
-        --gray-400: #9ca3af;
-        --gray-300: #d1d5db;
-        --gray-200: #e5e7eb;
-        --gray-100: #f3f4f6;
-        --gray-50: #f9fafb;
-        
-        --text-main: #ffffff;
-        --text-inv: #000000;
-        --text-muted: #9ca3af;
-        --text-sub: #6b7280;
-        --bg-900: var(--gray-900);
-      }
-
-      .light-theme {
-        /* LIGHT MODE INVERSIONS - HIGH CONTRAST */
-        --gray-950: #f1f5f9;
-        --gray-900: #ffffff; 
-        --gray-850: #f8fafc;
-        --gray-800: #f1f5f9; /* Soft light background for inputs */
-        --gray-750: #e2e8f0;
-        --gray-700: #cbd5e1;
-        --gray-600: #94a3b8;
+      :root, .light-theme {
+        /* UNIFIED LIGHT & WARM BRONZE THEME (MATCHING REFERENCE UI) */
+        --gray-950: #e9edf2;
+        --gray-900: #f4f6f9; /* Main app canvas background */
+        --gray-850: #fbf9f5; /* Warm cream stat/inner card surface */
+        --gray-800: #ffffff; /* Crisp white card & sidebar surface */
+        --gray-750: #f5f1e8; /* Soft warm hover/secondary surface */
+        --gray-700: #e2e8f0; /* Crisp card border */
+        --gray-600: #cbd5e1;
+        --gray-500: #475569; /* High-contrast secondary text */
+        --gray-400: #475569; /* High-contrast muted text */
+        --gray-300: #1e293b; /* Deep slate text */
+        --gray-200: #0f172a; /* Deep black text */
+        --gray-100: #0f172a;
         --gray-50: #0f172a;
-        --gray-100: #1e293b;
-        --gray-200: #334155;
-        --gray-300: #475569;
-        --gray-400: #64748b;
-        --gray-500: #71717a;
 
         --text-main: #0f172a; /* Deep Charcoal Black */
         --text-inv: #ffffff;
-        --text-muted: #475569; /* Dark Gray */
-        --text-sub: #64748b;
-        --bg-900: #ffffff;
+        --text-muted: #475569; /* Readable Slate Gray */
+        --text-sub: #1e293b; /* Crisp Dark Slate for card titles & labels */
+        --bg-900: #f4f6f9;
       }
 
       body {

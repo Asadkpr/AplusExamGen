@@ -71,45 +71,45 @@ const getSectionTagStyles = (type: string) => {
   
   // 🔹 URDU & ISLAMIYAT TYPES (GOLD)
   if (isUrdu(type) || upper.includes('تشریح') || upper.includes('ترجمہ') || upper.includes('خلاصہ')) {
-    return 'bg-gold-500/20 text-gold-400 border-gold-500/40 ring-gold-500/10 shadow-[0_0_10px_rgba(245,158,11,0.1)] [.light-theme_&]:bg-gold-100 [.light-theme_&]:text-gold-700 [.light-theme_&]:border-gold-200';
+    return 'bg-[#FBF6EE] text-[#94703C] border-[#E6D5B8] ring-[#E6D5B8]/30';
   }
   
   // 🔹 OBJECTIVE / GRAMMAR (BLUE)
   if (upper === 'MCQ' || ['VERB', 'SPELLING', 'MEANING', 'GRAMMAR', 'SYNONYM'].some(t => upper.includes(t))) {
-    return 'bg-blue-500/20 text-blue-300 border-blue-500/40 ring-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.1)] [.light-theme_&]:bg-blue-100 [.light-theme_&]:text-blue-700 [.light-theme_&]:border-blue-200';
+    return 'bg-blue-100 text-blue-700 border-blue-200 ring-blue-100';
   }
   
   // 🔹 CONCEPTUAL / SHORT (EMERALD)
   if (upper.includes('SHORT')) {
-    return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-emerald-500/10 shadow-[0_0_10px_rgba(16,185,129,0.1)] [.light-theme_&]:bg-emerald-100 [.light-theme_&]:text-emerald-700 [.light-theme_&]:border-emerald-200';
+    return 'bg-emerald-100 text-emerald-700 border-emerald-200 ring-emerald-100';
   }
   
   // 🔹 THEORY / LONG (PURPLE)
   if (upper.includes('LONG') || upper.includes('THEORY')) {
-    return 'bg-purple-500/20 text-purple-300 border-purple-500/40 ring-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.1)] [.light-theme_&]:bg-purple-100 [.light-theme_&]:text-purple-700 [.light-theme_&]:border-purple-200';
+    return 'bg-purple-100 text-purple-700 border-purple-200 ring-purple-100';
   }
   
   // 🔹 APPLIED / MATH (ORANGE)
   if (upper.includes('NUMERICAL') || upper.includes('PROBLEM') || upper.includes('CALC')) {
-    return 'bg-orange-500/20 text-orange-300 border-orange-500/40 ring-orange-500/10 shadow-[0_0_10px_rgba(249,115,22,0.1)] [.light-theme_&]:bg-orange-100 [.light-theme_&]:text-orange-700 [.light-theme_&]:border-orange-200';
+    return 'bg-orange-100 text-orange-700 border-orange-200 ring-orange-100';
   }
   
   // 🔹 CREATIVE WRITING (ROSE)
   if (['ESSAY', 'LETTER', 'STORY', 'DIALOGUE', 'APPLICATION'].some(t => upper.includes(t))) {
-    return 'bg-rose-500/20 text-rose-300 border-rose-500/40 ring-rose-500/10 shadow-[0_0_10px_rgba(244,63,94,0.1)] [.light-theme_&]:bg-rose-100 [.light-theme_&]:text-rose-700 [.light-theme_&]:border-rose-200';
+    return 'bg-rose-100 text-rose-700 border-rose-200 ring-rose-100';
   }
   
   // 🔹 COMPREHENSION / ANALYSIS (CYAN)
   if (['TRANSLATE', 'SUMMARY', 'PARAPHRASE', 'PASSAGE', 'VOICE', 'COMPREHENSION'].some(t => upper.includes(t))) {
-    return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 ring-cyan-500/10 shadow-[0_0_10px_rgba(6,182,212,0.1)] [.light-theme_&]:bg-cyan-100 [.light-theme_&]:text-cyan-700 [.light-theme_&]:border-cyan-200';
+    return 'bg-cyan-100 text-cyan-700 border-cyan-200 ring-cyan-100';
   }
   
   // 🔹 VOCABULARY / OTHER (AMBER)
   if (['IDIOMS', 'SENTENCES', 'ALTERNATE', 'PAIR', 'PUNCTUATION'].some(t => upper.includes(t))) {
-    return 'bg-amber-500/20 text-amber-300 border-amber-500/40 ring-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.1)] [.light-theme_&]:bg-amber-100 [.light-theme_&]:text-amber-700 [.light-theme_&]:border-amber-200';
+    return 'bg-amber-100 text-amber-700 border-amber-200 ring-amber-100';
   }
 
-  return 'bg-gray-500/10 text-gray-400 border-gray-500/30 ring-gray-500/5';
+  return 'bg-slate-100 text-slate-700 border-slate-200 ring-slate-100';
 };
 
 const isChapterMandatory = (chapterName: string, mandatoryNumbers: string[]) => {
@@ -857,6 +857,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
     try {
       const questions = getSelectedQuestions();
       const totalMarks = effectiveSections.reduce((acc, s) => acc + (s.attemptCount * s.marksPerQuestion), 0);
+      const isUserAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
       const paperData = {
         title: `${selectedClass} - ${selectedSubject}`,
         classLevel: selectedClass,
@@ -866,7 +867,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
         questions: questions,
         instituteProfile: user.instituteProfile || undefined,
         userId: user.id || 'admin',
-        createdBy: user.name || 'User',
+        createdBy: isUserAdmin ? 'Master Admin' : (user.name || 'User'),
         selectedChapterIds: selectedChapters || [],
         selectedSubtopicIds: selectedSubtopics || [],
         formattedChapters: getChaptersDisplay() || '',
@@ -1818,10 +1819,10 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
               {CLASSES.map((cls, idx) => {
                 const color = CARD_COLORS[idx % CARD_COLORS.length];
                 return (
-                <div key={cls} onClick={() => handleClassSelect(cls)} className={`group relative cursor-pointer rounded-2xl border-2 p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 w-full aspect-square md:aspect-[4/3] overflow-hidden bg-surface-800/80 backdrop-blur-sm ${selectedClass === cls ? `border-transparent shadow-xl scale-105` : `${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}`}>
+                <div key={cls} onClick={() => handleClassSelect(cls)} className={`group relative cursor-pointer rounded-2xl border-2 p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 w-full aspect-square md:aspect-[4/3] overflow-hidden bg-white shadow-sm ${selectedClass === cls ? `border-[#C29B61] bg-[#FBF6EE] shadow-md scale-[1.03]` : `${color.border} ${color.hoverBorder} hover:bg-[#FBF9F5] hover:-translate-y-1 ${color.shadow}`}`}>
                   <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} transition-opacity duration-500 ${selectedClass === cls ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                  <div className={`relative z-10 transition-all duration-300 ${selectedClass === cls ? `scale-110 ${color.icon}` : `text-theme-text-muted ${color.groupHoverIcon} group-hover:scale-110`}`}>{getClassIcon(cls)}</div>
-                  <span className={`relative z-10 font-black text-sm md:text-lg whitespace-nowrap transition-all duration-300 ${selectedClass === cls ? 'text-theme-text-main tracking-wide' : 'text-theme-text-sub group-hover:text-theme-text-main group-hover:tracking-wide'}`}>{cls}</span>
+                  <div className={`relative z-10 transition-all duration-300 ${selectedClass === cls ? `scale-110 text-[#B0894F]` : `${color.icon} ${color.groupHoverIcon} group-hover:scale-110`}`}>{getClassIcon(cls)}</div>
+                  <span className={`relative z-10 font-black text-sm md:text-lg whitespace-nowrap transition-all duration-300 ${selectedClass === cls ? 'text-[#0F172A] tracking-wide' : 'text-[#0F172A] group-hover:text-[#94703C] group-hover:tracking-wide'}`}>{cls}</span>
                 </div>
               )})}
             </div>
@@ -1839,12 +1840,12 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                   {classSubjects.map((subj, idx) => {
                     const color = CARD_COLORS[idx % CARD_COLORS.length];
                     return (
-                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`group relative cursor-pointer rounded-2xl border-2 p-5 flex flex-col items-center justify-center text-center transition-all duration-300 w-full h-32 sm:h-36 overflow-hidden bg-surface-800/80 backdrop-blur-sm ${selectedSubject === subj ? `border-transparent shadow-xl scale-105` : `${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}`}>
+                    <div key={subj} onClick={() => handleSubjectSelect(subj)} className={`group relative cursor-pointer rounded-2xl border-2 p-5 flex flex-col items-center justify-center text-center transition-all duration-300 w-full h-32 sm:h-36 overflow-hidden bg-white shadow-sm ${selectedSubject === subj ? `border-[#C29B61] bg-[#FBF6EE] shadow-md scale-[1.03]` : `${color.border} ${color.hoverBorder} hover:bg-[#FBF9F5] hover:-translate-y-1 ${color.shadow}`}`}>
                       <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} transition-opacity duration-500 ${selectedSubject === subj ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                      <div className={`relative z-10 transition-colors duration-300 mb-2 ${selectedSubject === subj ? color.icon : `text-theme-text-muted ${color.groupHoverIcon}`}`}>
+                      <div className={`relative z-10 transition-colors duration-300 mb-2 ${selectedSubject === subj ? 'text-[#B0894F]' : `${color.icon} ${color.groupHoverIcon}`}`}>
                          <Layers size={28} className={`transition-transform duration-300 ${selectedSubject === subj ? 'scale-110' : 'group-hover:scale-110'}`} />
                       </div>
-                      <span className={`relative z-10 font-bold text-base md:text-lg leading-tight transition-all duration-300 ${selectedSubject === subj ? 'text-theme-text-main tracking-wide' : 'text-theme-text-sub group-hover:text-theme-text-main group-hover:tracking-wide'}`}>{subj}</span>
+                      <span className={`relative z-10 font-extrabold text-base md:text-lg leading-tight transition-all duration-300 ${selectedSubject === subj ? 'text-[#0F172A] tracking-wide' : 'text-[#0F172A] group-hover:text-[#94703C] group-hover:tracking-wide'}`}>{subj}</span>
                     </div>
                   )})}
                   {classSubjects.length === 0 && (
@@ -1900,9 +1901,9 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                     </button>
                   </div>
                   {mandatoryChapterIds.length > 0 && (
-                    <div className="bg-gold-500/10 border border-gold-500/30 rounded-xl p-3 flex items-center gap-3 max-w-2xl mx-auto mb-4 animate-fadeIn">
-                       <Lock className="text-gold-500 shrink-0" size={18} />
-                       <p className="text-[10px] text-gold-200 uppercase font-black tracking-widest leading-relaxed">Some chapters are <span className="text-gold-500">Locked</span> because they are mandatory for the selected board pattern.</p>
+                    <div className="bg-[#FBF6EE] border border-[#E6D5B8] rounded-xl p-3 flex items-center gap-3 max-w-2xl mx-auto mb-4 animate-fadeIn">
+                       <Lock className="text-[#B0894F] shrink-0" size={18} />
+                       <p className="text-[10px] text-[#785A31] uppercase font-black tracking-widest leading-relaxed">Some chapters are <span className="text-[#0F172A]">Locked</span> because they are mandatory for the selected board pattern.</p>
                     </div>
                   )}
                   <div className="space-y-3">
@@ -2008,13 +2009,13 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                         Configure MCQs, Short questions, and Long questions as needed.
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-blue-500/20 text-blue-300 border-blue-500/40">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-blue-100 text-blue-700 border-blue-200">
                           MCQs
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-emerald-100 text-emerald-700 border-emerald-200">
                           Short Questions
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-purple-500/20 text-purple-300 border-purple-500/40">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold tracking-tight bg-purple-100 text-purple-700 border-purple-200">
                           Long Questions
                         </span>
                       </div>
@@ -2118,7 +2119,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                              <div className="flex items-center gap-2 px-3 text-gold-500/50 border-r border-surface-700 mr-1 shrink-0"><Tag size={14} /><span className="text-[10px] font-black uppercase tracking-tighter">Topics</span></div>
                              {currentSectionTopics.map(topic => {
                                const hasSelection = isTopicActiveInSelection(topic);
-                               return (<button key={topic} onClick={() => setSelectedTopicFilter(topic)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase whitespace-nowrap transition-all border flex items-center gap-1.5 ${selectedTopicFilter === topic ? 'bg-gold-500 text-black border-gold-500' : hasSelection ? 'bg-green-500/20 text-green-400 border-green-500/40 hover:bg-green-500/30' : 'bg-surface-800 text-theme-text-muted border-surface-700 hover:border-gold-500'}`}>{hasSelection && <Check size={10} className="stroke-[4]" />}{topic}</button>);
+                               return (<button key={topic} onClick={() => setSelectedTopicFilter(topic)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase whitespace-nowrap transition-all border flex items-center gap-1.5 ${selectedTopicFilter === topic ? 'bg-gold-500 text-black border-gold-500' : hasSelection ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200' : 'bg-surface-800 text-theme-text-muted border-surface-700 hover:border-gold-500'}`}>{hasSelection && <Check size={10} className="stroke-[4]" />}{topic}</button>);
                              })}
                           </div>
                         )}
@@ -2278,7 +2279,7 @@ export const GeneratePaper: React.FC<GeneratePaperProps> = ({ user, onBack, init
                                 <h3 className="text-xl font-bold text-theme-text-main uppercase tracking-tighter">Choose Part Replacement</h3>
                                 <p className="text-xs text-theme-text-muted mt-1">Replacing Unit {swappingSlot.unitIndex + 1}, Part {String.fromCharCode(97 + swappingSlot.partIndex)}</p>
                              </div>
-                             <button onClick={() => setSwappingSlot(null)} className="p-2 text-theme-text-muted hover:text-white"><X size={24} /></button>
+                             <button onClick={() => setSwappingSlot(null)} className="p-2 text-theme-text-muted hover:text-[#0F172A]"><X size={24} /></button>
                            </div>
                         </div>
                         <div className="flex-grow overflow-y-auto p-4 space-y-3 custom-scrollbar bg-surface-900/30">

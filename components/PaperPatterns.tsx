@@ -853,8 +853,8 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
   const renderClassGrid = () => (
     <div className="animate-fadeIn">
       <div className="flex justify-between items-center mb-8">
-         <h2 className="text-2xl font-bold text-theme-text-main uppercase tracking-widest">Select Class</h2>
-         <button onClick={loadData} className="flex items-center gap-2 text-sm text-gold-500 hover:text-theme-text-main transition-colors" disabled={isLoading}>
+         <h2 className="text-2xl font-black text-[#0F172A] uppercase tracking-widest">Select Class</h2>
+         <button onClick={loadData} className="flex items-center gap-2 text-sm font-bold text-[#B0894F] hover:text-[#0F172A] transition-colors" disabled={isLoading}>
            <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} /> Refresh List
          </button>
       </div>
@@ -862,12 +862,12 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
         {CLASSES.map((cls, idx) => {
           const color = CARD_COLORS[idx % CARD_COLORS.length];
           return (
-          <div key={cls} onClick={() => handleClassClick(cls)} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+          <div key={cls} onClick={() => handleClassClick(cls)} className={`group relative cursor-pointer rounded-2xl border-2 bg-white shadow-sm p-6 flex flex-col items-center justify-center gap-4 transition-all duration-300 overflow-hidden w-full aspect-square md:aspect-[4/3] ${color.border} ${color.hoverBorder} hover:bg-[#FBF9F5] hover:-translate-y-1 ${color.shadow}`}>
             <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-            <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
+            <div className={`relative z-10 ${color.icon} ${color.groupHoverIcon} transition-colors duration-300 transform group-hover:scale-110`}>
                 <GraduationCap size={40} />
             </div>
-            <h3 className="relative z-10 font-black text-theme-text-main text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</h3>
+            <h3 className="relative z-10 font-black text-[#0F172A] group-hover:text-[#94703C] text-lg tracking-tight group-hover:tracking-wide transition-all duration-300 text-center leading-tight">{cls}</h3>
           </div>
         )})}
       </div>
@@ -879,8 +879,8 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
     return (
       <div className="animate-fadeIn">
         <div className="flex justify-between items-center mb-8">
-           <h2 className="text-2xl font-bold text-theme-text-main uppercase tracking-widest">
-             Subjects for <span className="text-gold-500">{selectedClass}</span>
+           <h2 className="text-2xl font-black text-[#0F172A] uppercase tracking-widest">
+             Subjects for <span className="text-[#B0894F]">{selectedClass}</span>
            </h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
@@ -888,13 +888,13 @@ export const PaperPatterns: React.FC<PaperPatternsProps> = ({ user, onBack, onUs
             const patternCount = patterns.filter(p => (p.subject?.toLowerCase() === subject.toLowerCase() && p.classLevel === selectedClass) || (!p.subject && p.classLevel === selectedClass)).length;
             const color = CARD_COLORS[idx % CARD_COLORS.length];
             return (
-              <div key={subject} onClick={() => handleSubjectClick(subject)} className={`group relative cursor-pointer rounded-2xl border-2 bg-surface-800/80 backdrop-blur-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 overflow-hidden w-full h-36 ${color.border} ${color.hoverBorder} hover:bg-surface-800 hover:-translate-y-1 ${color.shadow}`}>
+              <div key={subject} onClick={() => handleSubjectClick(subject)} className={`group relative cursor-pointer rounded-2xl border-2 bg-white shadow-sm p-5 flex flex-col items-center justify-center gap-3 text-center transition-all duration-300 overflow-hidden w-full h-36 ${color.border} ${color.hoverBorder} hover:bg-[#FBF9F5] hover:-translate-y-1 ${color.shadow}`}>
                 <div className={`absolute inset-0 bg-gradient-to-br ${color.from} ${color.to} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                <div className={`relative z-10 text-theme-text-muted ${color.groupHoverIcon} transition-colors duration-300`}>
+                <div className={`relative z-10 ${color.icon} ${color.groupHoverIcon} transition-colors duration-300`}>
                     <Layers size={28} className="transition-transform duration-300 group-hover:scale-110" />
                 </div>
-                <h3 className="relative z-10 font-bold text-theme-text-sub group-hover:text-theme-text-main text-base md:text-lg leading-tight transition-all duration-300 group-hover:tracking-wide">{subject}</h3>
-                <div className={`relative z-10 mt-1 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-widest transition-colors bg-surface-900 text-theme-text-muted border ${color.border} group-hover:bg-white/10 ${color.groupHoverIcon} group-hover:${color.border.replace('border-', 'border-')}`}>{patternCount} Patterns</div>
+                <h3 className="relative z-10 font-extrabold text-[#0F172A] group-hover:text-[#94703C] text-base md:text-lg leading-tight transition-all duration-300 group-hover:tracking-wide">{subject}</h3>
+                <div className="relative z-10 mt-1 text-[10px] px-2.5 py-0.5 rounded-md font-black uppercase tracking-widest transition-colors bg-[#FBF6EE] text-[#94703C] border border-[#E6D5B8] group-hover:bg-[#C29B61] group-hover:text-white group-hover:border-[#B0894F]">{patternCount} Patterns</div>
               </div>
             );
           })}

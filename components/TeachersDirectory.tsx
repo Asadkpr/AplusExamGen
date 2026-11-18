@@ -194,12 +194,12 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <button 
             onClick={onBack} 
-            className="text-gray-400 hover:text-gold-500 flex items-center transition-colors"
+            className="text-[#475569] hover:text-[#B0894F] flex items-center transition-colors font-semibold"
           >
-            <ArrowLeft size={20} className="mr-1" /><span className="font-medium">Dashboard</span>
+            <ArrowLeft size={20} className="mr-1" /><span className="font-semibold">Dashboard</span>
           </button>
-          <div className="text-xl font-bold text-white tracking-wider flex items-center gap-2">
-            <Users className="text-gold-500" /> REGISTERED SCHOOL
+          <div className="text-xl font-extrabold text-[#0F172A] tracking-wider flex items-center gap-2">
+            <Users className="text-[#C29B61]" /> REGISTERED SCHOOL
           </div>
           <div className="w-20"></div>
         </div>
@@ -213,13 +213,13 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
               placeholder="Search schools by name, email, phone or institute..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 text-theme-text-main pl-10 pr-9 py-2.5 rounded-xl focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none transition-all"
+              className="w-full bg-white border border-gray-700 text-[#0F172A] pl-10 pr-9 py-2.5 rounded-xl focus:border-[#C29B61] focus:ring-1 focus:ring-[#C29B61] outline-none transition-all shadow-sm"
             />
-            <Search className="absolute left-3 top-3 text-gray-500" size={18} />
+            <Search className="absolute left-3 top-3 text-[#64748B]" size={18} />
             {searchTerm && (
               <button 
                 onClick={() => setSearchTerm('')} 
-                className="absolute right-3 top-3 text-gray-400 hover:text-white transition-colors p-0.5 rounded-full hover:bg-gray-700"
+                className="absolute right-3 top-3 text-[#64748B] hover:text-[#0F172A] transition-colors p-0.5 rounded-full hover:bg-gray-700"
                 title="Clear search"
               >
                 <X size={16} />
@@ -375,15 +375,15 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
            <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-scaleIn">
               <div className="flex justify-between items-center mb-6">
-                 <h3 className="text-xl font-bold text-white uppercase tracking-wider">Edit School Profile</h3>
-                 <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+                 <h3 className="text-xl font-extrabold text-[#0F172A] uppercase tracking-wider">Edit School Profile</h3>
+                 <button onClick={() => setEditingUser(null)} className="text-[#64748B] hover:text-[#0F172A]"><X size={24} /></button>
               </div>
               <div className="space-y-4">
                  <Input label="Full Name" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} />
                  <Input label="Email Address" type="email" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value})} />
                  <Input label="Mobile Number" value={editingUser.mobile} onChange={e => setEditingUser({...editingUser, mobile: e.target.value})} />
                  <div className="border-t border-gray-700 pt-4">
-                    <p className="text-[10px] text-gray-500 font-bold uppercase mb-2">Institute Information</p>
+                    <p className="text-[10px] text-[#475569] font-bold uppercase mb-2">Institute Information</p>
                     <Input label="Institute Name" value={editingUser.instituteProfile?.instituteName || ''} onChange={e => setEditingUser({
                         ...editingUser, 
                         instituteProfile: { ...editingUser.instituteProfile!, instituteName: e.target.value }
@@ -407,11 +407,11 @@ export const TeachersDirectory: React.FC<TeachersDirectoryProps> = ({ user, onBa
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
            <div className="bg-gray-800 border border-gold-500/50 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-scaleIn">
               <div className="text-center mb-6">
-                 <div className="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-500/30 [.light-theme_&]:bg-yellow-100 [.light-theme_&]:text-yellow-700 [.light-theme_&]:border-yellow-200">
+                 <div className="w-16 h-16 bg-yellow-100 text-yellow-700 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-200">
                     <Key size={32} />
                  </div>
-                 <h3 className="text-xl font-bold text-white uppercase">Reset Password</h3>
-                 <p className="text-xs text-gray-400 mt-1">For: <span className="text-gold-500 font-bold">{resettingUser.name}</span></p>
+                 <h3 className="text-xl font-extrabold text-[#0F172A] uppercase">Reset Password</h3>
+                 <p className="text-xs text-[#475569] mt-1">For: <span className="text-[#B0894F] font-bold">{resettingUser.name}</span></p>
               </div>
               <Input 
                 label="New Password" 

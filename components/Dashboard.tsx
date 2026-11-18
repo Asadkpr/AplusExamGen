@@ -1,17 +1,36 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, ViewState } from '../types';
-import { getAllUsers, getUserCount, getCachedUserCountSync, resetUserCache } from '../services/authService';
-import { getAnnouncements, getCachedAnnouncementsSync, subscribeToAnnouncements, resetAnnouncementCache } from '../services/announcementService';
-import { getPaperCount, getCachedPaperCountSync, getCachedTodayPaperCountSync, resetPaperCache, getSavedPapers } from '../services/paperService';
-import { getPatternCount, getCachedPatternCountSync, resetPatternCache, getPatterns } from '../services/patternService';
+import { getAllUsers, getCachedUserCountSync, resetUserCache } from '../services/authService';
+import { getCachedAnnouncementsSync, subscribeToAnnouncements, resetAnnouncementCache } from '../services/announcementService';
+import { getCachedPaperCountSync, getCachedTodayPaperCountSync, resetPaperCache, getSavedPapers } from '../services/paperService';
+import { getCachedPatternCountSync, resetPatternCache, getPatterns } from '../services/patternService';
 import { resetChapterCache } from '../services/chapterService';
 import { resetSubjectCache } from '../services/subjectService';
 import { resetQuestionCache } from '../services/questionService';
 import { syncService, DashboardStats, getStartOfTodayMs } from '../services/syncService';
-import { APP_NAME, COPYRIGHT_TEXT } from '../constants';
-import { useTheme } from '../context/ThemeContext';
-import { FilePlus2, FolderOpen, UserCog, HelpCircle, LogOut, Menu, X, ChevronRight, UploadCloud, Users, School, Mail, Phone, Layout, Moon, Sun, Info, Wifi, WifiOff, AlertTriangle, Database, Megaphone, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
+import {
+  FilePlus2,
+  FolderOpen,
+  UserCog,
+  HelpCircle,
+  LogOut,
+  Menu,
+  X,
+  ChevronRight,
+  ChevronLeft,
+  UploadCloud,
+  Users,
+  School,
+  Layout,
+  Info,
+  AlertTriangle,
+  Database,
+  Megaphone,
+  ExternalLink,
+  Sparkles,
+  RefreshCw,
+  LayoutGrid
+} from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -21,15 +40,14 @@ interface DashboardProps {
   onCloseDemoAlert?: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ 
-  user, 
-  onLogout, 
+export const Dashboard: React.FC<DashboardProps> = ({
+  user,
+  onLogout,
   onNavigate,
   showDemoAlert = false,
   onCloseDemoAlert
 }) => {
   const isAdmin = user.email === 'admin' || user.email === 'admin@aplusexamgen.com' || user.id === 'local-admin';
-  const isLocalMode = user.id === 'local-admin' || user.id.startsWith('local-');
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -39,19 +57,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  // Initialize with cached sync count so page displays INSTANTLY without delay or '...'
+  // Initialize with cached sync count so page displays INSTANTLY without delay
   const [userCount, setUserCount] = useState<number | null>(() => getCachedUserCountSync());
   const [paperCount, setPaperCount] = useState<number | null>(() => getCachedPaperCountSync(isAdmin ? undefined : user.id));
   const [todayPaperCount, setTodayPaperCount] = useState<number>(() => getCachedTodayPaperCountSync());
-  const [patternCount, setPatternCount] = useState<number | null>(() => getCachedPatternCountSync());
+  const [, setPatternCount] = useState<number | null>(() => getCachedPatternCountSync());
   const [newsList, setNewsList] = useState(() => getCachedAnnouncementsSync());
   const [latestAnnouncement, setLatestAnnouncement] = useState<string | null>(() => {
     const cached = getCachedAnnouncementsSync();
     return cached.length > 0 ? cached[0].title : null;
   });
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchError] = useState<string | null>(null);
   const [isSyncingCounts, setIsSyncingCounts] = useState(false);
-  const { isDarkMode, toggleTheme } = useTheme();
 
   const hydrateFallbackCounts = async (force: boolean = false) => {
     if (!isAdmin) {
@@ -96,13 +113,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       resetSubjectCache();
       resetQuestionCache();
       await syncService.refreshServerCounts(user.id, isAdmin, true);
+      await hydrateFallbackCounts(true);
     } catch (_) {}
     setIsSyncingCounts(false);
   };
 
   useEffect(() => {
-    // 1. Subscribe to real-time live dashboard stats (Papers, Patterns, Schools)
-    // Automatically fetches 1-read cloud metadata (`visibility_settings/dashboard_stats`) on cold domains!
     const unsubStats = syncService.subscribe(user.id, isAdmin, (stats: DashboardStats) => {
       setPaperCount(stats.papersCount);
       setTodayPaperCount(stats.todayPapersCount ?? 0);
@@ -112,7 +128,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
     });
 
-    // 2. Subscribe to real-time live announcements
     const unsubNews = subscribeToAnnouncements((news) => {
       if (news && news.length > 0) {
         setNewsList(news);
@@ -127,32 +142,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [isAdmin, user.id]);
 
   const sidebarItems = [
-    { id: 'GENERATE_PAPER', label: 'Generate Paper', icon: <FilePlus2 size={20} /> },
-    { id: 'SAVED_PAPERS', label: 'Saved Papers', icon: <FolderOpen size={20} /> },
-    { id: 'NEWS_ANNOUNCEMENTS', label: 'News & Announcements', icon: <Megaphone size={20} /> },
+    { id: 'GENERATE_PAPER', label: 'Generate Paper', icon: <FilePlus2 size={19} strokeWidth={1.9} /> },
+    { id: 'SAVED_PAPERS', label: 'Saved Papers', icon: <FolderOpen size={19} strokeWidth={1.9} /> },
+    { id: 'NEWS_ANNOUNCEMENTS', label: 'News & Announcements', icon: <Megaphone size={19} strokeWidth={1.9} /> },
     ...(isAdmin ? [
-      { id: 'PAPER_PATTERNS', label: 'Paper Patterns', icon: <Layout size={20} /> },
-      { id: 'UPLOAD_PAPER', label: 'Upload Paper', icon: <UploadCloud size={20} /> },
-      { id: 'MANAGE_CONTENT', label: 'Question Bank', icon: <Database size={20} /> },
-      { id: 'TEACHERS_DIRECTORY', label: 'Registered School', icon: <Users size={20} /> }
+      { id: 'PAPER_PATTERNS', label: 'Paper Patterns', icon: <Layout size={19} strokeWidth={1.9} /> },
+      { id: 'UPLOAD_PAPER', label: 'Upload Paper', icon: <UploadCloud size={19} strokeWidth={1.9} /> },
+      { id: 'MANAGE_CONTENT', label: 'Question Bank', icon: <Database size={19} strokeWidth={1.9} /> },
+      { id: 'TEACHERS_DIRECTORY', label: 'Registered School', icon: <Users size={19} strokeWidth={1.9} /> }
     ] : []),
-    { id: 'PROFILE_SETTINGS', label: 'Profile Setup', icon: <UserCog size={20} /> },
-    { id: 'ABOUT_US', label: 'About Us', icon: <Info size={20} /> },
-    { id: 'HELP_SUPPORT', label: 'Help & Support', icon: <HelpCircle size={20} /> },
-  ];
-
-  const gridItems = [
-    { id: 'GENERATE_PAPER', label: 'Generate Paper', desc: 'Create new exam', icon: <FilePlus2 className="w-10 h-10 text-gold-500" /> },
-    { id: 'SAVED_PAPERS', label: 'Saved Papers', desc: 'View past exams', icon: <FolderOpen className="w-10 h-10 text-gold-400" /> },
-    { id: 'NEWS_ANNOUNCEMENTS', label: 'News & Updates', desc: 'Latest bulletins', icon: <Megaphone className="w-10 h-10 text-gold-400" /> },
-    ...(isAdmin ? [
-      { id: 'PAPER_PATTERNS', label: 'Paper Patterns', desc: 'Manage Layouts', icon: <Layout className="w-10 h-10 text-gold-400" /> },
-      { id: 'UPLOAD_PAPER', label: 'Upload Paper', desc: 'Import Questions', icon: <UploadCloud className="w-10 h-10 text-gold-400" /> },
-      { id: 'MANAGE_CONTENT', label: 'Question Bank', desc: 'Edit Content', icon: <Database className="w-10 h-10 text-gold-400" /> },
-      { id: 'TEACHERS_DIRECTORY', label: 'Registered School', desc: 'View registered users', icon: <Users className="w-10 h-10 text-gold-400" /> }
-    ] : []),
-    { id: 'PROFILE_SETTINGS', label: 'Profile Setup', desc: 'Institute details', icon: <UserCog className="w-10 h-10 text-gold-400" /> },
-    { id: 'HELP_SUPPORT', label: 'Help & Support', desc: 'FAQs & Contact', icon: <HelpCircle className="w-10 h-10 text-gold-400" /> },
+    { id: 'PROFILE_SETTINGS', label: 'Profile Setup', icon: <UserCog size={19} strokeWidth={1.9} /> },
+    { id: 'ABOUT_US', label: 'About Us', icon: <Info size={19} strokeWidth={1.9} /> },
+    { id: 'HELP_SUPPORT', label: 'Help & Support', icon: <HelpCircle size={19} strokeWidth={1.9} /> },
   ];
 
   const handleNavClick = (view: string) => {
@@ -161,13 +162,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex text-theme-text-main font-sans selection:bg-gold-500 selection:text-black transition-colors duration-300">
-      <div className="lg:hidden fixed top-0 w-full bg-gray-800 border-b border-gray-700 z-50 px-4 py-2.5 flex items-center justify-between shadow-md">
+    <div className="min-h-screen bg-[#F4F6F9] flex text-[#0F172A] font-sans selection:bg-[#C29B61] selection:text-white">
+      {/* Mobile Header */}
+      <div className="lg:hidden fixed top-0 w-full bg-white border-b border-[#E5E7EB] z-50 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2.5">
-          <button type="button" onClick={() => setIsSidebarOpen(true)} className="text-gold-500 p-1">
-            <Menu size={24} />
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="text-[#0F172A] hover:text-[#B58B4C] p-1 rounded-lg transition-colors"
+          >
+            <Menu size={22} />
           </button>
-          <span className="font-bold text-base sm:text-lg text-gold-500 tracking-wider">APLUS EXAMGEN</span>
+          <div className="w-8 h-8 rounded-lg bg-white border border-[#E2D9C8] p-0.5 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+            <img src="/logo.png" alt="APLUS Logo" className="w-full h-full object-contain rounded-md" />
+          </div>
+          <span className="font-extrabold text-base text-[#0F172A] tracking-tight">APLUS EXAMGEN</span>
         </div>
         <button
           type="button"
@@ -175,7 +184,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             setIsSidebarOpen(false);
             onLogout();
           }}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 active:scale-95 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-all"
           title="Log Out"
         >
           <LogOut size={14} />
@@ -183,342 +192,513 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </button>
       </div>
 
-      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40 lg:hidden backdrop-blur-[1px]"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
 
-      <aside className={`fixed lg:sticky top-0 left-0 h-[100dvh] lg:h-screen w-64 bg-gray-800 border-r border-gray-700 z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-5 border-b border-gray-700 flex justify-between items-center bg-gray-900/50"><h1 className="text-xl font-extrabold text-gold-500 tracking-widest uppercase whitespace-nowrap">APLUS EXAMGEN</h1><button type="button" onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-theme-text-muted"><X size={24} /></button></div>
-        <div className="p-5 border-b border-gray-700 bg-gray-800 transition-colors">
-           <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500 font-bold border border-gold-500/30">{user.name.charAt(0)}</div><div className="overflow-hidden">
-             <p className="text-sm font-bold text-theme-text-main truncate w-32">{isAdmin ? "Admin Access" : user.name}</p>
-             <p className="text-xs text-gold-500">{isAdmin ? "System Admin" : "Teacher"}</p>
-           </div></div>
-           <div className="mt-3 flex items-center justify-center gap-2 px-2 py-1.5 rounded text-[10px] font-bold uppercase border bg-green-500/10 border-green-500/30 text-green-400"><Wifi size={12} />Cloud Connected</div>
-           <button 
-             onClick={handleManualSyncCounts}
-             disabled={isSyncingCounts}
-             title="Sync live count directly from DB"
-             className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase border bg-gold-500/10 border-gold-500/30 text-gold-400 hover:bg-gold-500/20 transition-all cursor-pointer"
-           >
-             <RefreshCw size={11} className={isSyncingCounts ? "animate-spin" : ""} />
-             <span>{isSyncingCounts ? "Syncing..." : "Sync DB Counts"}</span>
-           </button>
+      {/* Left Sidebar (Matching Reference Image: Crisp White, Warm Cream Active State, Clean Alignment) */}
+      <aside
+        className={`fixed lg:sticky top-0 left-0 h-[100dvh] lg:h-screen w-64 bg-white border-r border-[#E5E7EB] z-50 transform transition-transform duration-300 lg:translate-x-0 flex flex-col select-none ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {/* Subtle circular collapse badge on right edge like reference image */}
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen(false)}
+          className="lg:hidden absolute -right-3.5 top-6 w-7 h-7 rounded-full bg-white border border-[#E5E7EB] shadow-md flex items-center justify-center text-[#475569] hover:text-[#0F172A]"
+          aria-label="Close Sidebar"
+        >
+          <ChevronLeft size={15} />
+        </button>
+
+        {/* Brand & User Profile Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-[#F1F5F9]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-white border border-[#E2D9C8] p-0.5 flex items-center justify-center shadow-sm shrink-0 overflow-hidden">
+                <img src="/logo.png" alt="APLUS Logo" className="w-full h-full object-contain rounded-md" />
+              </div>
+              <h1 className="text-base font-extrabold text-[#0F172A] tracking-tight whitespace-nowrap">
+                APLUS EXAMGEN
+              </h1>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden text-[#64748B] hover:text-[#0F172A]"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#FBF9F5] border border-[#EFECE6]">
+            {isAdmin ? (
+              <img
+                src="/logo.png"
+                alt="Admin Logo"
+                className="w-9 h-9 rounded-full object-contain bg-white p-0.5 border border-[#E2D9C8] shrink-0"
+              />
+            ) : user.instituteProfile?.logoUrl ? (
+              <img
+                src={user.instituteProfile.logoUrl}
+                alt="Institute Logo"
+                className="w-9 h-9 rounded-full object-contain bg-white p-0.5 border border-[#E2D9C8] shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-[#C29B61]/15 flex items-center justify-center text-[#9E763B] font-bold text-sm border border-[#C29B61]/30 shrink-0">
+                {(user.name || 'A').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="overflow-hidden min-w-0">
+              <p className="text-xs font-bold text-[#0F172A] truncate">
+                {isAdmin ? 'Admin Access' : user.name}
+              </p>
+              <p className="text-[11px] font-medium text-[#B58B4C] truncate">
+                {isAdmin ? 'System Admin' : (user.instituteProfile?.instituteName || 'Teacher Account')}
+              </p>
+            </div>
+          </div>
         </div>
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
-           {sidebarItems.map(item => (
-             <button key={item.id} onClick={() => handleNavClick(item.id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg text-theme-text-muted hover:bg-gray-750 hover:text-gold-500 transition-all group"><span className="group-hover:scale-110 transition-transform">{item.icon}</span>{item.label}<ChevronRight size={14} className="ml-auto opacity-0 group-hover:opacity-100" /></button>
-           ))}
+
+        {/* Navigation Links */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
+          {/* Active Dashboard Item (Matches Reference Image Active Pill) */}
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            className="w-full flex items-center gap-3.5 px-3.5 py-2.5 text-[13.5px] font-semibold rounded-xl bg-[#FBF6EE] text-[#B58B4C] transition-all cursor-default"
+          >
+            <span className="text-[#B58B4C] shrink-0">
+              <LayoutGrid size={19} strokeWidth={2} />
+            </span>
+            <span className="truncate">Dashboard</span>
+          </button>
+
+          {sidebarItems.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleNavClick(item.id)}
+              className="w-full flex items-center gap-3.5 px-3.5 py-2.5 text-[13.5px] font-medium rounded-xl text-[#1E293B] hover:bg-[#FBF6EE] hover:text-[#B58B4C] transition-all group cursor-pointer"
+            >
+              <span className="text-[#334155] group-hover:text-[#B58B4C] transition-colors shrink-0">
+                {item.icon}
+              </span>
+              <span className="truncate text-left flex-1">{item.label}</span>
+              <ChevronRight
+                size={14}
+                className="ml-auto opacity-0 group-hover:opacity-100 text-[#B58B4C] transition-opacity shrink-0"
+              />
+            </button>
+          ))}
         </nav>
-        <div className="p-4 pb-6 lg:pb-4 border-t border-gray-700 bg-gray-900/30 space-y-3 shrink-0">
-          <button type="button" onClick={toggleTheme} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-main bg-gray-900/50 rounded-lg transition-colors border border-gray-700">{isDarkMode ? <Sun size={16} className="text-gold-400" /> : <Moon size={16} className="text-indigo-400" />}{isDarkMode ? "Light Mode" : "Dark Mode"}</button>
-          <button type="button" onClick={() => { setIsSidebarOpen(false); onLogout(); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors cursor-pointer"><LogOut size={16} />Log Out</button>
+
+        {/* Bottom Logout Button Only (Theme toggle removed as requested) */}
+        <div className="p-4 border-t border-[#E5E7EB] bg-white shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setIsSidebarOpen(false);
+              onLogout();
+            }}
+            className="w-full flex items-center gap-3.5 px-3.5 py-2.5 text-[13.5px] font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+          >
+            <LogOut size={19} strokeWidth={1.9} className="shrink-0" />
+            <span>Log Out</span>
+          </button>
         </div>
       </aside>
 
-      <main className="flex-grow pt-16 lg:pt-0 p-4 sm:p-8 overflow-y-auto custom-scrollbar">
-        <div className="max-w-6xl mx-auto h-full flex flex-col">
-          {/* Banner removed */}
+      {/* Main Content Area */}
+      <main className="flex-grow pt-16 lg:pt-0 p-4 sm:p-7 overflow-y-auto custom-scrollbar">
+        <div className="max-w-7xl mx-auto h-full flex flex-col">
           {fetchError && (
-            <div className="mb-6 bg-red-900/20 border border-red-500/50 rounded-xl p-4 flex items-start gap-3">
-              <AlertTriangle className="text-red-500 mt-1" size={24} />
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="text-red-600 mt-0.5" size={20} />
               <div>
-                <h3 className="text-red-400 font-bold">Data Fetch Error</h3>
-                <p className="text-theme-text-muted text-sm mt-1">{fetchError}</p>
+                <h3 className="text-red-700 font-bold text-sm">Data Fetch Error</h3>
+                <p className="text-red-600 text-xs mt-0.5">{fetchError}</p>
               </div>
             </div>
           )}
-          
-          {latestAnnouncement && (
-            <div 
-              onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')}
-              className="mb-8 bg-gold-500/10 border border-gold-500/30 rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-gold-500/20 transition-all animate-fadeIn"
-            >
-              <div className="bg-gold-500 p-2 rounded-full text-black animate-bounce shrink-0"><Megaphone size={16} /></div>
-              <div className="flex-grow min-w-0">
-                <span className="text-[10px] font-black uppercase text-gold-500 tracking-widest">Latest Update</span>
-                <p className="text-theme-text-main text-xs sm:text-sm font-bold truncate">{latestAnnouncement}</p>
-              </div>
-              <ChevronRight size={20} className="text-gold-500" />
-            </div>
-          )}
 
-          {/* Welcome Banner */}
-          <div className="bg-gradient-to-r from-[#0F172A] to-[#1E293B] rounded-2xl p-5 md:p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between relative overflow-hidden mb-8 border border-gray-800 shadow-xl gap-6">
-            <div className="flex items-center gap-4 z-10 w-full lg:w-auto">
-              {user.instituteProfile?.logoUrl && !isAdmin ? (
-                <img src={user.instituteProfile.logoUrl} alt="Institute Logo" style={{ filter: 'grayscale(100%)' }} className="w-16 h-16 rounded-full object-contain bg-white p-1 border-2 border-gold-500 shadow-xl shrink-0 grayscale" />
-              ) : (
-                <div className="bg-white/10 p-4 rounded-full border border-white/5 shadow-inner shrink-0">
-                  <UserCog size={32} className="text-white" />
-                </div>
-              )}
-              <div>
-                <h1 className="text-xl md:text-2xl font-extrabold text-white tracking-tight">Welcome, {isAdmin ? "Master Admin" : user.name}</h1>
-                <p className="text-gray-400 text-xs md:text-sm mt-1 max-w-md">{isAdmin ? "Manage system, users and directory." : "Create and manage your examination papers."}</p>
-                {!isAdmin && user.instituteProfile && (
-                  <div className="flex items-center gap-2 mt-2 text-gray-300 text-[10px] md:text-xs font-medium bg-white/5 w-fit px-3 py-1 rounded-full border border-white/10">
-                     <School size={12} className="text-gold-500" />
-                     <span>{user.instituteProfile.instituteName}</span>
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${
-                    isAdmin 
-                      ? 'bg-gold-500/10 text-gold-400 border-gold-500/30' 
-                      : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                  }`}>
-                    {isAdmin ? "Global Admin • All Papers" : "Teacher Account • My Papers"}
-                  </span>
-                  
-                  <button 
-                    onClick={handleManualSyncCounts}
-                    disabled={isSyncingCounts}
-                    title="Click to refresh live database counts"
-                    className="flex items-center gap-1.5 text-[10px] font-bold text-gray-300 hover:text-gold-400 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full border border-white/10 transition-all cursor-pointer"
-                  >
-                    <RefreshCw size={11} className={isSyncingCounts ? "animate-spin text-gold-400" : "text-gray-400"} />
-                    <span>{isSyncingCounts ? "Syncing DB..." : "Live DB Sync"}</span>
-                  </button>
-                </div>
-              </div>
+          {/* Top Bar (Matches Reference Image Header Bar: "Dashboard" on Left, Action Buttons on Right) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A] tracking-tight">
+                Dashboard
+              </h1>
+              <p className="text-xs sm:text-sm text-[#64748B] mt-0.5">
+                Welcome, <span className="font-semibold text-[#1E293B]">{isAdmin ? 'Master Admin' : user.name}</span>
+                {!isAdmin && user.instituteProfile?.instituteName ? ` · ${user.instituteProfile.instituteName}` : ''}
+              </p>
             </div>
 
-            {/* Stats inside Banner (Right Side) */}
-            <div className="grid grid-cols-2 gap-3 z-10 w-full lg:w-[55%] xl:w-[50%]">
-              {isAdmin && (
-                <div onClick={() => onNavigate('TEACHERS_DIRECTORY')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
-                  <div className="bg-gold-500/10 p-2 md:p-2.5 rounded-full text-gold-500 shrink-0 group-hover:scale-110 transition-transform"><Users size={16} /></div>
-                  <div>
-                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{userCount !== null ? userCount : 0}</h3>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Schools <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
-                  </div>
-                </div>
-              )}
-              <div
-                onClick={!isAdmin ? () => onNavigate('SAVED_PAPERS') : undefined}
-                className={`bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg transition-colors group ${!isAdmin ? 'hover:border-gold-500/50 cursor-pointer' : 'cursor-default'}`}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => onNavigate('GENERATE_PAPER')}
+                className="px-4 py-2 rounded-lg bg-[#C29B61] hover:bg-[#B0894F] text-white font-semibold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-2 cursor-pointer"
               >
-                <div className="bg-blue-500/10 p-2 md:p-2.5 rounded-full text-blue-400 shrink-0 group-hover:scale-110 transition-transform"><FolderOpen size={16} /></div>
-                <div>
-                  <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{paperCount !== null ? paperCount : 0}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">{isAdmin ? "All Papers" : "My Papers"} <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live count"></span></p>
+                <FilePlus2 size={16} />
+                <span>Generate Paper</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleManualSyncCounts}
+                disabled={isSyncingCounts}
+                className="px-4 py-2 rounded-lg bg-white hover:bg-[#F8FAFC] text-[#0F172A] border border-[#E2E8F0] font-semibold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                <RefreshCw size={15} className={isSyncingCounts ? 'animate-spin text-[#C29B61]' : 'text-[#475569]'} />
+                <span>{isSyncingCounts ? 'Syncing...' : 'Refresh'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Latest Update Strip */}
+          {latestAnnouncement && (
+            <div
+              onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')}
+              className="mb-6 bg-white border border-[#E5E7EB] rounded-2xl p-2 shadow-[0_2px_10px_rgba(15,23,42,0.03)] cursor-pointer hover:border-[#C29B61]/60 transition-all"
+            >
+              <div className="bg-[#FBF9F5] rounded-xl px-4 py-3 flex items-center gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Megaphone size={17} />
                 </div>
+                <div className="flex-grow min-w-0">
+                  <span className="text-[10px] font-bold uppercase text-[#B58B4C] tracking-wider block">
+                    Latest Update
+                  </span>
+                  <p className="text-[#0F172A] text-xs sm:text-sm font-bold truncate">
+                    {latestAnnouncement}
+                  </p>
+                </div>
+                <ChevronRight size={18} className="text-[#64748B] shrink-0" />
               </div>
-              {isAdmin && (
-                <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg transition-colors group cursor-default">
-                  <div className="bg-emerald-500/10 p-2 md:p-2.5 rounded-full text-emerald-400 shrink-0 group-hover:scale-110 transition-transform"><FilePlus2 size={16} /></div>
-                  <div>
-                    <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{todayPaperCount}</h3>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Today Generated Papers <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Daily generated papers count"></span></p>
+            </div>
+          )}
+
+          {/* Top Stat Counter Cards (Exact Style from Reference Image: White Frame + Warm Cream Inner Card + Rounded Icon Box) */}
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'xl:grid-cols-4' : 'xl:grid-cols-2'} gap-4 mb-7`}>
+            {isAdmin && (
+              <div
+                onClick={() => onNavigate('TEACHERS_DIRECTORY')}
+                className="bg-white rounded-2xl p-2 border border-[#ECEAE4] shadow-[0_2px_10px_rgba(15,23,42,0.04)] hover:border-[#C29B61]/60 transition-all cursor-pointer group"
+              >
+                <div className="bg-[#FBF9F5] rounded-xl px-4 py-4 flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-[#4B5563] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                    <Users size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-[#64748B] font-medium truncate">Schools</p>
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] leading-tight mt-0.5 tabular-nums">
+                      {(userCount !== null ? userCount : 0).toLocaleString()}
+                    </h3>
                   </div>
                 </div>
-              )}
-              <div onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')} className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-4 py-2.5 md:py-3 flex items-center gap-3 shadow-lg hover:border-gold-500/50 transition-colors group cursor-pointer">
-                <div className="bg-purple-500/10 p-2 md:p-2.5 rounded-full text-purple-400 shrink-0 group-hover:scale-110 transition-transform"><Megaphone size={16} /></div>
-                <div>
-                  <h3 className="text-base md:text-lg font-black text-white leading-none mb-0.5 tabular-nums font-mono">{newsList.length > 0 ? newsList.length : (latestAnnouncement ? '1' : '1')}</h3>
-                  <p className="text-[9px] md:text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">Updates <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Real-time live updates"></span></p>
+              </div>
+            )}
+
+            <div
+              onClick={!isAdmin ? () => onNavigate('SAVED_PAPERS') : undefined}
+              className={`bg-white rounded-2xl p-2 border border-[#ECEAE4] shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all group ${
+                !isAdmin ? 'hover:border-[#C29B61]/60 cursor-pointer' : 'cursor-default'
+              }`}
+            >
+              <div className="bg-[#FBF9F5] rounded-xl px-4 py-4 flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                  <FolderOpen size={20} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-[#64748B] font-medium truncate">
+                    {isAdmin ? 'All Papers' : 'My Papers'}
+                  </p>
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] leading-tight mt-0.5 tabular-nums">
+                    {(paperCount !== null ? paperCount : 0).toLocaleString()}
+                  </h3>
                 </div>
               </div>
             </div>
 
-            {/* Background Graphic */}
-            <div className="absolute right-[-20px] top-[-20px] opacity-[0.03] pointer-events-none transform rotate-12 scale-150">
-               <FilePlus2 size={300} />
+            {isAdmin && (
+              <div className="bg-white rounded-2xl p-2 border border-[#ECEAE4] shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all group cursor-default">
+                <div className="bg-[#FBF9F5] rounded-xl px-4 py-4 flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-[#4B5563] text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <FilePlus2 size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-[#64748B] font-medium truncate">
+                      Today Generated Papers
+                    </p>
+                    <h3 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] leading-tight mt-0.5 tabular-nums">
+                      {todayPaperCount.toLocaleString()}
+                    </h3>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div
+              onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')}
+              className="bg-white rounded-2xl p-2 border border-[#ECEAE4] shadow-[0_2px_10px_rgba(15,23,42,0.04)] hover:border-[#C29B61]/60 transition-all cursor-pointer group"
+            >
+              <div className="bg-[#FBF9F5] rounded-xl px-4 py-4 flex items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                  <Megaphone size={20} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-[#64748B] font-medium truncate">Updates</p>
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] leading-tight mt-0.5 tabular-nums">
+                    {newsList.length > 0 ? newsList.length : (latestAnnouncement ? 1 : 1)}
+                  </h3>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="mb-8">
-             <div className="flex justify-between items-end mb-4">
-               <h2 className="text-xl font-bold text-theme-text-main">Quick Actions</h2>
-               <span className="text-xs text-theme-text-muted flex items-center gap-1 cursor-pointer hover:text-gold-500 transition-colors">Access your most used features <ChevronRight size={14}/></span>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div onClick={() => onNavigate('GENERATE_PAPER')} className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gold-500/30 hover:border-gold-500 rounded-2xl p-6 flex items-start gap-4 cursor-pointer group shadow-xl relative overflow-hidden transition-all hover:-translate-y-1">
-                   <div className="bg-gold-500 p-4 rounded-full text-black shadow-[0_0_15px_rgba(234,179,8,0.5)] group-hover:scale-110 transition-transform z-10 shrink-0"><FilePlus2 size={28} /></div>
-                   <div className="z-10 flex-grow">
-                     <h3 className="text-lg font-bold text-theme-text-main mb-1">Generate Paper</h3>
-                     <p className="text-gray-400 text-sm leading-snug">Create a new examination paper with ease.</p>
-                   </div>
-                   <div className="absolute bottom-4 right-4 bg-gray-700 text-theme-text-main rounded-full p-2 group-hover:bg-gold-500 group-hover:text-black transition-colors z-10"><ChevronRight size={20} /></div>
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-gold-500/5 rounded-full blur-2xl pointer-events-none"></div>
+          {/* Main Dashboard Panels (Matching Reference Image White Containers + Warm Cream Summary Cards) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+            {/* Left Panel: Quick Actions */}
+            <div className="lg:col-span-5 bg-white border border-[#ECEAE4] rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(15,23,42,0.04)] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base sm:text-lg font-bold text-[#0F172A]">Quick Actions</h2>
+                <span className="text-xs text-[#64748B] font-medium">Primary Workspace</span>
+              </div>
+
+              <div className="space-y-4 flex-1 flex flex-col justify-center">
+                <div
+                  onClick={() => onNavigate('GENERATE_PAPER')}
+                  className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-2xl p-5 flex items-center gap-4 cursor-pointer group transition-all"
+                >
+                  <div className="w-14 h-14 rounded-full bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                    <FilePlus2 size={26} />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <p className="text-xs text-[#64748B] font-medium">Exam Creation</p>
+                    <h3 className="text-base sm:text-lg font-extrabold text-[#0F172A] mt-0.5">
+                      Generate Paper
+                    </h3>
+                    <p className="text-xs text-[#64748B] mt-0.5 truncate">
+                      Create a new examination paper with ease
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#475569] group-hover:bg-[#C29B61] group-hover:text-white group-hover:border-[#C29B61] transition-colors shrink-0">
+                    <ChevronRight size={17} />
+                  </div>
                 </div>
 
-                <div onClick={() => onNavigate('SAVED_PAPERS')} className="bg-gradient-to-br from-[#1E293B] to-[#0F172A] border border-blue-500/30 hover:border-blue-500 rounded-2xl p-6 flex items-start gap-4 cursor-pointer group shadow-xl relative overflow-hidden transition-all hover:-translate-y-1">
-                   <div className="bg-blue-600 p-4 rounded-full text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] group-hover:scale-110 transition-transform z-10 shrink-0"><FolderOpen size={28} /></div>
-                   <div className="z-10 flex-grow">
-                     <h3 className="text-lg font-bold text-white mb-1">Saved Papers</h3>
-                     <p className="text-gray-400 text-sm leading-snug">View and manage your saved papers.</p>
-                   </div>
-                   <div className="absolute bottom-4 right-4 bg-gray-700 text-white rounded-full p-2 group-hover:bg-blue-500 transition-colors z-10"><ChevronRight size={20} /></div>
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div
+                  onClick={() => onNavigate('SAVED_PAPERS')}
+                  className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-2xl p-5 flex items-center gap-4 cursor-pointer group transition-all"
+                >
+                  <div className="w-14 h-14 rounded-full bg-[#4B5563] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                    <FolderOpen size={25} />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <p className="text-xs text-[#64748B] font-medium">Personal Archive</p>
+                    <h3 className="text-base sm:text-lg font-extrabold text-[#B58B4C] mt-0.5">
+                      Saved Papers
+                    </h3>
+                    <p className="text-xs text-[#64748B] mt-0.5 truncate">
+                      View and manage your saved papers
+                    </p>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-white border border-[#E5E7EB] flex items-center justify-center text-[#475569] group-hover:bg-[#4B5563] group-hover:text-white group-hover:border-[#4B5563] transition-colors shrink-0">
+                    <ChevronRight size={17} />
+                  </div>
                 </div>
-             </div>
-          </div>
+              </div>
+            </div>
 
-          {/* More Features */}
-          <div className="mb-8">
-             <div className="flex justify-between items-end mb-4">
-               <h2 className="text-xl font-bold text-theme-text-main">More Features</h2>
-               <span className="text-xs text-theme-text-muted flex items-center gap-1 cursor-pointer hover:text-gold-500 transition-colors">Everything you need in one place <ChevronRight size={14}/></span>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                   <div className="bg-purple-600 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><Megaphone size={20} /></div>
-                   <div className="flex-grow">
-                     <h3 className="text-sm md:text-base font-bold text-theme-text-main">News & Updates</h3>
-                     <p className="text-gray-400 text-xs mt-0.5">View latest bulletins and announcements.</p>
-                   </div>
-                   <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+            {/* Right Panel: More Features */}
+            <div className="lg:col-span-7 bg-white border border-[#ECEAE4] rounded-2xl p-5 sm:p-6 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base sm:text-lg font-bold text-[#0F172A]">More Features</h2>
+                <span className="text-xs text-[#64748B] font-medium">Tools & Management</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div
+                  onClick={() => onNavigate('NEWS_ANNOUNCEMENTS')}
+                  className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                    <Megaphone size={18} />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <h3 className="text-sm font-bold text-[#0F172A] truncate">News & Updates</h3>
+                    <p className="text-[#64748B] text-xs mt-0.5 truncate">Latest bulletins & alerts</p>
+                  </div>
+                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
                 </div>
 
-                <div onClick={() => onNavigate('PROFILE_SETTINGS')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                   <div className="bg-green-600 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><UserCog size={20} /></div>
-                   <div className="flex-grow">
-                     <h3 className="text-sm md:text-base font-bold text-theme-text-main">Profile Setup</h3>
-                     <p className="text-gray-400 text-xs mt-0.5">Complete your institute profile and details.</p>
-                   </div>
-                   <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
-                </div>
-                
-                <div onClick={() => onNavigate('HELP_SUPPORT')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                   <div className="bg-red-500 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><HelpCircle size={20} /></div>
-                   <div className="flex-grow">
-                     <h3 className="text-sm md:text-base font-bold text-theme-text-main">Help & Support</h3>
-                     <p className="text-gray-400 text-xs mt-0.5">FAQs and contact information.</p>
-                   </div>
-                   <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+                <div
+                  onClick={() => onNavigate('PROFILE_SETTINGS')}
+                  className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#4B5563] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                    <UserCog size={18} />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <h3 className="text-sm font-bold text-[#0F172A] truncate">Profile Setup</h3>
+                    <p className="text-[#64748B] text-xs mt-0.5 truncate">Institute logo & details</p>
+                  </div>
+                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
                 </div>
 
-
+                <div
+                  onClick={() => onNavigate('HELP_SUPPORT')}
+                  className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#4B5563] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                    <HelpCircle size={18} />
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <h3 className="text-sm font-bold text-[#0F172A] truncate">Help & Support</h3>
+                    <p className="text-[#64748B] text-xs mt-0.5 truncate">FAQs and contact support</p>
+                  </div>
+                  <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
+                </div>
 
                 {isAdmin && (
                   <>
-                    <div onClick={() => onNavigate('PAPER_PATTERNS')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                       <div className="bg-teal-500 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><Layout size={20} /></div>
-                       <div className="flex-grow">
-                         <h3 className="text-sm md:text-base font-bold text-theme-text-main">Paper Patterns</h3>
-                         <p className="text-gray-400 text-xs mt-0.5">Manage your paper layouts and templates.</p>
-                       </div>
-                       <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+                    <div
+                      onClick={() => onNavigate('PAPER_PATTERNS')}
+                      className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <Layout size={18} />
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <h3 className="text-sm font-bold text-[#0F172A] truncate">Paper Patterns</h3>
+                        <p className="text-[#64748B] text-xs mt-0.5 truncate">Manage layouts & templates</p>
+                      </div>
+                      <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
                     </div>
-                    <div onClick={() => onNavigate('TEACHERS_DIRECTORY')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                       <div className="bg-indigo-500 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><Users size={20} /></div>
-                       <div className="flex-grow">
-                         <h3 className="text-sm md:text-base font-bold text-theme-text-main">Registered Schools</h3>
-                         <p className="text-gray-400 text-xs mt-0.5">Manage and view registered users.</p>
-                       </div>
-                       <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+
+                    <div
+                      onClick={() => onNavigate('TEACHERS_DIRECTORY')}
+                      className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <Users size={18} />
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <h3 className="text-sm font-bold text-[#0F172A] truncate">Registered Schools</h3>
+                        <p className="text-[#64748B] text-xs mt-0.5 truncate">Manage registered users</p>
+                      </div>
+                      <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
                     </div>
-                    <div onClick={() => onNavigate('MANAGE_CONTENT')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                       <div className="bg-orange-500 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><Database size={20} /></div>
-                       <div className="flex-grow">
-                         <h3 className="text-sm md:text-base font-bold text-theme-text-main">Question Bank</h3>
-                         <p className="text-gray-400 text-xs mt-0.5">Edit and manage the database.</p>
-                       </div>
-                       <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+
+                    <div
+                      onClick={() => onNavigate('MANAGE_CONTENT')}
+                      className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-[#4B5563] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <Database size={18} />
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <h3 className="text-sm font-bold text-[#0F172A] truncate">Question Bank</h3>
+                        <p className="text-[#64748B] text-xs mt-0.5 truncate">Edit & manage questions</p>
+                      </div>
+                      <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
                     </div>
-                    <div onClick={() => onNavigate('UPLOAD_PAPER')} className="bg-gray-800 border border-gray-700 hover:border-gray-500 rounded-xl p-5 flex items-center gap-4 cursor-pointer group transition-all">
-                       <div className="bg-pink-500 p-3 rounded-full text-white group-hover:scale-110 transition-transform shrink-0"><UploadCloud size={20} /></div>
-                       <div className="flex-grow">
-                         <h3 className="text-sm md:text-base font-bold text-theme-text-main">Upload Paper</h3>
-                         <p className="text-gray-400 text-xs mt-0.5">Import new questions to database.</p>
-                       </div>
-                       <div className="bg-gray-700 text-white rounded-full p-1.5 group-hover:bg-gray-600 transition-colors"><ChevronRight size={16} /></div>
+
+                    <div
+                      onClick={() => onNavigate('UPLOAD_PAPER')}
+                      className="bg-[#FBF9F5] hover:bg-[#F5EFE4] border border-[#EFECE6] rounded-xl p-4 flex items-center gap-3.5 cursor-pointer group transition-all sm:col-span-2"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-[#C29B61] text-white flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <UploadCloud size={18} />
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <h3 className="text-sm font-bold text-[#0F172A] truncate">Upload Paper</h3>
+                        <p className="text-[#64748B] text-xs mt-0.5 truncate">Import new questions via Excel / CSV</p>
+                      </div>
+                      <ChevronRight size={16} className="text-[#64748B] group-hover:text-[#0F172A] shrink-0" />
                     </div>
                   </>
                 )}
-             </div>
+              </div>
+            </div>
           </div>
 
-          <footer className="mt-auto pt-8 pb-4 text-center text-xs text-theme-text-sub border-t border-gray-800/60">
+          <footer className="mt-auto pt-6 pb-3 text-center text-xs text-[#64748B] border-t border-[#E5E7EB]">
             <p className="text-[11px] font-semibold tracking-wide">
-              Powered by <span className="text-gold-500 font-bold">primeTech.AI</span>
+              Powered by <span className="text-[#B58B4C] font-bold">primeTech.AI</span>
             </p>
           </footer>
         </div>
       </main>
 
-      {/* 🚀 School Management System Live Demo Announcement Modal */}
+      {/* School Management System Live Demo Announcement Modal */}
       {showDemoAlert && (
-        <div 
+        <div
           className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/40 animate-fadeIn"
           onClick={handleCloseDemoAlert}
         >
-          <div 
-            className="relative w-full max-w-[380px] max-h-[92vh] overflow-y-auto bg-gray-900 border-2 border-gold-500/70 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(245,158,11,0.25)] p-4 sm:p-5 text-center animate-scaleUp custom-scrollbar"
+          <div
+            className="relative w-full max-w-[380px] max-h-[92vh] overflow-y-auto bg-white border border-[#E5E7EB] rounded-2xl shadow-2xl p-5 text-center custom-scrollbar"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Background decorative glows */}
-            <div className="absolute -top-12 -left-12 w-28 h-28 bg-gold-500/15 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-12 -right-12 w-28 h-28 bg-blue-500/15 rounded-full blur-2xl pointer-events-none" />
-
-            {/* Top Close (Cross) Button */}
             <button
               onClick={handleCloseDemoAlert}
-              className="absolute top-2.5 right-2.5 p-1.5 text-gray-300 hover:text-white bg-gray-800/90 hover:bg-gray-700 border border-gray-600 rounded-full transition-colors z-20 shadow-md"
+              className="absolute top-3 right-3 p-1.5 text-[#64748B] hover:text-[#0F172A] bg-[#F4F6F9] hover:bg-[#E5E7EB] rounded-full transition-colors z-20"
               title="Close"
               aria-label="Close"
             >
               <X size={15} />
             </button>
 
-            {/* Announcement Badge */}
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gold-500/15 border border-gold-500/40 text-gold-400 text-[10px] font-black uppercase tracking-wider mb-2">
-              <Sparkles size={11} className="text-gold-400 animate-pulse" />
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FBF6EE] border border-[#E6D5B8] text-[#B58B4C] text-[10px] font-bold uppercase tracking-wider mb-2">
+              <Sparkles size={11} className="text-[#C29B61]" />
               <span>New Feature Ready</span>
             </div>
 
-            {/* Icon Header */}
-            <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-gradient-to-br from-gold-500 to-amber-600 flex items-center justify-center text-black shadow-md">
-              <School size={20} className="text-gray-950" />
+            <div className="w-11 h-11 mx-auto mb-2.5 rounded-xl bg-[#C29B61] flex items-center justify-center text-white shadow-sm">
+              <School size={21} />
             </div>
 
-            {/* Title */}
-            <h2 className="text-base sm:text-lg font-black text-white tracking-tight mb-1.5">
+            <h2 className="text-base sm:text-lg font-extrabold text-[#0F172A] tracking-tight mb-1.5">
               School Management System
             </h2>
 
-            {/* Short English announcement message */}
-            <p className="text-gray-300 text-[11px] sm:text-xs leading-relaxed mb-2.5">
+            <p className="text-[#64748B] text-xs leading-relaxed mb-3">
               Manage student admissions, fee vouchers, attendance, exams, and staff records in one unified platform.
             </p>
 
-            {/* Demo Credentials Info Box */}
-            <div className="bg-gold-500/10 border border-gold-500/30 rounded-lg p-2 mb-3 text-left">
-              <p className="text-[10px] sm:text-[11px] text-gold-200 leading-snug">
-                <span className="font-bold text-gold-400 uppercase tracking-wide">Demo Login:</span> Username and password are provided at the bottom of the login page.
+            <div className="bg-[#FBF9F5] border border-[#EFECE6] rounded-xl p-2.5 mb-3 text-left">
+              <p className="text-[11px] text-[#334155] leading-snug">
+                <span className="font-bold text-[#B58B4C] uppercase tracking-wide">Demo Login:</span> Username and password are provided at the bottom of the login page.
               </p>
             </div>
 
-            {/* Feature Highlights Pills - Compact 2-column */}
-            <div className="grid grid-cols-2 gap-1.5 mb-3.5 text-left text-[9px] sm:text-[10px] font-semibold text-gray-200">
-              <div className="bg-gray-800/90 border border-gray-700/60 rounded-md px-2 py-1 flex items-center gap-1.5 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-gold-500 shrink-0" />
-                <span className="truncate">Admissions & Fees</span>
+            <div className="grid grid-cols-2 gap-1.5 mb-4 text-left text-[10px] font-semibold text-[#1E293B]">
+              <div className="bg-[#FBF9F5] border border-[#EFECE6] rounded-lg px-2.5 py-1.5 truncate">
+                Admissions & Fees
               </div>
-              <div className="bg-gray-800/90 border border-gray-700/60 rounded-md px-2 py-1 flex items-center gap-1.5 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                <span className="truncate">Attendance & Exams</span>
+              <div className="bg-[#FBF9F5] border border-[#EFECE6] rounded-lg px-2.5 py-1.5 truncate">
+                Attendance & Exams
               </div>
-              <div className="bg-gray-800/90 border border-gray-700/60 rounded-md px-2 py-1 flex items-center gap-1.5 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                <span className="truncate">Report Cards</span>
+              <div className="bg-[#FBF9F5] border border-[#EFECE6] rounded-lg px-2.5 py-1.5 truncate">
+                Report Cards
               </div>
-              <div className="bg-gray-800/90 border border-gray-700/60 rounded-md px-2 py-1 flex items-center gap-1.5 truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                <span className="truncate">Staff & Accounts</span>
+              <div className="bg-[#FBF9F5] border border-[#EFECE6] rounded-lg px-2.5 py-1.5 truncate">
+                Staff & Accounts
               </div>
             </div>
 
-            {/* Demo CTA Button */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <a
                 href="https://schoolmanagement-s.netlify.app/"
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleCloseDemoAlert}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gold-500 via-amber-500 to-gold-600 hover:from-gold-400 hover:to-amber-500 text-gray-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#C29B61] hover:bg-[#B0894F] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all"
               >
                 <span>Explore Live Demo</span>
                 <ExternalLink size={13} strokeWidth={2.5} />
@@ -527,7 +707,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button
                 type="button"
                 onClick={handleCloseDemoAlert}
-                className="text-[10px] sm:text-[11px] text-gray-400 hover:text-gray-200 transition-colors uppercase tracking-wider font-bold py-0.5"
+                className="text-[11px] text-[#64748B] hover:text-[#0F172A] transition-colors uppercase tracking-wider font-bold py-0.5"
               >
                 Maybe Later / Close
               </button>

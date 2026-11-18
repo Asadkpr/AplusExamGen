@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
 interface ThemeContextType {
   isDarkMode: boolean;
@@ -8,42 +8,19 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-
-  // Sync theme on initial load
+  // Always use the unified light/warm-bronze theme across the app
   useEffect(() => {
-    const stored = localStorage.getItem('aplus_theme');
-    if (stored === 'light') {
-      setIsDarkMode(false);
-      document.documentElement.classList.add('light-theme');
-      document.body.classList.add('light-theme');
-    } else {
-      setIsDarkMode(true);
-      document.documentElement.classList.remove('light-theme');
-      document.body.classList.remove('light-theme');
-    }
+    document.documentElement.classList.add('light-theme');
+    document.body.classList.add('light-theme');
+    localStorage.setItem('aplus_theme', 'light');
   }, []);
 
   const toggleTheme = () => {
-    setIsDarkMode(prev => {
-      const newVal = !prev;
-      if (newVal) {
-        // Switching to Dark
-        document.documentElement.classList.remove('light-theme');
-        document.body.classList.remove('light-theme');
-        localStorage.setItem('aplus_theme', 'dark');
-      } else {
-        // Switching to Light
-        document.documentElement.classList.add('light-theme');
-        document.body.classList.add('light-theme');
-        localStorage.setItem('aplus_theme', 'light');
-      }
-      return newVal;
-    });
+    // Theme switching disabled; app uses the unified light & warm-bronze theme
   };
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDarkMode: false, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -174,14 +174,6 @@ export const SavedPapers: React.FC<SavedPapersProps> = ({ onBack, user, onOpenPa
                      <Calendar size={14} className="text-gold-500/50" /> 
                      {new Date(paper.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                    </div>
-                   {isAdmin && (
-                     <div className="mt-3 flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-gold-500/10 flex items-center justify-center text-gold-500">
-                          <UserIcon size={10} />
-                        </div>
-                        <span className="text-[10px] text-theme-text-sub font-bold uppercase truncate">{paper.createdBy || 'Unknown User'}</span>
-                     </div>
-                   )}
                 </div>
                 <div className="bg-gray-900/50 p-4 flex gap-3 border-t border-gray-700">
                   <Button variant="secondary" className="text-[10px] py-2 flex-grow font-black uppercase tracking-widest">
